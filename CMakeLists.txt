@@ -20,6 +20,7 @@ endif()
 
 if(WIN32)
   add_executable(CopyFix WIN32 src/winmain.cpp)
+  target_compile_definitions(CopyFix PRIVATE UNICODE _UNICODE)
   target_link_libraries(CopyFix PRIVATE copyfix_core user32 shell32 gdi32 comctl32)
   set_target_properties(CopyFix PROPERTIES OUTPUT_NAME CopyFix)
   foreach(target copyfix_core CopyFix copyfix_tests copyfix_perf_tests)
