@@ -125,3 +125,8 @@
 {"csv_quoted_spaced", L"\"Name\", \"Price\", \"Quantity\"", Profile::Smart, L"\"Name\", \"Price\", \"Quantity\"", true},
 {"csv_multiline_with_period", L"Alice Smith, 10, Developer.\nBob Jones, 20, Manager.", Profile::Gentle, L"Alice Smith, 10, Developer.\nBob Jones, 20, Manager.", true},
 {"prose_markdown_hard_break", L"Один, два, три.  \nЗатем строка.", Profile::Gentle, L"Один, два, три.  \nЗатем строка.", true},
+{"plain_unicode_enumeration_crlf", L"Также необходимо сохранить символы:\r\nЁ ё, № 42, 50%, €100, ₽2500, © 2026.\r\nЭто   обычная проза.", Profile::Gentle, L"Также необходимо сохранить символы:\nЁ ё, № 42, 50%, €100, ₽2500, © 2026.\nЭто обычная проза.", false},
+{"plain_unicode_enumeration_cr", L"Также необходимо сохранить символы:\rЁ ё, № 42, 50%, €100, ₽2500, © 2026.\rЭто   обычная проза.", Profile::Gentle, L"Также необходимо сохранить символы:\nЁ ё, № 42, 50%, €100, ₽2500, © 2026.\nЭто обычная проза.", false},
+{"csv_crlf_still_protected", L"Name, Price, Quantity\r\nMilk, 125.50, 2", Profile::Deep, L"Name, Price, Quantity\r\nMilk, 125.50, 2", true},
+{"csv_cr_still_protected", L"Name, Price, Quantity\rMilk, 125.50, 2", Profile::Smart, L"Name, Price, Quantity\rMilk, 125.50, 2", true},
+{"markdown_hardbreak_crlf", L"Первый абзац  \r\nСледующая строка", Profile::Gentle, L"Первый абзац  \r\nСледующая строка", true},
