@@ -17,11 +17,22 @@
 ## New UX and registry validation
 
 - [ ] Download the latest GitHub Actions ZIP and confirm the only file is `CopyFix.exe`.
-- [ ] Verify the two-column preview preserves blank lines, sentences, spaces, Unicode emoji and line endings (CRLF in Win32 EDIT).
+- [ ] Verify the two-column preview preserves blank lines, sentences, spaces, Unicode emoji and line endings (RichEdit internal CR paragraphs and CRLF in clipboard).
 - [ ] Resize preview; inspect controls at 100%, 125%, 150% and 200% display scaling. Verify keyboard Tab and Escape.
 - [ ] Verify settings saved in `HKEY_CURRENT_USER\Software\CopyFix` (`Profile`, `Hotkey` DWORD). Restart and confirm persistence.
 - [ ] Confirm no `copyfix.ini` is created or read; test running from a read-only directory.
 - [ ] Check that cancelling preview leaves the clipboard unchanged, and that Undo remains functional.
+
+## PDF reflow and visual change checks
+
+- [ ] Smart: long wrapped prose lines join at lower-case continuation; short ambiguous lines stay intact.
+- [ ] Deep: `скопиро-\nван` and `непра-\nвильно` become whole words with explicit preview.
+- [ ] Deep: `Санкт-\nПетербург` and `северо-\nзападный` retain the semantic hyphen.
+- [ ] No join across blank paragraph boundaries. JSON, CSV, code, Markdown remain protected.
+- [ ] RichEdit preview: deleted spans highlighted in pale red, inserted/replaced spans in pale green.
+- [ ] Toggle `↵` displays actual source hard breaks; soft wrap is not marked. Applied clipboard has no marker.
+- [ ] Scroll both RichEdit panes, resize, keyboard selection, text highlights persist; compare source and result.
+- [ ] Same CTest/PE checks; ZIP must still contain only CopyFix.exe.
 
 ## Safe clipboard integration (isolated VM/session only)
 

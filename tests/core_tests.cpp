@@ -137,6 +137,47 @@ int main() {
         std::cerr << "FAIL word-boundary rendering regression\n";
         ++failed;
     }
+    // User QA: semantic hyphens must survive Deep processing, while PDF
+    // syllable breaks must be removed only with preview. Blank lines are
+    // paragraph boundaries; hard structures remain entirely unchanged.
+    const std::vector<Case> pdf_cases{
+        {"qa_deep_dehyphenation", L"Текст был скопиро-\nван, а затем непра-\nвильно разбит.",
+            Profile::Deep, L"Текст был скопирован, а затем неправильно разбит."},
+        {"qa_semantic_city_dash", L"Например, Санкт-\nПетербург расположен рядом с водой.",
+            Profile::Deep, L"Например, Санкт-Петербург расположен рядом с водой."},
+        {"qa_semantic_region_dash", L"Регион северо-\nзападный и большой.",
+            Profile::Deep, L"Регион северо-западный и большой."},
+        {"qa_plain_paragraphs", L"Обычная длинная строка продолжается в этом\nпредложении.\n\nА это уже второй абзац.",
+            Profile::Smart, L"Обычная длинная строка продолжается в этом предложении.\n\nА это уже второй абзац."},
+        {"qa_smart_no_dehyphen", L"Это обычный скопиро-\nванный документ.",
+            Profile::Smart, L"Это обычный скопиро-\nванный документ."},
+        {"qa_gentle_no_reflow", L"Сначала идет длинная строка с мыслями\nпотом перенос внутри абзаца.",
+            Profile::Gentle, L"Сначала идет длинная строка с мыслями\nпотом перенос внутри абзаца."},
+        {"qa_conservative_list", L"1. Список  один\n2. Другой  пункт", Profile::Deep,
+            L"1. Список  один\n2. Другой  пункт", true},
+        {"qa_preserve_short_poetry", L"небольшая\nстрока", Profile::Smart,
+            L"небольшая\nстрока"},
+    };
+    for (const auto& test : pdf_cases) {
+        const auto result = Clean(test.source, test.profile);
+        if (result.text != test.expected || result.protected_structure != test.structure ||
+            Clean(result.text, test.profile).text != result.text ||
+            !copyfix::IsWellFormedUtf16(result.text)) {
+            std::cerr << "FAIL " << test.name << "\n";
+            ++failed;
+        }
+    }
+    const auto deepSample = Clean(qa_sample, Profile::Deep);
+    if (deepSample.protected_structure ||
+        deepSample.text.find(L"скопирован из PDF-документа") == std::wstring::npos ||
+        deepSample.text.find(L"неправильно разделённые слова") == std::wstring::npos ||
+        deepSample.text.find(L"Санкт-Петербург является") == std::wstring::npos ||
+        deepSample.text.find(L"\n\nНекоторые предложения") == std::wstring::npos ||
+        deepSample.text.find(L"\n\nТакже необходимо сохранить") == std::wstring::npos ||
+        !deepSample.requires_confirmation) {
+        std::cerr << "FAIL full QA paragraph semantics and dehyphenation\n";
+        ++failed;
+    }
     // Property-like stable tests spanning Russian text, whitespace and line endings.
     for (int n = 0; n < 300; ++n) {
         const std::wstring sample = L"  Тест" + std::wstring(static_cast<std::size_t>(n % 19), L' ') +

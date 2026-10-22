@@ -168,19 +168,51 @@ std::wstring NormalizePlainLine(const std::wstring& line, std::size_t& count) {
     return out;
 }
 
-bool CanJoin(const std::wstring& prior, const std::wstring& next, Profile profile) noexcept {
-    if (prior.empty() || next.empty()) return false;
-    if (prior.size() < (profile == Profile::Deep ? 12U : 38U)) return false;
-    if (LooksLikeList(prior) || LooksLikeList(next)) return false;
-    if (HasSuspiciousStructure(prior) || HasSuspiciousStructure(next)) return false;
-    const auto a = prior.back();
-    const auto b = next.front();
-    if (!IsLower(b)) return false;
+// Joining a physical PDF line is ambiguous. Smart joins unhyphenated
+// lower-case continuations; Deep additionally previews dehyphenation.
+// Never guess across a blank paragraph boundary, across terminal sentence
+// punctuation, or into capitalized sentences. Recognized compound prefixes
+// retain the semantic hyphen (Санкт-Петербург, северо-западный).
+enum class JoinKind { No, WithSpace, WithoutHyphen, KeepHyphen };
+
+bool IsUpper(wchar_t c) noexcept {
+    return (c >= L'A' && c <= L'Z') || (c >= L'А' && c <= L'Я') || c == L'Ё';
+}
+
+bool KeepCompoundHyphen(const std::wstring& prior, wchar_t next) noexcept {
+    if (prior.empty() || prior.back() != L'-') return false;
+    const auto start = prior.find_last_of(L" \t([{");
+    const auto stem = prior.substr(start == std::wstring::npos ? 0 : start + 1,
+                                   prior.size() - (start == std::wstring::npos ? 0 : start + 1) - 1);
+    // All-uppercase initial word in a proper name: keep the dash.
+    if (IsUpper(next) && (stem == L"Санкт" || stem == L"Нью" || stem == L"Усть" ||
+                           stem == L"Ростов" || stem == L"Йошкар")) return true;
+    if (!IsLower(next)) return false;
+    return stem == L"северо" || stem == L"юго" || stem == L"восточно" ||
+           stem == L"западно" || stem == L"социально" || stem == L"научно" ||
+           stem == L"военно" || stem == L"русско" || stem == L"англо" ||
+           stem == L"историко" || stem == L"медико";
+}
+
+JoinKind DecideJoin(const std::wstring& prior, const std::wstring& next,
+                    Profile profile) noexcept {
+    if (profile == Profile::Gentle || prior.empty() || next.empty()) return JoinKind::No;
+    if (LooksLikeList(prior) || LooksLikeList(next) ||
+        HasSuspiciousStructure(prior) || HasSuspiciousStructure(next)) return JoinKind::No;
+    const wchar_t a = prior.back(), b = next.front();
     if (a == L'.' || a == L'!' || a == L'?' || a == L':' || a == L';' ||
-        a == L'\u2014' || a == L'\u2013' || a == L',' || a == L'(') return false;
-    if (a == L'-') return profile == Profile::Deep && prior.size() >= 2 &&
-                            IsBasicLetter(prior[prior.size() - 2]);
-    return IsBasicLetter(a) || IsDigit(a) || a == L')';
+        a == L'\u2014' || a == L'\u2013' || a == L',' || a == L'(') return JoinKind::No;
+    if (a == L'-') {
+        if (profile != Profile::Deep || prior.size() < 2 ||
+            !IsBasicLetter(prior[prior.size() - 2])) return JoinKind::No;
+        if (KeepCompoundHyphen(prior, b)) return JoinKind::KeepHyphen;
+        if (IsLower(b)) return JoinKind::WithoutHyphen;
+        return JoinKind::No;
+    }
+    if (!IsLower(b)) return JoinKind::No;
+    if (prior.size() < (profile == Profile::Smart ? 20U : 10U)) return JoinKind::No;
+    return IsBasicLetter(a) || IsDigit(a) || a == L')' ? JoinKind::WithSpace
+                                                        : JoinKind::No;
 }
 
 }  // namespace
@@ -269,14 +301,21 @@ Result Clean(const std::wstring& source, Profile profile) {
         std::vector<std::wstring> joined;
         joined.reserve(reduced.size());
         for (auto& line : reduced) {
-            if (!joined.empty() && CanJoin(joined.back(), line, profile)) {
-                auto& previous = joined.back();
-                if (previous.back() == L'-') previous.pop_back();
-                else previous += L' ';
-                previous += line;
-                ++count;
-                result.requires_confirmation = true;
-            } else joined.emplace_back(std::move(line));
+            // An empty physical line is a semantic paragraph boundary.
+            if (!joined.empty()) {
+                const auto decision = DecideJoin(joined.back(), line, profile);
+                if (decision != JoinKind::No) {
+                    auto& previous = joined.back();
+                    if (decision == JoinKind::WithoutHyphen) previous.pop_back();
+                    if (decision == JoinKind::WithSpace) previous += L' ';
+                    // KeepHyphen: concatenate without adding space.
+                    previous += line;
+                    ++count;
+                    result.requires_confirmation = true;
+                    continue;
+                }
+            }
+            joined.emplace_back(std::move(line));
         }
         reduced.swap(joined);
     }

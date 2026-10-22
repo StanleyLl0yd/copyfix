@@ -8,6 +8,8 @@
 
 int main() {
     g_instance = GetModuleHandleW(nullptr);
+    g_richedit_module = LoadLibraryW(L"Msftedit.dll");
+    if (!g_richedit_module) return 9;
     g_canvas_brush = CreateSolidBrush(kCanvas);
     g_surface_brush = CreateSolidBrush(kSurface);
     g_font_body = MakeFont(11, FW_NORMAL, 96);
@@ -31,16 +33,18 @@ int main() {
     const auto after = GetDlgItem(preview, kPreviewAfterEdit);
     if (!before || !after || GetDlgCtrlID(after) == IDCANCEL ||
         GetDlgCtrlID(before) == GetDlgCtrlID(after)) return 12;
-    const auto expected = copyfix::ToWindowsLineEndings(g_pending.before.text);
-    if (GetWindowTextLengthW(after) != static_cast<int>(expected.size())) return 13;
-    HDC dc = GetDC(after);
-    if (!dc) return 14;
-    SetBkMode(dc, TRANSPARENT);
-    SendMessageW(preview, WM_CTLCOLORSTATIC, reinterpret_cast<WPARAM>(dc),
-                 reinterpret_cast<LPARAM>(after));
-    const bool opaque = GetBkMode(dc) == OPAQUE;
-    ReleaseDC(after, dc);
-    if (!opaque) return 15;
+    wchar_t klass[60]{};
+    GetClassNameW(after, klass, static_cast<int>(std::size(klass)));
+    if (wcscmp(klass, L"RICHEDIT50W") != 0) return 13;
+    if (SendMessageW(after, EM_GETLINECOUNT, 0, 0) < 100) return 14;
+    const auto bg = static_cast<COLORREF>(SendMessageW(after, EM_GETBKGNDCOLOR, 0, 0));
+    if (bg != kSurface) return 15;
+    const auto toggle = GetDlgItem(preview, kPreviewShowBreaks);
+    if (!toggle) return 19;
+    SendMessageW(toggle, BM_CLICK, 0, 0);
+    if (!g_show_breaks || !IsWindow(preview)) return 20;
+    SendMessageW(toggle, BM_CLICK, 0, 0);
+    if (g_show_breaks || !IsWindow(preview)) return 21;
 
     // Win32 EDIT sends scroll notifications to its parent. These must never
     // be interpreted as Cancel/Apply, and wheel must not destroy the preview.
@@ -70,6 +74,7 @@ int main() {
     DeleteObject(g_font_caption);
     DeleteObject(g_surface_brush);
     DeleteObject(g_canvas_brush);
-    std::cout << "PASS preview opacity, native EDIT scrolling, wheel, command routing and ESC\n";
+    FreeLibrary(g_richedit_module);
+    std::cout << "PASS RichEdit background, change markers, scrolling, wheel, command routing and ESC\n";
     return 0;
 }

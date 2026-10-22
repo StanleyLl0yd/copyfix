@@ -1177,5 +1177,95 @@
     "input": "Первый абзац  \r\nСледующая строка",
     "expected": "Первый абзац  \r\nСледующая строка",
     "protected_structure": true
+  },
+  {
+    "id": "deep_pdf_dehyphen",
+    "category": "pdf-layout",
+    "description": "deep pdf dehyphen",
+    "profile": "deep",
+    "input": "Текст был скопиро-\nван, а затем непра-\nвильно разбит.",
+    "expected": "Текст был скопирован, а затем неправильно разбит.",
+    "protected_structure": false
+  },
+  {
+    "id": "deep_semantic_sankt",
+    "category": "pdf-layout",
+    "description": "deep semantic sankt",
+    "profile": "deep",
+    "input": "Например, Санкт-\nПетербург расположен рядом с водой.",
+    "expected": "Например, Санкт-Петербург расположен рядом с водой.",
+    "protected_structure": false
+  },
+  {
+    "id": "deep_semantic_region",
+    "category": "pdf-layout",
+    "description": "deep semantic region",
+    "profile": "deep",
+    "input": "Регион северо-\nзападный и большой.",
+    "expected": "Регион северо-западный и большой.",
+    "protected_structure": false
+  },
+  {
+    "id": "smart_pdf_reflow",
+    "category": "pdf-layout",
+    "description": "smart pdf reflow",
+    "profile": "smart",
+    "input": "Обычная длинная строка продолжается в этом\nпредложении.\n\nА это уже второй абзац.",
+    "expected": "Обычная длинная строка продолжается в этом предложении.\n\nА это уже второй абзац.",
+    "protected_structure": false
+  },
+  {
+    "id": "smart_pdf_reflow_windows_crlf",
+    "category": "pdf-layout",
+    "description": "smart pdf reflow windows crlf",
+    "profile": "smart",
+    "input": "Обычная длинная строка продолжается в этом\r\nпредложении.\r\n\r\nА это уже второй абзац.",
+    "expected": "Обычная длинная строка продолжается в этом предложении.\n\nА это уже второй абзац.",
+    "protected_structure": false
+  },
+  {
+    "id": "smart_preserves_hyphen",
+    "category": "pdf-layout",
+    "description": "smart preserves hyphen",
+    "profile": "smart",
+    "input": "Это обычный скопиро-\nванный документ.",
+    "expected": "Это обычный скопиро-\nванный документ.",
+    "protected_structure": false
+  },
+  {
+    "id": "gentle_preserves_lines",
+    "category": "pdf-layout",
+    "description": "gentle preserves lines",
+    "profile": "gentle",
+    "input": "Сначала идет длинная строка с мыслями\nпотом перенос внутри абзаца.",
+    "expected": "Сначала идет длинная строка с мыслями\nпотом перенос внутри абзаца.",
+    "protected_structure": false
+  },
+  {
+    "id": "smart_short_lines_safe",
+    "category": "pdf-layout",
+    "description": "smart short lines safe",
+    "profile": "smart",
+    "input": "небольшая\nстрока",
+    "expected": "небольшая\nстрока",
+    "protected_structure": false
+  },
+  {
+    "id": "deep_preserves_semantic_paragraphs",
+    "category": "pdf-layout",
+    "description": "deep preserves semantic paragraphs",
+    "profile": "deep",
+    "input": "Сначала идёт длинная строка внутри первого\nабзаца.\n\nВот второй абзац.",
+    "expected": "Сначала идёт длинная строка внутри первого абзаца.\n\nВот второй абзац.",
+    "protected_structure": false
+  },
+  {
+    "id": "deep_structured_list_unmodified",
+    "category": "pdf-layout",
+    "description": "deep structured list unmodified",
+    "profile": "deep",
+    "input": "1. Список  один\n2. Другой  пункт",
+    "expected": "1. Список  один\n2. Другой  пункт",
+    "protected_structure": true
   }
 ]
