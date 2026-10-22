@@ -70,6 +70,41 @@ int main() {
             ++failed;
         }
     }
+    // Regression: the user's first natural-language QA sample must not be
+    // classified as a CSV merely because a Unicode enumeration has commas.
+    const std::wstring qa_sample =
+        L"Сегодня   мы  решили   проверить  работу новой\n"
+        L"программы для  автоматической   обработки текста.\n\n"
+        L"Это    обычный текст,  который был скопиро-\n"
+        L"ван из PDF-документа.   В нём встречаются\n"
+        L"случайные  переносы строк,  лишние    пробелы\n"
+        L"и непра-\nвильно разделённые слова.\n\n\n"
+        L"Некоторые предложения  разрываются в самых\n"
+        L"неожиданных местах, хотя на самом деле\n"
+        L"должны составлять  один связный абзац.\n\n"
+        L"Например, Санкт-\nПетербург является одним из крупнейших\n"
+        L"городов России.  Его архитектура  известна\n"
+        L"далеко за пределами страны.\n\n\n"
+        L"   Ещё одна проблема -  пробелы в начале строк.\n"
+        L"Иногда     их слишком много.\n"
+        L"А иногда между абзацами остаётся\n\n\n\n"
+        L"четыре или пять пустых строк.\n\n"
+        L"Программа должна  сохранять числа:  123 456,78\n"
+        L"и даты: 22.10.2026, 01.12.1977.\n\n"
+        L"Также необходимо сохранить  символы:\n"
+        L"Ё ё, № 42, 50%, €100, ₽2500, © 2026.\n\n"
+        L"Unicode: Привет, мир! 🌍 🚀 😀\n"
+        L"English text   with    extra spaces.\n\n"
+        L"Это   последний абзац  тестового\n"
+        L"документа.   Проверка завершена!";
+    for (const auto profile : {Profile::Gentle, Profile::Smart, Profile::Deep}) {
+        const auto r = Clean(qa_sample, profile);
+        if (r.protected_structure || r.text == qa_sample || r.changes == 0 ||
+            !copyfix::IsWellFormedUtf16(r.text) || Clean(r.text, profile).text != r.text) {
+            std::cerr << "FAIL full plain-text QA sample" << "\n";
+            ++failed;
+        }
+    }
     // Property-like stable tests spanning Russian text, whitespace and line endings.
     for (int n = 0; n < 300; ++n) {
         const std::wstring sample = L"  Тест" + std::wstring(static_cast<std::size_t>(n % 19), L' ') +

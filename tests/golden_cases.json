@@ -1060,5 +1060,77 @@
     "input": "a,b,c\n1, 2,3\n4,5,6",
     "expected": "a,b,c\n1, 2,3\n4,5,6",
     "protected_structure": true
+  },
+  {
+    "id": "prose_enumeration_unicode",
+    "category": "structure-regression",
+    "description": "Natural-language enumeration with Unicode signs and punctuation",
+    "profile": "gentle",
+    "input": "Ё ё, № 42, 50%, €100, ₽2500, © 2026.  ",
+    "expected": "Ё ё, № 42, 50%, €100, ₽2500, © 2026.",
+    "protected_structure": false
+  },
+  {
+    "id": "prose_enumeration_sentence",
+    "category": "structure-regression",
+    "description": "Natural language prose with commas and double spaces",
+    "profile": "gentle",
+    "input": "Сегодня   мы перечисляем: первый,  второй, третий пример.",
+    "expected": "Сегодня мы перечисляем: первый, второй, третий пример.",
+    "protected_structure": false
+  },
+  {
+    "id": "prose_enumeration_in_paragraph",
+    "category": "structure-regression",
+    "description": "Prose paragraph with a multiline comma enumeration",
+    "profile": "smart",
+    "input": "Символы: Ё ё, № 42, 50%, €100, ₽2500, © 2026.\nЭто   обычный русский текст.",
+    "expected": "Символы: Ё ё, № 42, 50%, €100, ₽2500, © 2026.\nЭто обычный русский текст.",
+    "protected_structure": false
+  },
+  {
+    "id": "csv_header_spaced",
+    "category": "structure-regression",
+    "description": "Single CSV header with comma-separated names",
+    "profile": "gentle",
+    "input": "Name, Price, Quantity",
+    "expected": "Name, Price, Quantity",
+    "protected_structure": true
+  },
+  {
+    "id": "csv_compact_single",
+    "category": "structure-regression",
+    "description": "Single CSV row without spaces after delimiters",
+    "profile": "deep",
+    "input": "a,b,c",
+    "expected": "a,b,c",
+    "protected_structure": true
+  },
+  {
+    "id": "csv_quoted_spaced",
+    "category": "structure-regression",
+    "description": "CSV row with quoted fields",
+    "profile": "smart",
+    "input": "\"Name\", \"Price\", \"Quantity\"",
+    "expected": "\"Name\", \"Price\", \"Quantity\"",
+    "protected_structure": true
+  },
+  {
+    "id": "csv_multiline_with_period",
+    "category": "structure-regression",
+    "description": "Repeated CSV-style rows whose final values end in periods",
+    "profile": "gentle",
+    "input": "Alice Smith, 10, Developer.\nBob Jones, 20, Manager.",
+    "expected": "Alice Smith, 10, Developer.\nBob Jones, 20, Manager.",
+    "protected_structure": true
+  },
+  {
+    "id": "prose_markdown_hard_break",
+    "category": "structure-regression",
+    "description": "Markdown hard line break remains protected",
+    "profile": "gentle",
+    "input": "Один, два, три.  \nЗатем строка.",
+    "expected": "Один, два, три.  \nЗатем строка.",
+    "protected_structure": true
   }
 ]
