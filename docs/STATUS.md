@@ -16,8 +16,8 @@
 | Static CRT `/MT` and PE imports | PASS: CI rejects known dynamic VC++/UCRT/.NET runtime dependencies |
 | PE hardening | PASS: ASLR, NX, Control Flow Guard header + CFG load configuration |
 | Windows CI unit/performance tests | PASS: 2/2 CTest suites on Windows runner |
-| Windows EXE size | 160,256 bytes (156.5 KiB), CI artifact |
-| GitHub Actions | Exact PR HEAD and post-merge `main` PASS, workflow `39775790874` |
+| Windows EXE size | 160,768 bytes (157.0 KiB), latest post-merge CI artifact |
+| GitHub Actions | Exact PR HEAD and post-merge `main` PASS, workflow `39777098974` |
 | Windows 10/11 clean-machine runtime | NOT VERIFIED |
 | Live clipboard integration, tray, hotkey, preview and Undo | NOT VERIFIED interactively |
 | Main branch integrity | Ruleset `25634329` active: no deletion or force-push; required PR gate NOT YET ENABLED |
@@ -25,6 +25,6 @@
 | GitHub Release / Windows 1.0 | NOT CREATED |
 | Android | NOT STARTED; deferred until Windows 1.0 |
 
-Evidence: [Windows CI #39775639046 (exact PR HEAD)](https://github.com/StanleyLl0yd/copyfix/actions/runs/39775639046) and [#39775790874 (post-merge main)](https://github.com/StanleyLl0yd/copyfix/actions/runs/39775790874). Baseline exact-PR-head PE summary recorded **160,256 bytes** and SHA-256 `94997E540928394BD3AFFEFA89803BEC4C098CFB3D51843EA77C83554266323C` (the post-merge run is separately built and may differ).
+Evidence: [MSVC first-success exact PR HEAD #39775639046](https://github.com/StanleyLl0yd/copyfix/actions/runs/39775639046), [Win32 OOM safety exact PR HEAD #39776938242](https://github.com/StanleyLl0yd/copyfix/actions/runs/39776938242), and [latest post-merge main #39777098974](https://github.com/StanleyLl0yd/copyfix/actions/runs/39777098974). Latest main PE summary: **160,768 bytes**, SHA-256 `5FCCD73F7C7DF74F60CC02E80F6637F16ECD56CE60129947321557C9B8B54E2C`.
 
 The current files are a Windows prototype, **not a certified portable release**. No license has been selected. Real Windows UI/clipboard testing and Windows 10/11 clean-install validation remain mandatory before Windows 1.0.
