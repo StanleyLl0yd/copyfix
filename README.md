@@ -2,7 +2,7 @@
 
 **CopyFix** - лёгкая автономная утилита для очистки скопированного текста в Windows. Работает локально, не отправляет текст в сеть, не записывает историю буфера обмена и не использует перехват клавиатуры.
 
-> Status: **Windows prototype 0.1.0 / NOT RELEASE READY**. MSVC build, PE imports, Windows GUI, tray, clipboard, portable launch and Windows 10/11 are **NOT VERIFIED** until GitHub Actions and independent device validation.
+> Status: **Windows prototype 0.1.0 / NOT RELEASE READY**. MSVC v143 x64 build, Windows CTest, static-runtime import checks and PE hardening **PASS** in [GitHub Actions](https://github.com/StanleyLl0yd/copyfix/actions/runs/39775790874). Interactive GUI/tray/clipboard and clean Windows 10/11 portable runtime remain **NOT VERIFIED**.
 
 ## Use
 
