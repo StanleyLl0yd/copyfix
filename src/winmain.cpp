@@ -546,7 +546,15 @@ int WINAPI wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE, _In_ PWSTR, _In
     g_instance = instance;
     g_instance_mutex = CreateMutexW(nullptr, FALSE, L"Local\\CopyFix_Portable_Instance_8A69E7C9");
     if (!g_instance_mutex) return 1;
-    if (GetLastError() == ERROR_ALREADY_EXISTS) { CloseHandle(g_instance_mutex); return 0; }
+    if (GetLastError() == ERROR_ALREADY_EXISTS) {
+        CloseHandle(g_instance_mutex);
+        MessageBoxW(nullptr,
+                    L"CopyFix уже запущен. Чтобы использовать новую версию, "
+                    L"закройте работающий экземпляр через значок в трее "
+                    L"и затем запустите этот файл снова.",
+                    L"CopyFix - уже запущен", MB_OK | MB_ICONINFORMATION);
+        return 0;
+    }
     LoadSettings();
     g_taskbar_created = RegisterWindowMessageW(L"TaskbarCreated");
     const WNDCLASSEXW classes[] = {

@@ -105,6 +105,24 @@ int main() {
             ++failed;
         }
     }
+    // Real Windows clipboard data from Notepad uses CRLF, unlike the LF-only
+    // source fixture. A classifier must treat the same prose identically.
+    for (const auto profile : {Profile::Gentle, Profile::Smart, Profile::Deep}) {
+        for (const auto eol : {L"\r\n", L"\r"}) {
+            std::wstring windows_sample;
+            for (const auto ch : qa_sample) {
+                if (ch == L'\n') windows_sample += eol;
+                else windows_sample += ch;
+            }
+            const auto r = Clean(windows_sample, profile);
+            if (r.protected_structure || r.text == windows_sample || r.changes == 0 ||
+                !copyfix::IsWellFormedUtf16(r.text) ||
+                Clean(r.text, profile).text != r.text) {
+                std::cerr << "FAIL Windows EOL clipboard QA sample" << "\n";
+                ++failed;
+            }
+        }
+    }
     // Property-like stable tests spanning Russian text, whitespace and line endings.
     for (int n = 0; n < 300; ++n) {
         const std::wstring sample = L"  Тест" + std::wstring(static_cast<std::size_t>(n % 19), L' ') +

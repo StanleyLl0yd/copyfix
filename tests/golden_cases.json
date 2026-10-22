@@ -1132,5 +1132,50 @@
     "input": "Один, два, три.  \nЗатем строка.",
     "expected": "Один, два, три.  \nЗатем строка.",
     "protected_structure": true
+  },
+  {
+    "id": "plain_unicode_enumeration_crlf",
+    "category": "windows_eol",
+    "description": "prose sentence with unicode commas CRLF",
+    "profile": "gentle",
+    "input": "Также необходимо сохранить символы:\r\nЁ ё, № 42, 50%, €100, ₽2500, © 2026.\r\nЭто   обычная проза.",
+    "expected": "Также необходимо сохранить символы:\nЁ ё, № 42, 50%, €100, ₽2500, © 2026.\nЭто обычная проза.",
+    "protected_structure": false
+  },
+  {
+    "id": "plain_unicode_enumeration_cr",
+    "category": "windows_eol",
+    "description": "prose sentence with unicode commas CR",
+    "profile": "gentle",
+    "input": "Также необходимо сохранить символы:\rЁ ё, № 42, 50%, €100, ₽2500, © 2026.\rЭто   обычная проза.",
+    "expected": "Также необходимо сохранить символы:\nЁ ё, № 42, 50%, €100, ₽2500, © 2026.\nЭто обычная проза.",
+    "protected_structure": false
+  },
+  {
+    "id": "csv_crlf_still_protected",
+    "category": "windows_eol",
+    "description": "csv header and row CRLF unchanged",
+    "profile": "deep",
+    "input": "Name, Price, Quantity\r\nMilk, 125.50, 2",
+    "expected": "Name, Price, Quantity\r\nMilk, 125.50, 2",
+    "protected_structure": true
+  },
+  {
+    "id": "csv_cr_still_protected",
+    "category": "windows_eol",
+    "description": "csv header and row CR unchanged",
+    "profile": "smart",
+    "input": "Name, Price, Quantity\rMilk, 125.50, 2",
+    "expected": "Name, Price, Quantity\rMilk, 125.50, 2",
+    "protected_structure": true
+  },
+  {
+    "id": "markdown_hardbreak_crlf",
+    "category": "windows_eol",
+    "description": "markdown hard breaks must not be trimmed",
+    "profile": "gentle",
+    "input": "Первый абзац  \r\nСледующая строка",
+    "expected": "Первый абзац  \r\nСледующая строка",
+    "protected_structure": true
   }
 ]

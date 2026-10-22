@@ -37,8 +37,11 @@ std::vector<std::wstring> SplitLines(const std::wstring& s) {
     std::vector<std::wstring> out;
     std::size_t last = 0;
     for (std::size_t i = 0; i < s.size(); ++i) {
-        if (s[i] == L'\n') {
+        if (IsLinebreak(s[i])) {
             out.emplace_back(s.substr(last, i - last));
+            // Clipboard text usually contains CRLF. Do not keep its CR in
+            // each line: CSV and prose classification must be EOL-agnostic.
+            if (s[i] == L'\r' && i + 1 < s.size() && s[i + 1] == L'\n') ++i;
             last = i + 1;
         }
     }
