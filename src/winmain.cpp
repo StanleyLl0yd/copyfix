@@ -81,14 +81,19 @@ UINT HotkeyModifiers(int i) { return i == 1 ? MOD_CONTROL | MOD_SHIFT : MOD_CONT
 UINT HotkeyVirtualKey(int i) { return i == 2 ? L'C' : VK_F9; }
 
 std::wstring ConfigPath() {
-    wchar_t path[32768]{};
-    const DWORD size = GetModuleFileNameW(nullptr, path, static_cast<DWORD>(std::size(path)));
-    if (!size || size == std::size(path)) return {};
-    std::wstring result(path, size);
-    const auto slash = result.find_last_of(L"\\/");
-    if (slash == std::wstring::npos) return {};
-    result.resize(slash + 1);
-    return result + L"copyfix.ini";
+    try {
+        // Avoid a 64-KiB stack buffer (MSVC /analyze C6262).
+        std::wstring path(32768, L'\0');
+        const DWORD size = GetModuleFileNameW(nullptr, path.data(), static_cast<DWORD>(path.size()));
+        if (!size || size >= path.size()) return {};
+        path.resize(size);
+        const auto slash = path.find_last_of(L"\\/");
+        if (slash == std::wstring::npos) return {};
+        path.resize(slash + 1);
+        return path + L"copyfix.ini";
+    } catch (const std::bad_alloc&) {
+        return {}; // Settings stay in memory if a configuration path cannot be allocated.
+    }
 }
 
 void LoadSettings() {
@@ -151,8 +156,13 @@ bool ReadUnderLock(ClipSnapshot& result) {
     SIZE_T len = 0;
     while (len < maximum && data[len] != 0) ++len;
     if (len < maximum && len <= kMaxChars) {
-        result.text.assign(data, len);
-        success = copyfix::IsWellFormedUtf16(result.text);
+        try {
+            result.text.assign(data, len);
+            success = copyfix::IsWellFormedUtf16(result.text);
+        } catch (const std::bad_alloc&) {
+            // GlobalUnlock and CloseClipboard must still run on allocation failure.
+            success = false;
+        }
     }
     GlobalUnlock(handle);
     if (!success) return false;
@@ -243,17 +253,23 @@ void ClearPending() { g_pending = Pending{}; }
 void ClearUndo() { g_undo = Undo{}; }
 
 void AcceptPending() {
-    DWORD sequence = 0;
-    const auto final_text = ToClipboardLineEndings(g_pending.after.text);
-    const bool written = WriteIfUnchanged(g_pending.before, final_text, &sequence);
-    if (written) {
-        ClearUndo();
-        g_undo.before = g_pending.before.text;
-        g_undo.after = final_text;
-        g_undo.after_sequence = sequence;
-        g_undo.available = true;
-        Notify(L"Исправленный текст находится в буфере обмена.");
-    } else Notify(L"Запись не завершена. Проверьте содержимое буфера обмена.");
+    try {
+        const auto final_text = ToClipboardLineEndings(g_pending.after.text);
+        // Prepare Undo before mutating clipboard; OOM must not leave an
+        // already-modified clipboard without a valid Undo snapshot.
+        Undo next_undo;
+        next_undo.before = g_pending.before.text;
+        next_undo.after = final_text;
+        DWORD sequence = 0;
+        if (WriteIfUnchanged(g_pending.before, final_text, &sequence)) {
+            next_undo.after_sequence = sequence;
+            next_undo.available = true;
+            g_undo = std::move(next_undo);
+            Notify(L"Исправленный текст находится в буфере обмена.");
+        } else Notify(L"Запись не завершена. Проверьте содержимое буфера обмена.");
+    } catch (const std::bad_alloc&) {
+        Notify(L"Недостаточно памяти. Буфер не изменён.");
+    }
     ClearPending();
 }
 
@@ -277,9 +293,9 @@ LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
         SendMessageW(before, WM_SETFONT, reinterpret_cast<WPARAM>(font), TRUE);
         SendMessageW(after, WM_SETFONT, reinterpret_cast<WPARAM>(font), TRUE);
         CreateWindowW(L"BUTTON", L"Применить", WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
-                      564, 432, 110, 32, window, reinterpret_cast<HMENU>(kPreviewAccept), g_instance, nullptr);
+                      564, 432, 110, 32, window, reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kPreviewAccept)), g_instance, nullptr);
         CreateWindowW(L"BUTTON", L"Отмена", WS_CHILD | WS_VISIBLE,
-                      684, 432, 110, 32, window, reinterpret_cast<HMENU>(kPreviewCancel), g_instance, nullptr);
+                      684, 432, 110, 32, window, reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kPreviewCancel)), g_instance, nullptr);
         return 0;
     }
     case WM_SIZE: {
@@ -378,21 +394,21 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
                       20, 22, 250, 20, window, nullptr, g_instance, nullptr);
         HWND h = CreateWindowW(L"COMBOBOX", nullptr,
             WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL,
-            20, 45, 310, 200, window, reinterpret_cast<HMENU>(kComboHotkey), g_instance, nullptr);
+            20, 45, 310, 200, window, reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kComboHotkey)), g_instance, nullptr);
         for (int i = 0; i < 3; ++i) SendMessageW(h, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(HotkeyName(i)));
         SendMessageW(h, CB_SETCURSEL, static_cast<WPARAM>(g_settings.hotkey), 0);
         CreateWindowW(L"STATIC", L"Профиль:", WS_CHILD | WS_VISIBLE,
                       20, 90, 250, 20, window, nullptr, g_instance, nullptr);
         HWND p = CreateWindowW(L"COMBOBOX", nullptr,
             WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL,
-            20, 113, 310, 200, window, reinterpret_cast<HMENU>(kComboProfile), g_instance, nullptr);
+            20, 113, 310, 200, window, reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kComboProfile)), g_instance, nullptr);
         for (const auto* s : {L"Бережный", L"Умный", L"Глубокий"})
             SendMessageW(p, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(s));
         SendMessageW(p, CB_SETCURSEL, static_cast<WPARAM>(g_settings.profile), 0);
         CreateWindowW(L"BUTTON", L"Сохранить", WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
-                      100, 174, 110, 32, window, reinterpret_cast<HMENU>(kSettingsSave), g_instance, nullptr);
+                      100, 174, 110, 32, window, reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kSettingsSave)), g_instance, nullptr);
         CreateWindowW(L"BUTTON", L"Отмена", WS_CHILD | WS_VISIBLE,
-                      220, 174, 110, 32, window, reinterpret_cast<HMENU>(kSettingsCancel), g_instance, nullptr);
+                      220, 174, 110, 32, window, reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kSettingsCancel)), g_instance, nullptr);
         return 0;
     }
     case WM_COMMAND:
@@ -526,7 +542,7 @@ LRESULT CALLBACK MessageProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
 }
 }  // namespace
 
-int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
+int WINAPI wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE, _In_ PWSTR, _In_ int) {
     g_instance = instance;
     g_instance_mutex = CreateMutexW(nullptr, FALSE, L"Local\\CopyFix_Portable_Instance_8A69E7C9");
     if (!g_instance_mutex) return 1;
