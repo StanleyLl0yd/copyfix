@@ -43,6 +43,8 @@
 - [ ] Large input (100K, 1M chars), long line, repeated operations: no crashes/leaks.
 - [ ] Deep preview over limit: text unchanged with clear notification.
 - [ ] No installer, backend, network requests, telemetry, history, log of clipboard data.
+- [ ] Scroll both preview panes independently using scrollbar thumb, mouse wheel and Page Up/Down; no overprinted glyphs, preview closing, or process termination.
+- [ ] Click Apply and Cancel after scrolling; scroll notifications must never be mistaken for button commands.
 - [ ] Check UI dialogs when Windows text scale is 125%, 150% and 200%.
 - [ ] Verify copied text pasted into common apps (browser form, Word, Notepad).
 

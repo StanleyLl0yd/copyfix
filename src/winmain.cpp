@@ -30,6 +30,8 @@ constexpr UINT kMenuSettings = 206;
 constexpr UINT kMenuAbout = 207;
 constexpr UINT kMenuExit = 208;
 constexpr UINT kMenuOneLine = 209;
+constexpr UINT kPreviewBeforeEdit = 510;
+constexpr UINT kPreviewAfterEdit = 511;
 constexpr UINT kPreviewAccept = 300;
 constexpr UINT kPreviewCancel = 301;
 constexpr UINT kSettingsSave = 400;
@@ -365,8 +367,8 @@ void LayoutPreview(HWND window) {
     Position(window, kPreviewSubtitle, margin, 64, w - 2*margin, 22, dpi);
     Position(window, kPreviewBeforeLabel, margin, 112, column, 28, dpi);
     Position(window, kPreviewAfterLabel, margin + column + gap, 112, column, 28, dpi);
-    Position(window, 1, margin, edit_y, column, edit_height, dpi);
-    Position(window, 2, margin + column + gap, edit_y, column, edit_height, dpi);
+    Position(window, kPreviewBeforeEdit, margin, edit_y, column, edit_height, dpi);
+    Position(window, kPreviewAfterEdit, margin + column + gap, edit_y, column, edit_height, dpi);
     Position(window, kPreviewNote, margin, h - 76, std::max(160,w-386), 26, dpi);
     Position(window, kPreviewCancel, w - 282, h - 84, 112, 44, dpi);
     Position(window, kPreviewAccept, w - 162, h - 84, 136, 44, dpi);
@@ -394,9 +396,13 @@ LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
         const auto original = copyfix::ToWindowsLineEndings(g_pending.before.text);
         const auto cleaned = copyfix::ToWindowsLineEndings(g_pending.after.text);
         HWND before = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", original.c_str(),
-                                     style, 0, 0, 1, 1, window, reinterpret_cast<HMENU>(1), g_instance, nullptr);
+                                     style, 0, 0, 1, 1, window,
+                                     reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kPreviewBeforeEdit)),
+                                     g_instance, nullptr);
         HWND after = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", cleaned.c_str(),
-                                    style, 0, 0, 1, 1, window, reinterpret_cast<HMENU>(2), g_instance, nullptr);
+                                    style, 0, 0, 1, 1, window,
+                                    reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kPreviewAfterEdit)),
+                                    g_instance, nullptr);
         ApplyFont(before, g_font_body);
         ApplyFont(after, g_font_body);
         SendMessageW(before, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(12,12));
@@ -418,12 +424,17 @@ LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
     }
     case WM_CTLCOLORSTATIC: {
         auto dc = reinterpret_cast<HDC>(wparam);
-        SetBkMode(dc, TRANSPARENT);
         const UINT id = static_cast<UINT>(GetDlgCtrlID(reinterpret_cast<HWND>(lparam)));
-        if (id == 1 || id == 2) {
-            SetBkColor(dc, kSurface); SetTextColor(dc, kInk);
+        if (id == kPreviewBeforeEdit || id == kPreviewAfterEdit) {
+            // Read-only EDIT controls request WM_CTLCOLORSTATIC. Their text
+            // background MUST be opaque: TRANSPARENT leaves stale glyphs when
+            // the control BitBlts its surface during scrolling.
+            SetBkMode(dc, OPAQUE);
+            SetBkColor(dc, kSurface);
+            SetTextColor(dc, kInk);
             return reinterpret_cast<LRESULT>(g_surface_brush);
         }
+        SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, id == kPreviewTitle || id == kPreviewBeforeLabel ||
                          id == kPreviewAfterLabel ? kInk : kMuted);
         return reinterpret_cast<LRESULT>(g_canvas_brush);
@@ -443,12 +454,26 @@ LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
         bounds->ptMinTrackSize = POINT{Scale(760,g_preview_dpi), Scale(510,g_preview_dpi)};
         return 0;
     }
-    case WM_COMMAND:
-        if (LOWORD(wparam) == kPreviewAccept) { AcceptPending(); DestroyWindow(window); return 0; }
-        if (LOWORD(wparam) == kPreviewCancel || LOWORD(wparam) == IDCANCEL) {
+    case WM_COMMAND: {
+        const auto id = LOWORD(wparam);
+        const auto notification = HIWORD(wparam);
+        const auto from = reinterpret_cast<HWND>(lparam);
+        // Multiline EDIT sends EN_VSCROLL/EN_HSCROLL as WM_COMMAND. Never
+        // confuse child notifications with the standard IDCANCEL command (2).
+        if (notification == BN_CLICKED && from && IsWindow(from)) {
+            if (id == kPreviewAccept && from == GetDlgItem(window, kPreviewAccept)) {
+                AcceptPending(); DestroyWindow(window); return 0;
+            }
+            if (id == kPreviewCancel && from == GetDlgItem(window, kPreviewCancel)) {
+                DestroyWindow(window); return 0;
+            }
+        }
+        // IsDialogMessage posts a synthetic ID=IDCANCEL with no source HWND.
+        if (id == IDCANCEL && notification == 0 && !from) {
             DestroyWindow(window); return 0;
         }
         break;
+    }
     case WM_CLOSE: DestroyWindow(window); return 0;
     case WM_DESTROY: g_preview = nullptr; ClearPending(); return 0;
     }
@@ -458,7 +483,7 @@ LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
 void OpenPreview() {
     if (g_preview) { SetForegroundWindow(g_preview); return; }
     g_preview = CreateWindowExW(WS_EX_APPWINDOW, L"CopyFixPreview", L"CopyFix - проверка текста",
-        WS_OVERLAPPEDWINDOW | WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT,
+        WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT,
         Scale(1040,96), Scale(690,96), nullptr, nullptr, g_instance, nullptr);
     if (!g_preview) { ClearPending(); Notify(L"Не удалось открыть предпросмотр."); }
 }
