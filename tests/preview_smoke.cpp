@@ -21,6 +21,7 @@ int main() {
         g_pending.before.text += L"More preview text across multiple lines.\r\n";
     }
     g_pending.after.text = g_pending.before.text;
+    g_pending.after.text.replace(0, 5, L"Fixed");
     const WNDCLASSEXW klass{sizeof(WNDCLASSEXW), 0, PreviewProc, 0, 0, g_instance,
         nullptr, nullptr, g_canvas_brush, nullptr, L"CopyFixPreview", nullptr};
     if (!RegisterClassExW(&klass)) return 10;
@@ -33,17 +34,27 @@ int main() {
     const auto after = GetDlgItem(preview, kPreviewAfterEdit);
     if (!before || !after || GetDlgCtrlID(after) == IDCANCEL ||
         GetDlgCtrlID(before) == GetDlgCtrlID(after)) return 12;
-    wchar_t klass[60]{};
-    GetClassNameW(after, klass, static_cast<int>(std::size(klass)));
-    if (wcscmp(klass, L"RICHEDIT50W") != 0) return 13;
+    wchar_t class_name[60]{};
+    GetClassNameW(after, class_name, static_cast<int>(std::size(class_name)));
+    if (wcscmp(class_name, L"RICHEDIT50W") != 0) return 13;
     if (SendMessageW(after, EM_GETLINECOUNT, 0, 0) < 100) return 14;
-    const auto bg = static_cast<COLORREF>(SendMessageW(after, EM_GETBKGNDCOLOR, 0, 0));
-    if (bg != kSurface) return 15;
+    // Read back a highlighted character: the preview must actually use a
+    // colored RichEdit selection, not merely render a white text surface.
+    CHARRANGE highlight{0, 1};
+    SendMessageW(after, EM_EXSETSEL, 0, reinterpret_cast<LPARAM>(&highlight));
+    CHARFORMAT2W fmt{};
+    fmt.cbSize = sizeof(fmt);
+    SendMessageW(after, EM_GETCHARFORMAT, SCF_SELECTION, reinterpret_cast<LPARAM>(&fmt));
+    if (!(fmt.dwMask & CFM_BACKCOLOR) || fmt.crBackColor != RGB(218, 247, 231)) return 15;
     const auto toggle = GetDlgItem(preview, kPreviewShowBreaks);
     if (!toggle) return 19;
-    SendMessageW(toggle, BM_CLICK, 0, 0);
+    SendMessageW(toggle, BM_SETCHECK, BST_CHECKED, 0);
+    SendMessageW(preview, WM_COMMAND, MAKEWPARAM(kPreviewShowBreaks, BN_CLICKED),
+                 reinterpret_cast<LPARAM>(toggle));
     if (!g_show_breaks || !IsWindow(preview)) return 20;
-    SendMessageW(toggle, BM_CLICK, 0, 0);
+    SendMessageW(toggle, BM_SETCHECK, BST_UNCHECKED, 0);
+    SendMessageW(preview, WM_COMMAND, MAKEWPARAM(kPreviewShowBreaks, BN_CLICKED),
+                 reinterpret_cast<LPARAM>(toggle));
     if (g_show_breaks || !IsWindow(preview)) return 21;
 
     // Win32 EDIT sends scroll notifications to its parent. These must never
