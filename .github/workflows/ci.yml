@@ -33,13 +33,10 @@ jobs:
         shell: pwsh
         run: |
           ./tools/check-pe.ps1 -Exe 'build/Release/CopyFix.exe' -OutDir 'build/pe-report'
-      - name: Export diagnostic package (not a GitHub Release)
-        if: always()
+      - name: Export standalone EXE only (not a GitHub Release)
         uses: actions/upload-artifact@v4
         with:
-          name: CopyFix-Windows-x64-prototype
-          if-no-files-found: warn
+          name: CopyFix-Windows-x64-EXE-only
+          if-no-files-found: error
           retention-days: 14
-          path: |
-            build/Release/CopyFix.exe
-            build/pe-report/pe-*.txt
+          path: build/Release/CopyFix.exe

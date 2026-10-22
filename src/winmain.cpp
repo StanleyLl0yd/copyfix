@@ -36,6 +36,30 @@ constexpr UINT kSettingsSave = 400;
 constexpr UINT kSettingsCancel = 401;
 constexpr UINT kComboHotkey = 402;
 constexpr UINT kComboProfile = 403;
+constexpr UINT kPreviewTitle = 410;
+constexpr UINT kPreviewSubtitle = 411;
+constexpr UINT kPreviewBeforeLabel = 412;
+constexpr UINT kPreviewAfterLabel = 413;
+constexpr UINT kPreviewNote = 414;
+constexpr UINT kSettingsTitle = 415;
+constexpr UINT kSettingsSubtitle = 416;
+constexpr UINT kSettingsFooter = 417;
+
+constexpr COLORREF kCanvas = RGB(247, 249, 252);
+constexpr COLORREF kSurface = RGB(255, 255, 255);
+constexpr COLORREF kInk = RGB(29, 42, 64);
+constexpr COLORREF kMuted = RGB(99, 113, 133);
+constexpr COLORREF kBlue = RGB(37, 99, 235);
+constexpr COLORREF kBorder = RGB(222, 228, 237);
+HBRUSH g_canvas_brush = nullptr;
+HBRUSH g_surface_brush = nullptr;
+HFONT g_font_body = nullptr;
+HFONT g_font_title = nullptr;
+HFONT g_font_label = nullptr;
+HFONT g_font_caption = nullptr;
+int g_preview_dpi = 96;
+int g_settings_dpi = 96;
+
 
 struct Settings {
     copyfix::Profile profile = copyfix::Profile::Gentle;
@@ -70,6 +94,61 @@ UINT g_hotkey_id = kHotkeyA;
 UINT g_taskbar_created = 0;
 bool g_hotkey_registered = false;
 
+int Scale(int px, int dpi) noexcept { return MulDiv(px, dpi, 96); }
+HFONT MakeFont(int points, int weight, int dpi) {
+    return CreateFontW(-MulDiv(points, dpi, 72), 0, 0, 0, weight,
+                       FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+                       OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+                       DEFAULT_PITCH | FF_SWISS, L"Segoe UI");
+}
+void ApplyFont(HWND hwnd, HFONT font) {
+    if (hwnd && font) SendMessageW(hwnd, WM_SETFONT, reinterpret_cast<WPARAM>(font), TRUE);
+}
+HWND MakeLabel(HWND parent, int id, const wchar_t* text, HFONT font) {
+    HWND label = CreateWindowExW(0, L"STATIC", text, WS_CHILD | WS_VISIBLE | SS_LEFT,
+                                0, 0, 1, 1, parent,
+                                reinterpret_cast<HMENU>(static_cast<UINT_PTR>(id)),
+                                g_instance, nullptr);
+    ApplyFont(label, font);
+    return label;
+}
+void Position(HWND parent, UINT id, int x, int y, int w, int h, int dpi) {
+    if (auto child = GetDlgItem(parent, id))
+        MoveWindow(child, Scale(x,dpi), Scale(y,dpi),
+                   std::max(1, Scale(w,dpi)), std::max(1, Scale(h,dpi)), TRUE);
+}
+void DrawActionButton(const DRAWITEMSTRUCT* item) {
+    if (!item || item->CtlType != ODT_BUTTON) return;
+    const bool primary = item->CtlID == kPreviewAccept || item->CtlID == kSettingsSave;
+    const bool pressed = (item->itemState & ODS_SELECTED) != 0;
+    const auto fill = CreateSolidBrush(primary ? (pressed ? RGB(29, 78, 216) : kBlue)
+                                             : (pressed ? RGB(233, 238, 246) : kSurface));
+    const auto pen = CreatePen(PS_SOLID, 1, primary ? kBlue : kBorder);
+    HGDIOBJ oldbrush = SelectObject(item->hDC, fill);
+    HGDIOBJ oldpen = SelectObject(item->hDC, pen);
+    RECT box = item->rcItem;
+    RoundRect(item->hDC, box.left, box.top, box.right, box.bottom,
+              Scale(12, g_preview_dpi), Scale(12, g_preview_dpi));
+    SelectObject(item->hDC, oldbrush);
+    SelectObject(item->hDC, oldpen);
+    DeleteObject(fill);
+    DeleteObject(pen);
+    wchar_t text[100]{};
+    GetWindowTextW(item->hwndItem, text, static_cast<int>(std::size(text)));
+    SetBkMode(item->hDC, TRANSPARENT);
+    SetTextColor(item->hDC, primary ? RGB(255,255,255) : kInk);
+    const auto priorfont = SelectObject(item->hDC, g_font_label ? g_font_label : GetStockObject(DEFAULT_GUI_FONT));
+    DrawTextW(item->hDC, text, -1, &box, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    SelectObject(item->hDC, priorfont);
+    if (item->itemState & ODS_FOCUS) {
+        RECT focus = box;
+        InflateRect(&focus, -Scale(4,g_preview_dpi), -Scale(4,g_preview_dpi));
+        DrawFocusRect(item->hDC, &focus);
+    }
+}
+
+
+
 const wchar_t* HotkeyName(int i) {
     switch (i) {
     case 1: return L"Ctrl + Shift + F9";
@@ -80,39 +159,43 @@ const wchar_t* HotkeyName(int i) {
 UINT HotkeyModifiers(int i) { return i == 1 ? MOD_CONTROL | MOD_SHIFT : MOD_CONTROL | MOD_ALT; }
 UINT HotkeyVirtualKey(int i) { return i == 2 ? L'C' : VK_F9; }
 
-std::wstring ConfigPath() {
-    try {
-        // Avoid a 64-KiB stack buffer (MSVC /analyze C6262).
-        std::wstring path(32768, L'\0');
-        const DWORD size = GetModuleFileNameW(nullptr, path.data(), static_cast<DWORD>(path.size()));
-        if (!size || size >= path.size()) return {};
-        path.resize(size);
-        const auto slash = path.find_last_of(L"\\/");
-        if (slash == std::wstring::npos) return {};
-        path.resize(slash + 1);
-        return path + L"copyfix.ini";
-    } catch (const std::bad_alloc&) {
-        return {}; // Settings stay in memory if a configuration path cannot be allocated.
-    }
+// Per-user settings: no INI, files, elevated privileges, or roaming surprises.
+constexpr const wchar_t* kSettingsKey = L"Software\\CopyFix";
+
+void LoadSettings() noexcept {
+    HKEY key = nullptr;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, kSettingsKey, 0, KEY_QUERY_VALUE, &key) != ERROR_SUCCESS)
+        return;
+    auto read = [key](const wchar_t* name, DWORD fallback) noexcept {
+        DWORD value = fallback;
+        DWORD type = 0;
+        DWORD length = sizeof(value);
+        if (RegQueryValueExW(key, name, nullptr, &type,
+                             reinterpret_cast<BYTE*>(&value), &length) != ERROR_SUCCESS ||
+            type != REG_DWORD || length != sizeof(value)) return fallback;
+        return value;
+    };
+    const DWORD profile = read(L"Profile", 0);
+    const DWORD hotkey = read(L"Hotkey", 0);
+    if (profile <= 2) g_settings.profile = static_cast<copyfix::Profile>(profile);
+    if (hotkey <= 2) g_settings.hotkey = static_cast<int>(hotkey);
+    RegCloseKey(key);
 }
 
-void LoadSettings() {
-    const auto path = ConfigPath();
-    if (path.empty()) return;
-    const int p = GetPrivateProfileIntW(L"CopyFix", L"Profile", 0, path.c_str());
-    const int h = GetPrivateProfileIntW(L"CopyFix", L"Hotkey", 0, path.c_str());
-    if (p >= 0 && p <= 2) g_settings.profile = static_cast<copyfix::Profile>(p);
-    if (h >= 0 && h <= 2) g_settings.hotkey = h;
-}
-
-void SaveSettings() {
-    const auto path = ConfigPath();
-    if (path.empty()) return;
-    const auto p = std::to_wstring(static_cast<int>(g_settings.profile));
-    const auto h = std::to_wstring(g_settings.hotkey);
-    // Portable: failures (e.g. read-only directories) keep in-memory settings.
-    WritePrivateProfileStringW(L"CopyFix", L"Profile", p.c_str(), path.c_str());
-    WritePrivateProfileStringW(L"CopyFix", L"Hotkey", h.c_str(), path.c_str());
+bool SaveSettings() noexcept {
+    HKEY key = nullptr;
+    if (RegCreateKeyExW(HKEY_CURRENT_USER, kSettingsKey, 0, nullptr,
+                        REG_OPTION_NON_VOLATILE, KEY_SET_VALUE, nullptr, &key,
+                        nullptr) != ERROR_SUCCESS) return false;
+    const DWORD profile = static_cast<DWORD>(g_settings.profile);
+    const DWORD hotkey = static_cast<DWORD>(g_settings.hotkey);
+    const bool ok =
+        RegSetValueExW(key, L"Profile", 0, REG_DWORD,
+                       reinterpret_cast<const BYTE*>(&profile), sizeof(profile)) == ERROR_SUCCESS &&
+        RegSetValueExW(key, L"Hotkey", 0, REG_DWORD,
+                       reinterpret_cast<const BYTE*>(&hotkey), sizeof(hotkey)) == ERROR_SUCCESS;
+    RegCloseKey(key);
+    return ok;
 }
 
 void Notify(const wchar_t* message) {
@@ -240,13 +323,7 @@ bool WriteIfUnchanged(const ClipSnapshot& expected, const std::wstring& text,
 }
 
 std::wstring ToClipboardLineEndings(const std::wstring& source) {
-    std::wstring out;
-    out.reserve(source.size());
-    for (std::size_t i = 0; i < source.size(); ++i) {
-        if (source[i] == L'\n' && (i == 0 || source[i - 1] != L'\r')) out += L'\r';
-        out += source[i];
-    }
-    return out;
+    return copyfix::ToWindowsLineEndings(source);
 }
 
 void ClearPending() { g_pending = Pending{}; }
@@ -273,68 +350,116 @@ void AcceptPending() {
     ClearPending();
 }
 
+// Read-only native EDIT needs Windows CRLF. LF-only produces visually joined
+// lines on Windows even when the transformation preserves all the paragraphs.
+void LayoutPreview(HWND window) {
+    RECT client{}; GetClientRect(window, &client);
+    const int dpi = g_preview_dpi;
+    const int w = MulDiv(client.right, 96, dpi);
+    const int h = MulDiv(client.bottom, 96, dpi);
+    const int margin = 26, gap = 20;
+    const int column = std::max(150, (w - 2 * margin - gap) / 2);
+    const int edit_y = 146;
+    const int edit_height = std::max(100, h - edit_y - 112);
+    Position(window, kPreviewTitle, margin, 22, w - 2*margin, 39, dpi);
+    Position(window, kPreviewSubtitle, margin, 64, w - 2*margin, 22, dpi);
+    Position(window, kPreviewBeforeLabel, margin, 112, column, 28, dpi);
+    Position(window, kPreviewAfterLabel, margin + column + gap, 112, column, 28, dpi);
+    Position(window, 1, margin, edit_y, column, edit_height, dpi);
+    Position(window, 2, margin + column + gap, edit_y, column, edit_height, dpi);
+    Position(window, kPreviewNote, margin, h - 76, std::max(160,w-386), 26, dpi);
+    Position(window, kPreviewCancel, w - 282, h - 84, 112, 44, dpi);
+    Position(window, kPreviewAccept, w - 162, h - 84, 136, 44, dpi);
+    InvalidateRect(window, nullptr, TRUE);
+}
+
 LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam) {
     switch (msg) {
     case WM_CREATE: {
-        CreateWindowW(L"STATIC", L"Исходный текст", WS_CHILD | WS_VISIBLE, 12, 12, 300, 20,
-                      window, nullptr, g_instance, nullptr);
-        CreateWindowW(L"STATIC", L"Предлагаемый результат", WS_CHILD | WS_VISIBLE, 410, 12, 300, 20,
-                      window, nullptr, g_instance, nullptr);
-        const auto count_label = L"Изменений: " + std::to_wstring(g_pending.after.changes);
-        CreateWindowW(L"STATIC", count_label.c_str(), WS_CHILD | WS_VISIBLE,
-                      12, 436, 400, 20, window, reinterpret_cast<HMENU>(3), g_instance, nullptr);
-        const DWORD style = WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_MULTILINE |
+        g_preview_dpi = static_cast<int>(GetDpiForWindow(window));
+        const wchar_t* profile = g_settings.profile == copyfix::Profile::Gentle ? L"бережный" :
+                                 g_settings.profile == copyfix::Profile::Smart ? L"умный" : L"глубокий";
+        MakeLabel(window, kPreviewTitle, L"Проверьте изменения", g_font_title);
+        MakeLabel(window, kPreviewSubtitle,
+                  L"Сравните текст до и после очистки. Изменения применяются только после подтверждения.", g_font_caption);
+        MakeLabel(window, kPreviewBeforeLabel, L"ИСХОДНЫЙ ТЕКСТ", g_font_label);
+        MakeLabel(window, kPreviewAfterLabel, L"РЕЗУЛЬТАТ ОБРАБОТКИ", g_font_label);
+        const std::wstring status = std::to_wstring(g_pending.after.changes) +
+                                    L" изменений  |  Профиль: " + profile;
+        MakeLabel(window, kPreviewNote, status.c_str(), g_font_caption);
+        const DWORD style = WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_TABSTOP | ES_MULTILINE |
                             ES_AUTOVSCROLL | ES_READONLY;
-        HWND before = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", g_pending.before.text.c_str(),
-                                     style, 12, 36, 382, 380, window, reinterpret_cast<HMENU>(1), g_instance, nullptr);
-        HWND after = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", g_pending.after.text.c_str(),
-                                    style, 410, 36, 382, 380, window, reinterpret_cast<HMENU>(2), g_instance, nullptr);
-        const auto font = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-        SendMessageW(before, WM_SETFONT, reinterpret_cast<WPARAM>(font), TRUE);
-        SendMessageW(after, WM_SETFONT, reinterpret_cast<WPARAM>(font), TRUE);
-        CreateWindowW(L"BUTTON", L"Применить", WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
-                      564, 432, 110, 32, window, reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kPreviewAccept)), g_instance, nullptr);
-        CreateWindowW(L"BUTTON", L"Отмена", WS_CHILD | WS_VISIBLE,
-                      684, 432, 110, 32, window, reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kPreviewCancel)), g_instance, nullptr);
+        // Convert before placing text in the Windows EDIT control: clipboard
+        // text can have CRLF, but the engine always returns canonical LF.
+        const auto original = copyfix::ToWindowsLineEndings(g_pending.before.text);
+        const auto cleaned = copyfix::ToWindowsLineEndings(g_pending.after.text);
+        HWND before = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", original.c_str(),
+                                     style, 0, 0, 1, 1, window, reinterpret_cast<HMENU>(1), g_instance, nullptr);
+        HWND after = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", cleaned.c_str(),
+                                    style, 0, 0, 1, 1, window, reinterpret_cast<HMENU>(2), g_instance, nullptr);
+        ApplyFont(before, g_font_body);
+        ApplyFont(after, g_font_body);
+        SendMessageW(before, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(12,12));
+        SendMessageW(after, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(12,12));
+        CreateWindowW(L"BUTTON", L"Применить", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW,
+                      0,0,1,1,window,reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kPreviewAccept)),g_instance,nullptr);
+        CreateWindowW(L"BUTTON", L"Отмена", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW,
+                      0,0,1,1,window,reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kPreviewCancel)),g_instance,nullptr);
+        LayoutPreview(window);
         return 0;
     }
-    case WM_SIZE: {
-        const int w = LOWORD(lparam), h = HIWORD(lparam);
-        const int gap = 16, left = 12, half = std::max(1, (w - 2 * left - gap) / 2);
-        MoveWindow(GetDlgItem(window, 1), left, 36, half, (h > 110 ? h - 110 : 1), TRUE);
-        MoveWindow(GetDlgItem(window, 2), left + half + gap, 36, half, (h > 110 ? h - 110 : 1), TRUE);
-        MoveWindow(GetDlgItem(window, 3), 12, h - 43, 400, 25, TRUE);
-        MoveWindow(GetDlgItem(window, kPreviewAccept), w - 240, h - 48, 106, 30, TRUE);
-        MoveWindow(GetDlgItem(window, kPreviewCancel), w - 122, h - 48, 106, 30, TRUE);
+    case WM_SIZE: LayoutPreview(window); return 0;
+    case WM_DPICHANGED: {
+        auto* suggested = reinterpret_cast<const RECT*>(lparam);
+        SetWindowPos(window, nullptr, suggested->left, suggested->top,
+                     suggested->right - suggested->left, suggested->bottom - suggested->top,
+                     SWP_NOZORDER | SWP_NOACTIVATE);
+        return 0;
+    }
+    case WM_CTLCOLORSTATIC: {
+        auto dc = reinterpret_cast<HDC>(wparam);
+        SetBkMode(dc, TRANSPARENT);
+        const UINT id = static_cast<UINT>(GetDlgCtrlID(reinterpret_cast<HWND>(lparam)));
+        if (id == 1 || id == 2) {
+            SetBkColor(dc, kSurface); SetTextColor(dc, kInk);
+            return reinterpret_cast<LRESULT>(g_surface_brush);
+        }
+        SetTextColor(dc, id == kPreviewTitle || id == kPreviewBeforeLabel ||
+                         id == kPreviewAfterLabel ? kInk : kMuted);
+        return reinterpret_cast<LRESULT>(g_canvas_brush);
+    }
+    case WM_DRAWITEM: DrawActionButton(reinterpret_cast<const DRAWITEMSTRUCT*>(lparam)); return TRUE;
+    case WM_PAINT: {
+        PAINTSTRUCT ps{}; const auto dc = BeginPaint(window, &ps);
+        RECT bounds{}; GetClientRect(window, &bounds);
+        RECT line{Scale(26,g_preview_dpi), Scale(98,g_preview_dpi),
+                  bounds.right - Scale(26,g_preview_dpi), Scale(99,g_preview_dpi)};
+        HBRUSH border = CreateSolidBrush(kBorder); FillRect(dc, &line, border); DeleteObject(border);
+        EndPaint(window, &ps);
         return 0;
     }
     case WM_GETMINMAXINFO: {
         auto* bounds = reinterpret_cast<MINMAXINFO*>(lparam);
-        bounds->ptMinTrackSize = POINT{600, 350};
+        bounds->ptMinTrackSize = POINT{Scale(760,g_preview_dpi), Scale(510,g_preview_dpi)};
         return 0;
     }
     case WM_COMMAND:
-        if (LOWORD(wparam) == kPreviewAccept) {
-            AcceptPending();
-            DestroyWindow(window);
-            return 0;
+        if (LOWORD(wparam) == kPreviewAccept) { AcceptPending(); DestroyWindow(window); return 0; }
+        if (LOWORD(wparam) == kPreviewCancel || LOWORD(wparam) == IDCANCEL) {
+            DestroyWindow(window); return 0;
         }
-        if (LOWORD(wparam) == kPreviewCancel) { DestroyWindow(window); return 0; }
         break;
     case WM_CLOSE: DestroyWindow(window); return 0;
-    case WM_DESTROY:
-        g_preview = nullptr;
-        ClearPending();
-        return 0;
+    case WM_DESTROY: g_preview = nullptr; ClearPending(); return 0;
     }
     return DefWindowProcW(window, msg, wparam, lparam);
 }
 
 void OpenPreview() {
     if (g_preview) { SetForegroundWindow(g_preview); return; }
-    g_preview = CreateWindowExW(WS_EX_APPWINDOW, L"CopyFixPreview", L"CopyFix: предпросмотр",
-        WS_OVERLAPPEDWINDOW | WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT, 830, 530,
-        nullptr, nullptr, g_instance, nullptr);
+    g_preview = CreateWindowExW(WS_EX_APPWINDOW, L"CopyFixPreview", L"CopyFix - проверка текста",
+        WS_OVERLAPPEDWINDOW | WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT,
+        Scale(1040,96), Scale(690,96), nullptr, nullptr, g_instance, nullptr);
     if (!g_preview) { ClearPending(); Notify(L"Не удалось открыть предпросмотр."); }
 }
 
@@ -387,30 +512,60 @@ void UndoLast() {
     } else Notify(L"Не удалось восстановить текст, буфер не изменён или занят.");
 }
 
+void LayoutSettings(HWND window) {
+    RECT bounds{}; GetClientRect(window, &bounds);
+    const int dpi = g_settings_dpi;
+    const int w = MulDiv(bounds.right, 96, dpi);
+    const int h = MulDiv(bounds.bottom, 96, dpi);
+    Position(window, kSettingsTitle, 26, 22, w-52, 38, dpi);
+    Position(window, kSettingsSubtitle, 26, 64, w-52, 40, dpi);
+    Position(window, 420, 26, 124, w-52, 24, dpi);
+    Position(window, kComboHotkey, 26, 154, w-52, 250, dpi);
+    Position(window, 421, 26, 222, w-52, 24, dpi);
+    Position(window, kComboProfile, 26, 252, w-52, 250, dpi);
+    Position(window, kSettingsFooter, 26, h-104, w-52, 36, dpi);
+    Position(window, kSettingsCancel, w-286, h-64, 122, 42, dpi);
+    Position(window, kSettingsSave, w-156, h-64, 130, 42, dpi);
+}
+
 LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam) {
     switch (msg) {
     case WM_CREATE: {
-        CreateWindowW(L"STATIC", L"Горячая клавиша:", WS_CHILD | WS_VISIBLE,
-                      20, 22, 250, 20, window, nullptr, g_instance, nullptr);
-        HWND h = CreateWindowW(L"COMBOBOX", nullptr,
-            WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL,
-            20, 45, 310, 200, window, reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kComboHotkey)), g_instance, nullptr);
-        for (int i = 0; i < 3; ++i) SendMessageW(h, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(HotkeyName(i)));
-        SendMessageW(h, CB_SETCURSEL, static_cast<WPARAM>(g_settings.hotkey), 0);
-        CreateWindowW(L"STATIC", L"Профиль:", WS_CHILD | WS_VISIBLE,
-                      20, 90, 250, 20, window, nullptr, g_instance, nullptr);
-        HWND p = CreateWindowW(L"COMBOBOX", nullptr,
-            WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL,
-            20, 113, 310, 200, window, reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kComboProfile)), g_instance, nullptr);
-        for (const auto* s : {L"Бережный", L"Умный", L"Глубокий"})
-            SendMessageW(p, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(s));
-        SendMessageW(p, CB_SETCURSEL, static_cast<WPARAM>(g_settings.profile), 0);
-        CreateWindowW(L"BUTTON", L"Сохранить", WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
-                      100, 174, 110, 32, window, reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kSettingsSave)), g_instance, nullptr);
-        CreateWindowW(L"BUTTON", L"Отмена", WS_CHILD | WS_VISIBLE,
-                      220, 174, 110, 32, window, reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kSettingsCancel)), g_instance, nullptr);
+        g_settings_dpi = static_cast<int>(GetDpiForWindow(window));
+        MakeLabel(window,kSettingsTitle,L"Настройки",g_font_title);
+        MakeLabel(window,kSettingsSubtitle,L"CopyFix работает локально. Параметры хранятся только в реестре Windows.",g_font_caption);
+        MakeLabel(window,420,L"ГОРЯЧАЯ КЛАВИША",g_font_label);
+        HWND hotkey = CreateWindowW(L"COMBOBOX",nullptr,WS_CHILD | WS_VISIBLE | WS_TABSTOP |
+            CBS_DROPDOWNLIST | WS_VSCROLL,0,0,1,1,window,
+            reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kComboHotkey)),g_instance,nullptr);
+        for(int i=0;i<3;++i) SendMessageW(hotkey,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(HotkeyName(i)));
+        SendMessageW(hotkey,CB_SETCURSEL,static_cast<WPARAM>(g_settings.hotkey),0);
+        ApplyFont(hotkey,g_font_body);
+        MakeLabel(window,421,L"ПРОФИЛЬ ОБРАБОТКИ",g_font_label);
+        HWND profile=CreateWindowW(L"COMBOBOX",nullptr,WS_CHILD | WS_VISIBLE | WS_TABSTOP |
+            CBS_DROPDOWNLIST | WS_VSCROLL,0,0,1,1,window,
+            reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kComboProfile)),g_instance,nullptr);
+        for(const auto* name:{L"Бережный",L"Умный",L"Глубокий"})
+            SendMessageW(profile,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(name));
+        SendMessageW(profile,CB_SETCURSEL,static_cast<WPARAM>(g_settings.profile),0);
+        ApplyFont(profile,g_font_body);
+        MakeLabel(window,kSettingsFooter,L"HKCU\\Software\\CopyFix  |  Без INI-файлов",g_font_caption);
+        CreateWindowW(L"BUTTON",L"Сохранить",WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW,
+            0,0,1,1,window,reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kSettingsSave)),g_instance,nullptr);
+        CreateWindowW(L"BUTTON",L"Отмена",WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW,
+            0,0,1,1,window,reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kSettingsCancel)),g_instance,nullptr);
+        LayoutSettings(window);
         return 0;
     }
+    case WM_SIZE: LayoutSettings(window); return 0;
+    case WM_CTLCOLORSTATIC: {
+        auto dc = reinterpret_cast<HDC>(wparam);
+        SetBkMode(dc,TRANSPARENT);
+        const UINT id = static_cast<UINT>(GetDlgCtrlID(reinterpret_cast<HWND>(lparam)));
+        SetTextColor(dc,id==kSettingsTitle||id==420||id==421 ? kInk : kMuted);
+        return reinterpret_cast<LRESULT>(g_canvas_brush);
+    }
+    case WM_DRAWITEM: DrawActionButton(reinterpret_cast<const DRAWITEMSTRUCT*>(lparam));return TRUE;
     case WM_COMMAND:
         if (LOWORD(wparam) == kSettingsSave) {
             const int next_hotkey = static_cast<int>(SendMessageW(GetDlgItem(window, kComboHotkey), CB_GETCURSEL, 0, 0));
@@ -424,24 +579,28 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
             }
             g_settings.hotkey = next_hotkey;
             g_settings.profile = static_cast<copyfix::Profile>(next_profile);
-            SaveSettings();
+            if (!SaveSettings())
+                MessageBoxW(window,L"Не удалось сохранить параметры в HKCU. Они действуют до выхода из CopyFix.",
+                            L"CopyFix",MB_OK | MB_ICONWARNING);
             DestroyWindow(window);
             return 0;
         }
-        if (LOWORD(wparam) == kSettingsCancel) { DestroyWindow(window); return 0; }
+        if (LOWORD(wparam) == kSettingsCancel || LOWORD(wparam) == IDCANCEL) {
+            DestroyWindow(window); return 0;
+        }
         break;
     case WM_CLOSE: DestroyWindow(window); return 0;
     case WM_DESTROY: g_settings_window = nullptr; return 0;
     }
-    return DefWindowProcW(window, msg, wparam, lparam);
+    return DefWindowProcW(window,msg,wparam,lparam);
 }
 
 void OpenSettings() {
     if (g_settings_window) { SetForegroundWindow(g_settings_window); return; }
-    g_settings_window = CreateWindowExW(WS_EX_APPWINDOW, L"CopyFixSettings", L"Настройки CopyFix",
+    g_settings_window = CreateWindowExW(WS_EX_APPWINDOW,L"CopyFixSettings",L"CopyFix - настройки",
         WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_VISIBLE,
-        CW_USEDEFAULT, CW_USEDEFAULT, 366, 252,
-        nullptr, nullptr, g_instance, nullptr);
+        CW_USEDEFAULT,CW_USEDEFAULT,Scale(510,96),Scale(468,96),
+        nullptr,nullptr,g_instance,nullptr);
 }
 
 void ShowMenu() {
@@ -518,7 +677,8 @@ LRESULT CALLBACK MessageProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
         case kMenuUndo: UndoLast(); break;
         case kMenuGentle: case kMenuSmart: case kMenuDeep:
             g_settings.profile = static_cast<copyfix::Profile>(LOWORD(wparam) - kMenuGentle);
-            SaveSettings(); break;
+            if (!SaveSettings()) Notify(L"Не удалось сохранить профиль в реестре HKCU.");
+            break;
         case kMenuSettings: OpenSettings(); break;
         case kMenuAbout:
             MessageBoxW(window, L"CopyFix 0.1.0\nНативная офлайн-утилита для очистки текста.\n"
@@ -544,6 +704,8 @@ LRESULT CALLBACK MessageProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
 
 int WINAPI wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE, _In_ PWSTR, _In_ int) {
     g_instance = instance;
+    // Native high-DPI layout, with a graceful fallback on older Windows 10.
+    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     g_instance_mutex = CreateMutexW(nullptr, FALSE, L"Local\\CopyFix_Portable_Instance_8A69E7C9");
     if (!g_instance_mutex) return 1;
     if (GetLastError() == ERROR_ALREADY_EXISTS) {
@@ -556,14 +718,21 @@ int WINAPI wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE, _In_ PWSTR, _In
         return 0;
     }
     LoadSettings();
+    g_canvas_brush = CreateSolidBrush(kCanvas);
+    g_surface_brush = CreateSolidBrush(kSurface);
+    const int dpi = static_cast<int>(GetDpiForSystem());
+    g_font_body = MakeFont(11, FW_NORMAL, dpi);
+    g_font_title = MakeFont(22, FW_SEMIBOLD, dpi);
+    g_font_label = MakeFont(10, FW_SEMIBOLD, dpi);
+    g_font_caption = MakeFont(10, FW_NORMAL, dpi);
     g_taskbar_created = RegisterWindowMessageW(L"TaskbarCreated");
     const WNDCLASSEXW classes[] = {
         {sizeof(WNDCLASSEXW), 0, MessageProc, 0, 0, instance, nullptr, nullptr,
             nullptr, nullptr, L"CopyFixMessage", nullptr},
         {sizeof(WNDCLASSEXW), 0, PreviewProc, 0, 0, instance, nullptr, nullptr,
-            reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1), nullptr, L"CopyFixPreview", nullptr},
+            g_canvas_brush, nullptr, L"CopyFixPreview", nullptr},
         {sizeof(WNDCLASSEXW), 0, SettingsProc, 0, 0, instance, nullptr, nullptr,
-            reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1), nullptr, L"CopyFixSettings", nullptr}
+            g_canvas_brush, nullptr, L"CopyFixSettings", nullptr}
     };
     for (const auto& wc : classes) {
         if (!RegisterClassExW(&wc)) { CloseHandle(g_instance_mutex); return 2; }
@@ -574,9 +743,17 @@ int WINAPI wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE, _In_ PWSTR, _In
     }
     MSG message{};
     while (GetMessageW(&message, nullptr, 0, 0) > 0) {
+        if (g_preview && IsDialogMessageW(g_preview, &message)) continue;
+        if (g_settings_window && IsDialogMessageW(g_settings_window, &message)) continue;
         TranslateMessage(&message);
         DispatchMessageW(&message);
     }
+    if (g_font_body) DeleteObject(g_font_body);
+    if (g_font_title) DeleteObject(g_font_title);
+    if (g_font_label) DeleteObject(g_font_label);
+    if (g_font_caption) DeleteObject(g_font_caption);
+    if (g_canvas_brush) DeleteObject(g_canvas_brush);
+    if (g_surface_brush) DeleteObject(g_surface_brush);
     CloseHandle(g_instance_mutex);
     return static_cast<int>(message.wParam);
 }
