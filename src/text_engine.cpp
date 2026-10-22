@@ -125,6 +125,26 @@ bool HasSuspiciousStructure(const std::wstring& line) noexcept {
     return false;
 }
 
+// A complete prose sentence can enumerate several comma-separated phrases.
+// Requiring a space after every comma, sentence punctuation and a multiword
+// first phrase avoids treating CSV headers such as "Name, Price, Quantity" or
+// compact data rows as prose. Repeated CSV-shaped rows remain protected below.
+bool LooksLikeProseEnumeration(const std::wstring& line) noexcept {
+    const auto last = line.find_last_not_of(L" \t");
+    if (last == std::wstring::npos) return false;
+    const auto end = line[last];
+    if (end != L'.' && end != L'!' && end != L'?') return false;
+    const auto comma = line.find(L',');
+    if (comma == std::wstring::npos || comma + 1 >= line.size()) return false;
+    const auto first = line.substr(0, comma);
+    const auto space = first.find(L' ');
+    if (space == std::wstring::npos || space == 0 || space + 1 == first.size()) return false;
+    for (auto pos = comma; pos != std::wstring::npos; pos = line.find(L',', pos + 1)) {
+        if (pos + 1 >= line.size() || line[pos + 1] != L' ') return false;
+    }
+    return true;
+}
+
 std::wstring NormalizePlainLine(const std::wstring& line, std::size_t& count) {
     if (line.empty()) return line;
     std::wstring out;
@@ -193,7 +213,7 @@ bool IsStructured(const std::wstring& s) {
     for (const auto& line : lines) {
         std::size_t commas = 0;
         for (const auto c : line) if (c == L',') ++commas;
-        if (commas >= 2) return true;
+        if (commas >= 2 && !LooksLikeProseEnumeration(line)) return true;
     }
     if (lines.size() > 1) {
         // Markdown hard line breaks: two trailing spaces are intentional.
