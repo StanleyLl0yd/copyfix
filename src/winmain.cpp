@@ -67,7 +67,7 @@ int g_settings_dpi = 96;
 
 
 struct Settings {
-    copyfix::Profile profile = copyfix::Profile::Gentle;
+    copyfix::Profile profile = copyfix::Profile::Deep;
     int hotkey = 0;
 };
 struct ClipSnapshot {
@@ -182,7 +182,7 @@ void LoadSettings() noexcept {
             type != REG_DWORD || length != sizeof(value)) return fallback;
         return value;
     };
-    const DWORD profile = read(L"Profile", 0);
+    const DWORD profile = read(L"Profile", static_cast<DWORD>(copyfix::Profile::Deep));
     const DWORD hotkey = read(L"Hotkey", 0);
     if (profile <= 2) g_settings.profile = static_cast<copyfix::Profile>(profile);
     if (hotkey <= 2) g_settings.hotkey = static_cast<int>(hotkey);
