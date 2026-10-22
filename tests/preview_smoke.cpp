@@ -41,7 +41,12 @@ int main() {
     if (SendMessageW(after, EM_GETLINECOUNT, 0, 0) < 100) return Fail(14);
     // Read back a highlighted character: the preview must actually use a
     // colored RichEdit selection, not merely render a white text surface.
-    CHARRANGE highlight{0, 1};
+    const auto highlights = copyfix::ComputePreviewDiff(
+        MakePreviewText(g_pending.before.text, false),
+        MakePreviewText(g_pending.after.text, false));
+    if (highlights.added.empty()) return Fail(22);
+    const auto begin = static_cast<LONG>(highlights.added.front().begin);
+    CHARRANGE highlight{begin, begin + 1};
     SendMessageW(after, EM_EXSETSEL, 0, reinterpret_cast<LPARAM>(&highlight));
     CHARFORMAT2W fmt{};
     fmt.cbSize = sizeof(fmt);
