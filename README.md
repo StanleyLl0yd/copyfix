@@ -15,8 +15,8 @@
 Profiles:
 
 - **Бережный** (default): normalize ASCII spaces and line endings, remove leading BOM, limit extra blank lines. Structured text is passed through unchanged.
-- **Умный**: additionally propose heuristic line joins (with preview).
-- **Глубокий**: additionally propose ambiguous dehyphenation (always preview).
+- **Умный**: предлагает объединять переносы внутри обычных абзацев, если следующая строка начинается со строчной буквы (с обязательным предпросмотром).
+- **Глубокий**: дополнительно предлагает исправлять переносы слов: `скопиро-\nван` -> `скопирован`; сохраняет дефис в распознаваемых составных словах вроде `Санкт-Петербург` и `северо-западный`. Неоднозначные изменения требуют подтверждения.
 
 No spelling correction, AI, OCR, auto-paste, clipboard monitoring, telemetry, advertisements, external DLLs or registry state. No license has been selected.
 
@@ -38,7 +38,7 @@ Built-in defaults require no files. Settings are stored exclusively in the per-u
 
 ## Windows interface and test ZIP
 
-The native Win32 preview uses a modernized two-column layout, readable Segoe UI text, and explicit confirmation. Both the original and transformed text are converted to CRLF solely for display and Windows clipboard serialization; paragraph boundaries are not discarded. The GitHub Actions test artifact ZIP contains **only `CopyFix.exe`**; PE audit results remain visible in CI logs. No installer or GitHub Release is produced.
+The native Windows RichEdit preview (built-in `Msftedit.dll`, no bundled dependency) has side-by-side selectable text with pink highlights for deleted text and green highlights for new text. Toggle `↵ Показать настоящие переносы строк` to distinguish source hard line breaks from visual wrapping; markers are for viewing only and are not applied to the clipboard. Actual clipboard serialization still uses CRLF; paragraph boundaries are preserved. The GitHub Actions test artifact ZIP contains **only `CopyFix.exe`**; PE audit results remain visible in CI logs. No installer or GitHub Release is produced.
 
 ## Security and limitations
 
@@ -48,7 +48,8 @@ The native Win32 preview uses a modernized two-column layout, readable Segoe UI 
 - A sequence change invalidates Undo, even if the visible text happens to match; Undo cannot overwrite newly copied content.
 - Structured content detection is deliberately conservative, **not a complete format parser**; it may skip editable plain text. No fixed heuristics can safely infer every real paragraph boundary or preserve every compound word, so potentially destructive joins require explicit confirmation.
 - Avoid copying passwords or secrets if you do not wish them to pass through the CopyFix process memory. CopyFix does not retain a clipboard history or log input/output text.
-- No claim of Windows compatibility, final EXE size, runtime autonomy, or complete security audit is made before actual testing.
+- Smart/Deep PDF reflow is heuristic and cannot determine every hyphenated compound without a dictionary or semantic context; do not accept ambiguous transformations without reviewing the highlighted result.
+- No claim of clean-system runtime compatibility or complete security audit is made before actual testing.
 
 ## Repository
 

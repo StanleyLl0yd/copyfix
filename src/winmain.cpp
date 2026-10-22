@@ -2,6 +2,8 @@
 #define NOMINMAX
 #include <windows.h>
 #include <shellapi.h>
+#include <richedit.h>
+#include "diff_spans.h"
 
 #include "text_engine.h"
 
@@ -32,6 +34,7 @@ constexpr UINT kMenuExit = 208;
 constexpr UINT kMenuOneLine = 209;
 constexpr UINT kPreviewBeforeEdit = 510;
 constexpr UINT kPreviewAfterEdit = 511;
+constexpr UINT kPreviewShowBreaks = 512;
 constexpr UINT kPreviewAccept = 300;
 constexpr UINT kPreviewCancel = 301;
 constexpr UINT kSettingsSave = 400;
@@ -92,6 +95,8 @@ Settings g_settings;
 Pending g_pending;
 Undo g_undo;
 HANDLE g_instance_mutex = nullptr;
+HMODULE g_richedit_module = nullptr;
+bool g_show_breaks = false;
 UINT g_hotkey_id = kHotkeyA;
 UINT g_taskbar_created = 0;
 bool g_hotkey_registered = false;
@@ -369,10 +374,64 @@ void LayoutPreview(HWND window) {
     Position(window, kPreviewAfterLabel, margin + column + gap, 112, column, 28, dpi);
     Position(window, kPreviewBeforeEdit, margin, edit_y, column, edit_height, dpi);
     Position(window, kPreviewAfterEdit, margin + column + gap, edit_y, column, edit_height, dpi);
-    Position(window, kPreviewNote, margin, h - 76, std::max(160,w-386), 26, dpi);
+    Position(window, kPreviewNote, margin, h - 98, std::max(160,w-300), 23, dpi);
+    Position(window, kPreviewShowBreaks, margin, h - 70, std::max(190,w-420), 25, dpi);
     Position(window, kPreviewCancel, w - 282, h - 84, 112, 44, dpi);
     Position(window, kPreviewAccept, w - 162, h - 84, 136, 44, dpi);
     InvalidateRect(window, nullptr, TRUE);
+}
+
+// RichEdit represents each hard paragraph break as a single CR, unlike
+// native EDIT. Diff ranges must use exactly these RichEdit character offsets.
+std::wstring MakePreviewText(const std::wstring& source, bool show_breaks) {
+    std::wstring result;
+    result.reserve(source.size() + (show_breaks ? source.size()/5 : 0));
+    for (std::size_t i=0; i<source.size(); ++i) {
+        if (source[i] == L'\r' || source[i] == L'\n') {
+            if (show_breaks) result += L" \u21B5";
+            result += L'\r';
+            if (source[i] == L'\r' && i+1 < source.size() && source[i+1] == L'\n') ++i;
+        } else result += source[i];
+    }
+    return result;
+}
+
+void SetPreviewRichText(HWND control, const std::wstring& text) {
+    SendMessageW(control, EM_EXLIMITTEXT, 0, static_cast<LPARAM>(kMaxPreviewChars*3));
+    SetWindowTextW(control, text.c_str());
+    SendMessageW(control, EM_SETBKGNDCOLOR, 0, static_cast<LPARAM>(kSurface));
+}
+
+void MarkChanges(HWND control, const std::vector<copyfix::DiffSpan>& spans, COLORREF background) {
+    if (!control) return;
+    SendMessageW(control, WM_SETREDRAW, FALSE, 0);
+    const auto limit = std::min(spans.size(), static_cast<std::size_t>(240));
+    for (std::size_t i=0; i<limit; ++i) {
+        CHARRANGE range{static_cast<LONG>(spans[i].begin), static_cast<LONG>(spans[i].end)};
+        SendMessageW(control, EM_EXSETSEL, 0, reinterpret_cast<LPARAM>(&range));
+        CHARFORMAT2W fmt{};
+        fmt.cbSize = sizeof(fmt);
+        fmt.dwMask = CFM_BACKCOLOR;
+        fmt.crBackColor = background;
+        SendMessageW(control, EM_SETCHARFORMAT, SCF_SELECTION, reinterpret_cast<LPARAM>(&fmt));
+    }
+    CHARRANGE none{0, 0};
+    SendMessageW(control, EM_EXSETSEL, 0, reinterpret_cast<LPARAM>(&none));
+    SendMessageW(control, WM_SETREDRAW, TRUE, 0);
+    InvalidateRect(control, nullptr, TRUE);
+}
+
+void RenderPreviewText(HWND window) {
+    const HWND before = GetDlgItem(window, kPreviewBeforeEdit);
+    const HWND after = GetDlgItem(window, kPreviewAfterEdit);
+    if (!before || !after) return;
+    const auto raw = MakePreviewText(g_pending.before.text, g_show_breaks);
+    const auto cleaned = MakePreviewText(g_pending.after.text, g_show_breaks);
+    const auto diff = copyfix::ComputePreviewDiff(raw, cleaned);
+    SetPreviewRichText(before, raw);
+    SetPreviewRichText(after, cleaned);
+    MarkChanges(before, diff.removed, RGB(255, 225, 225));
+    MarkChanges(after, diff.added, RGB(218, 247, 231));
 }
 
 LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam) {
@@ -383,30 +442,35 @@ LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
                                  g_settings.profile == copyfix::Profile::Smart ? L"умный" : L"глубокий";
         MakeLabel(window, kPreviewTitle, L"Проверьте изменения", g_font_title);
         MakeLabel(window, kPreviewSubtitle,
-                  L"Сравните текст до и после очистки. Изменения применяются только после подтверждения.", g_font_caption);
+                  L"Розовый: удалено  •  Зелёный: добавлено или изменено. Буфер меняется после подтверждения.", g_font_caption);
         MakeLabel(window, kPreviewBeforeLabel, L"ИСХОДНЫЙ ТЕКСТ", g_font_label);
         MakeLabel(window, kPreviewAfterLabel, L"РЕЗУЛЬТАТ ОБРАБОТКИ", g_font_label);
         const std::wstring status = std::to_wstring(g_pending.after.changes) +
                                     L" изменений  |  Профиль: " + profile;
         MakeLabel(window, kPreviewNote, status.c_str(), g_font_caption);
         const DWORD style = WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_TABSTOP | ES_MULTILINE |
-                            ES_AUTOVSCROLL | ES_READONLY;
-        // Convert before placing text in the Windows EDIT control: clipboard
-        // text can have CRLF, but the engine always returns canonical LF.
-        const auto original = copyfix::ToWindowsLineEndings(g_pending.before.text);
-        const auto cleaned = copyfix::ToWindowsLineEndings(g_pending.after.text);
-        HWND before = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", original.c_str(),
+                            ES_AUTOVSCROLL | ES_READONLY | ES_NOHIDESEL;
+        HWND before = CreateWindowExW(WS_EX_CLIENTEDGE, MSFTEDIT_CLASS, L"",
                                      style, 0, 0, 1, 1, window,
                                      reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kPreviewBeforeEdit)),
                                      g_instance, nullptr);
-        HWND after = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", cleaned.c_str(),
+        HWND after = CreateWindowExW(WS_EX_CLIENTEDGE, MSFTEDIT_CLASS, L"",
                                     style, 0, 0, 1, 1, window,
                                     reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kPreviewAfterEdit)),
                                     g_instance, nullptr);
+        if (!before || !after) return -1;
         ApplyFont(before, g_font_body);
         ApplyFont(after, g_font_body);
         SendMessageW(before, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(12,12));
         SendMessageW(after, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(12,12));
+        HWND toggle = CreateWindowExW(0, L"BUTTON", L"↵ Показать настоящие переносы строк",
+                                      WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
+                                      0,0,1,1,window,
+                                      reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kPreviewShowBreaks)),
+                                      g_instance,nullptr);
+        ApplyFont(toggle, g_font_caption);
+        g_show_breaks = false;
+        RenderPreviewText(window);
         CreateWindowW(L"BUTTON", L"Применить", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW,
                       0,0,1,1,window,reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kPreviewAccept)),g_instance,nullptr);
         CreateWindowW(L"BUTTON", L"Отмена", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW,
@@ -425,15 +489,6 @@ LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
     case WM_CTLCOLORSTATIC: {
         auto dc = reinterpret_cast<HDC>(wparam);
         const UINT id = static_cast<UINT>(GetDlgCtrlID(reinterpret_cast<HWND>(lparam)));
-        if (id == kPreviewBeforeEdit || id == kPreviewAfterEdit) {
-            // Read-only EDIT controls request WM_CTLCOLORSTATIC. Their text
-            // background MUST be opaque: TRANSPARENT leaves stale glyphs when
-            // the control BitBlts its surface during scrolling.
-            SetBkMode(dc, OPAQUE);
-            SetBkColor(dc, kSurface);
-            SetTextColor(dc, kInk);
-            return reinterpret_cast<LRESULT>(g_surface_brush);
-        }
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, id == kPreviewTitle || id == kPreviewBeforeLabel ||
                          id == kPreviewAfterLabel ? kInk : kMuted);
@@ -461,6 +516,11 @@ LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
         // Multiline EDIT sends EN_VSCROLL/EN_HSCROLL as WM_COMMAND. Never
         // confuse child notifications with the standard IDCANCEL command (2).
         if (notification == BN_CLICKED && from && IsWindow(from)) {
+            if (id == kPreviewShowBreaks && from == GetDlgItem(window, kPreviewShowBreaks)) {
+                g_show_breaks = SendMessageW(from, BM_GETCHECK, 0, 0) == BST_CHECKED;
+                RenderPreviewText(window);
+                return 0;
+            }
             if (id == kPreviewAccept && from == GetDlgItem(window, kPreviewAccept)) {
                 AcceptPending(); DestroyWindow(window); return 0;
             }
@@ -743,6 +803,13 @@ int WINAPI wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE, _In_ PWSTR, _In
         return 0;
     }
     LoadSettings();
+    g_richedit_module = LoadLibraryW(L"Msftedit.dll");
+    if (!g_richedit_module) {
+        MessageBoxW(nullptr, L"Не удалось загрузить системный редактор Msftedit.dll.",
+                    L"CopyFix", MB_ICONERROR | MB_OK);
+        CloseHandle(g_instance_mutex);
+        return 1;
+    }
     g_canvas_brush = CreateSolidBrush(kCanvas);
     g_surface_brush = CreateSolidBrush(kSurface);
     const int dpi = static_cast<int>(GetDpiForSystem());
@@ -779,6 +846,7 @@ int WINAPI wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE, _In_ PWSTR, _In
     if (g_font_caption) DeleteObject(g_font_caption);
     if (g_canvas_brush) DeleteObject(g_canvas_brush);
     if (g_surface_brush) DeleteObject(g_surface_brush);
+    if (g_richedit_module) FreeLibrary(g_richedit_module);
     CloseHandle(g_instance_mutex);
     return static_cast<int>(message.wParam);
 }
