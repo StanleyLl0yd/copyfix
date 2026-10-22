@@ -1,0 +1,26 @@
+# Build outputs
+/build/
+/out/
+/.vs/
+/CMakeFiles/
+/CMakeCache.txt
+*.obj
+*.o
+*.exe
+*.dll
+*.pdb
+*.ilk
+*.lib
+*.exp
+*.ipch
+*.suo
+*.user
+*.log
+*.tmp
+# Portable user-specific settings
+copyfix.ini
+# Editor / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

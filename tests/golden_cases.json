@@ -1,0 +1,1064 @@
+[
+  {
+    "id": "spaces_01",
+    "category": "spaces",
+    "description": "spaces 01",
+    "profile": "gentle",
+    "input": "a  b",
+    "expected": "a b",
+    "protected_structure": false
+  },
+  {
+    "id": "spaces_02",
+    "category": "spaces",
+    "description": "spaces 02",
+    "profile": "gentle",
+    "input": "a   b",
+    "expected": "a b",
+    "protected_structure": false
+  },
+  {
+    "id": "spaces_03",
+    "category": "spaces",
+    "description": "spaces 03",
+    "profile": "gentle",
+    "input": "а   б",
+    "expected": "а б",
+    "protected_structure": false
+  },
+  {
+    "id": "spaces_04",
+    "category": "spaces",
+    "description": "spaces 04",
+    "profile": "gentle",
+    "input": "Привет    мир",
+    "expected": "Привет мир",
+    "protected_structure": false
+  },
+  {
+    "id": "spaces_05",
+    "category": "spaces",
+    "description": "spaces 05",
+    "profile": "gentle",
+    "input": "  начало",
+    "expected": "начало",
+    "protected_structure": false
+  },
+  {
+    "id": "spaces_06",
+    "category": "spaces",
+    "description": "spaces 06",
+    "profile": "gentle",
+    "input": "конец  ",
+    "expected": "конец",
+    "protected_structure": false
+  },
+  {
+    "id": "spaces_07",
+    "category": "spaces",
+    "description": "spaces 07",
+    "profile": "gentle",
+    "input": "  оба   края  ",
+    "expected": "оба края",
+    "protected_structure": false
+  },
+  {
+    "id": "spaces_08",
+    "category": "spaces",
+    "description": "spaces 08",
+    "profile": "gentle",
+    "input": "текст   с   пробелами",
+    "expected": "текст с пробелами",
+    "protected_structure": false
+  },
+  {
+    "id": "spaces_09",
+    "category": "spaces",
+    "description": "spaces 09",
+    "profile": "gentle",
+    "input": "5  кг",
+    "expected": "5 кг",
+    "protected_structure": false
+  },
+  {
+    "id": "spaces_10",
+    "category": "spaces",
+    "description": "spaces 10",
+    "profile": "gentle",
+    "input": "версия  1.0",
+    "expected": "версия 1.0",
+    "protected_structure": false
+  },
+  {
+    "id": "spaces_11",
+    "category": "spaces",
+    "description": "spaces 11",
+    "profile": "gentle",
+    "input": "строка   №  5",
+    "expected": "строка № 5",
+    "protected_structure": false
+  },
+  {
+    "id": "spaces_12",
+    "category": "spaces",
+    "description": "spaces 12",
+    "profile": "gentle",
+    "input": "Он сказал:  «Привет»",
+    "expected": "Он сказал: «Привет»",
+    "protected_structure": false
+  },
+  {
+    "id": "spaces_13",
+    "category": "spaces",
+    "description": "spaces 13",
+    "profile": "gentle",
+    "input": "Ёж  живёт",
+    "expected": "Ёж живёт",
+    "protected_structure": false
+  },
+  {
+    "id": "spaces_14",
+    "category": "spaces",
+    "description": "spaces 14",
+    "profile": "gentle",
+    "input": "hello   world",
+    "expected": "hello world",
+    "protected_structure": false
+  },
+  {
+    "id": "spaces_15",
+    "category": "spaces",
+    "description": "spaces 15",
+    "profile": "gentle",
+    "input": "русский   and   english",
+    "expected": "русский and english",
+    "protected_structure": false
+  },
+  {
+    "id": "spaces_16",
+    "category": "spaces",
+    "description": "spaces 16",
+    "profile": "gentle",
+    "input": "A ́  B",
+    "expected": "A ́ B",
+    "protected_structure": false
+  },
+  {
+    "id": "spaces_17",
+    "category": "spaces",
+    "description": "spaces 17",
+    "profile": "gentle",
+    "input": "😀   👨‍👩‍👧",
+    "expected": "😀 👨‍👩‍👧",
+    "protected_structure": false
+  },
+  {
+    "id": "spaces_18",
+    "category": "spaces",
+    "description": "spaces 18",
+    "profile": "gentle",
+    "input": "مرحبا   мир",
+    "expected": "مرحبا мир",
+    "protected_structure": false
+  },
+  {
+    "id": "spaces_19",
+    "category": "spaces",
+    "description": "spaces 19",
+    "profile": "gentle",
+    "input": "你好   мир",
+    "expected": "你好 мир",
+    "protected_structure": false
+  },
+  {
+    "id": "spaces_20",
+    "category": "spaces",
+    "description": "spaces 20",
+    "profile": "gentle",
+    "input": "🧪   тест",
+    "expected": "🧪 тест",
+    "protected_structure": false
+  },
+  {
+    "id": "spaces_21",
+    "category": "spaces",
+    "description": "spaces 21",
+    "profile": "gentle",
+    "input": "документ     2026",
+    "expected": "документ 2026",
+    "protected_structure": false
+  },
+  {
+    "id": "spaces_22",
+    "category": "spaces",
+    "description": "spaces 22",
+    "profile": "gentle",
+    "input": "строка       пробел",
+    "expected": "строка пробел",
+    "protected_structure": false
+  },
+  {
+    "id": "spaces_23",
+    "category": "spaces",
+    "description": "spaces 23",
+    "profile": "gentle",
+    "input": "  яблоко",
+    "expected": "яблоко",
+    "protected_structure": false
+  },
+  {
+    "id": "spaces_24",
+    "category": "spaces",
+    "description": "spaces 24",
+    "profile": "gentle",
+    "input": "груша   ",
+    "expected": "груша",
+    "protected_structure": false
+  },
+  {
+    "id": "spaces_25",
+    "category": "spaces",
+    "description": "spaces 25",
+    "profile": "gentle",
+    "input": "  текст  ",
+    "expected": "текст",
+    "protected_structure": false
+  },
+  {
+    "id": "newlines_01",
+    "category": "newlines",
+    "description": "newlines 01",
+    "profile": "gentle",
+    "input": "one\r\ntwo",
+    "expected": "one\ntwo",
+    "protected_structure": false
+  },
+  {
+    "id": "newlines_02",
+    "category": "newlines",
+    "description": "newlines 02",
+    "profile": "gentle",
+    "input": "один\rдва",
+    "expected": "один\nдва",
+    "protected_structure": false
+  },
+  {
+    "id": "newlines_03",
+    "category": "newlines",
+    "description": "newlines 03",
+    "profile": "gentle",
+    "input": "one\ntwo",
+    "expected": "one\ntwo",
+    "protected_structure": false
+  },
+  {
+    "id": "newlines_04",
+    "category": "newlines",
+    "description": "newlines 04",
+    "profile": "gentle",
+    "input": "a\r\nb\r\nc",
+    "expected": "a\nb\nc",
+    "protected_structure": false
+  },
+  {
+    "id": "newlines_05",
+    "category": "newlines",
+    "description": "newlines 05",
+    "profile": "gentle",
+    "input": "a\rb\nc",
+    "expected": "a\nb\nc",
+    "protected_structure": false
+  },
+  {
+    "id": "newlines_06",
+    "category": "newlines",
+    "description": "newlines 06",
+    "profile": "gentle",
+    "input": "a\r\nb\rc",
+    "expected": "a\nb\nc",
+    "protected_structure": false
+  },
+  {
+    "id": "newlines_07",
+    "category": "newlines",
+    "description": "newlines 07",
+    "profile": "gentle",
+    "input": "а\r\nб",
+    "expected": "а\nб",
+    "protected_structure": false
+  },
+  {
+    "id": "newlines_08",
+    "category": "newlines",
+    "description": "newlines 08",
+    "profile": "gentle",
+    "input": "a\r\n",
+    "expected": "a\n",
+    "protected_structure": false
+  },
+  {
+    "id": "newlines_09",
+    "category": "newlines",
+    "description": "newlines 09",
+    "profile": "gentle",
+    "input": "\ntext",
+    "expected": "\ntext",
+    "protected_structure": false
+  },
+  {
+    "id": "newlines_10",
+    "category": "newlines",
+    "description": "newlines 10",
+    "profile": "gentle",
+    "input": "a\n\nb",
+    "expected": "a\n\nb",
+    "protected_structure": false
+  },
+  {
+    "id": "newlines_11",
+    "category": "newlines",
+    "description": "newlines 11",
+    "profile": "gentle",
+    "input": "a\n\n\nb",
+    "expected": "a\n\nb",
+    "protected_structure": false
+  },
+  {
+    "id": "newlines_12",
+    "category": "newlines",
+    "description": "newlines 12",
+    "profile": "gentle",
+    "input": "a\n\n\n\nb",
+    "expected": "a\n\nb",
+    "protected_structure": false
+  },
+  {
+    "id": "newlines_13",
+    "category": "newlines",
+    "description": "newlines 13",
+    "profile": "gentle",
+    "input": "a\n\n\n\n\n\nb",
+    "expected": "a\n\nb",
+    "protected_structure": false
+  },
+  {
+    "id": "newlines_14",
+    "category": "newlines",
+    "description": "newlines 14",
+    "profile": "gentle",
+    "input": "a\n\n\nb\n\n\nc",
+    "expected": "a\n\nb\n\nc",
+    "protected_structure": false
+  },
+  {
+    "id": "newlines_15",
+    "category": "newlines",
+    "description": "newlines 15",
+    "profile": "gentle",
+    "input": "a\r\n\r\n\r\nb",
+    "expected": "a\n\nb",
+    "protected_structure": false
+  },
+  {
+    "id": "newlines_16",
+    "category": "newlines",
+    "description": "newlines 16",
+    "profile": "gentle",
+    "input": "сначала\r\n\r\n\r\nконец",
+    "expected": "сначала\n\nконец",
+    "protected_structure": false
+  },
+  {
+    "id": "unicode_01",
+    "category": "unicode",
+    "description": "unicode 01",
+    "profile": "gentle",
+    "input": "﻿Текст",
+    "expected": "Текст",
+    "protected_structure": false
+  },
+  {
+    "id": "unicode_02",
+    "category": "unicode",
+    "description": "unicode 02",
+    "profile": "gentle",
+    "input": "﻿Ёж",
+    "expected": "Ёж",
+    "protected_structure": false
+  },
+  {
+    "id": "unicode_03",
+    "category": "unicode",
+    "description": "unicode 03",
+    "profile": "gentle",
+    "input": "﻿A",
+    "expected": "A",
+    "protected_structure": false
+  },
+  {
+    "id": "unicode_04",
+    "category": "unicode",
+    "description": "unicode 04",
+    "profile": "gentle",
+    "input": "ё   Ё",
+    "expected": "ё Ё",
+    "protected_structure": false
+  },
+  {
+    "id": "unicode_05",
+    "category": "unicode",
+    "description": "unicode 05",
+    "profile": "gentle",
+    "input": "́  combining",
+    "expected": "́ combining",
+    "protected_structure": false
+  },
+  {
+    "id": "unicode_06",
+    "category": "unicode",
+    "description": "unicode 06",
+    "profile": "gentle",
+    "input": "👩‍💻  working",
+    "expected": "👩‍💻 working",
+    "protected_structure": false
+  },
+  {
+    "id": "unicode_07",
+    "category": "unicode",
+    "description": "unicode 07",
+    "profile": "gentle",
+    "input": "👨‍👩‍👧‍👦  вместе",
+    "expected": "👨‍👩‍👧‍👦 вместе",
+    "protected_structure": false
+  },
+  {
+    "id": "unicode_08",
+    "category": "unicode",
+    "description": "unicode 08",
+    "profile": "gentle",
+    "input": "©  2026",
+    "expected": "© 2026",
+    "protected_structure": false
+  },
+  {
+    "id": "unicode_09",
+    "category": "unicode",
+    "description": "unicode 09",
+    "profile": "gentle",
+    "input": "северо-западный",
+    "expected": "северо-западный",
+    "protected_structure": false
+  },
+  {
+    "id": "unicode_10",
+    "category": "unicode",
+    "description": "unicode 10",
+    "profile": "gentle",
+    "input": "до­кумент",
+    "expected": "до­кумент",
+    "protected_structure": false
+  },
+  {
+    "id": "unicode_11",
+    "category": "unicode",
+    "description": "unicode 11",
+    "profile": "gentle",
+    "input": "цена 100",
+    "expected": "цена 100",
+    "protected_structure": false
+  },
+  {
+    "id": "unicode_12",
+    "category": "unicode",
+    "description": "unicode 12",
+    "profile": "gentle",
+    "input": "A‍B",
+    "expected": "A‍B",
+    "protected_structure": false
+  },
+  {
+    "id": "unicode_13",
+    "category": "unicode",
+    "description": "unicode 13",
+    "profile": "gentle",
+    "input": "вопрос️",
+    "expected": "вопрос️",
+    "protected_structure": false
+  },
+  {
+    "id": "unicode_14",
+    "category": "unicode",
+    "description": "unicode 14",
+    "profile": "gentle",
+    "input": "ä  b",
+    "expected": "ä b",
+    "protected_structure": false
+  },
+  {
+    "id": "unicode_15",
+    "category": "unicode",
+    "description": "unicode 15",
+    "profile": "gentle",
+    "input": "1 000",
+    "expected": "1 000",
+    "protected_structure": false
+  },
+  {
+    "id": "unicode_16",
+    "category": "unicode",
+    "description": "unicode 16",
+    "profile": "gentle",
+    "input": "⓵   число",
+    "expected": "⓵ число",
+    "protected_structure": false
+  },
+  {
+    "id": "structured_json_object",
+    "category": "structured",
+    "description": "structured json object",
+    "profile": "gentle",
+    "input": "{\"a\":  1}",
+    "expected": "{\"a\":  1}",
+    "protected_structure": true
+  },
+  {
+    "id": "structured_json_array",
+    "category": "structured",
+    "description": "structured json array",
+    "profile": "smart",
+    "input": "[1,  2, 3]",
+    "expected": "[1,  2, 3]",
+    "protected_structure": true
+  },
+  {
+    "id": "structured_xml",
+    "category": "structured",
+    "description": "structured xml",
+    "profile": "deep",
+    "input": "<root>  text </root>",
+    "expected": "<root>  text </root>",
+    "protected_structure": true
+  },
+  {
+    "id": "structured_yaml",
+    "category": "structured",
+    "description": "structured yaml",
+    "profile": "gentle",
+    "input": "key:  value\n  nested:  item",
+    "expected": "key:  value\n  nested:  item",
+    "protected_structure": true
+  },
+  {
+    "id": "structured_markdown_heading",
+    "category": "structured",
+    "description": "structured markdown heading",
+    "profile": "smart",
+    "input": "#  Заголовок",
+    "expected": "#  Заголовок",
+    "protected_structure": true
+  },
+  {
+    "id": "structured_markdown_list",
+    "category": "structured",
+    "description": "structured markdown list",
+    "profile": "deep",
+    "input": "-  Первый пункт",
+    "expected": "-  Первый пункт",
+    "protected_structure": true
+  },
+  {
+    "id": "structured_markdown_table",
+    "category": "structured",
+    "description": "structured markdown table",
+    "profile": "gentle",
+    "input": "| A | B |\n|---|---|",
+    "expected": "| A | B |\n|---|---|",
+    "protected_structure": true
+  },
+  {
+    "id": "structured_markdown_quote",
+    "category": "structured",
+    "description": "structured markdown quote",
+    "profile": "smart",
+    "input": ">  Цитата",
+    "expected": ">  Цитата",
+    "protected_structure": true
+  },
+  {
+    "id": "structured_markdown_code",
+    "category": "structured",
+    "description": "structured markdown code",
+    "profile": "deep",
+    "input": "```json\n{ \"a\": 1 }\n```",
+    "expected": "```json\n{ \"a\": 1 }\n```",
+    "protected_structure": true
+  },
+  {
+    "id": "structured_bullet",
+    "category": "structured",
+    "description": "structured bullet",
+    "profile": "gentle",
+    "input": "•  элемент",
+    "expected": "•  элемент",
+    "protected_structure": true
+  },
+  {
+    "id": "structured_numbered",
+    "category": "structured",
+    "description": "structured numbered",
+    "profile": "smart",
+    "input": "1.  пункт",
+    "expected": "1.  пункт",
+    "protected_structure": true
+  },
+  {
+    "id": "structured_nested_numbered",
+    "category": "structured",
+    "description": "structured nested numbered",
+    "profile": "deep",
+    "input": "  2)  второй",
+    "expected": "  2)  второй",
+    "protected_structure": true
+  },
+  {
+    "id": "structured_cpp",
+    "category": "structured",
+    "description": "structured cpp",
+    "profile": "gentle",
+    "input": "int  main() {  return 0; }",
+    "expected": "int  main() {  return 0; }",
+    "protected_structure": true
+  },
+  {
+    "id": "structured_js",
+    "category": "structured",
+    "description": "structured js",
+    "profile": "smart",
+    "input": "const x =  2;",
+    "expected": "const x =  2;",
+    "protected_structure": true
+  },
+  {
+    "id": "structured_py",
+    "category": "structured",
+    "description": "structured py",
+    "profile": "deep",
+    "input": "print(  \"hi\")",
+    "expected": "print(  \"hi\")",
+    "protected_structure": true
+  },
+  {
+    "id": "structured_shell_command",
+    "category": "structured",
+    "description": "structured shell command",
+    "profile": "gentle",
+    "input": "echo  hello &&  exit",
+    "expected": "echo  hello &&  exit",
+    "protected_structure": true
+  },
+  {
+    "id": "structured_powershell",
+    "category": "structured",
+    "description": "structured powershell",
+    "profile": "smart",
+    "input": "Get-Item -Path C:\\Some  Folder",
+    "expected": "Get-Item -Path C:\\Some  Folder",
+    "protected_structure": true
+  },
+  {
+    "id": "structured_url",
+    "category": "structured",
+    "description": "structured url",
+    "profile": "deep",
+    "input": "https://example.org/a  b",
+    "expected": "https://example.org/a  b",
+    "protected_structure": true
+  },
+  {
+    "id": "structured_email",
+    "category": "structured",
+    "description": "structured email",
+    "profile": "gentle",
+    "input": "test@example.org  private",
+    "expected": "test@example.org  private",
+    "protected_structure": true
+  },
+  {
+    "id": "structured_ipv4",
+    "category": "structured",
+    "description": "structured ipv4",
+    "profile": "smart",
+    "input": "192.168.0.1  10.0.0.1",
+    "expected": "192.168.0.1  10.0.0.1",
+    "protected_structure": true
+  },
+  {
+    "id": "structured_ipv4_inline",
+    "category": "structured",
+    "description": "structured ipv4 inline",
+    "profile": "deep",
+    "input": "IP 8.8.8.8  works",
+    "expected": "IP 8.8.8.8  works",
+    "protected_structure": true
+  },
+  {
+    "id": "structured_csv",
+    "category": "structured",
+    "description": "structured csv",
+    "profile": "gentle",
+    "input": "name, age, city\nIvan, 30, Moscow\nLena, 40, Paris",
+    "expected": "name, age, city\nIvan, 30, Moscow\nLena, 40, Paris",
+    "protected_structure": true
+  },
+  {
+    "id": "structured_tsv",
+    "category": "structured",
+    "description": "structured tsv",
+    "profile": "smart",
+    "input": "name\t  age\nIvan\t  30",
+    "expected": "name\t  age\nIvan\t  30",
+    "protected_structure": true
+  },
+  {
+    "id": "structured_log",
+    "category": "structured",
+    "description": "structured log",
+    "profile": "deep",
+    "input": "2026-10-22 12:33:10  ERROR  failed",
+    "expected": "2026-10-22 12:33:10  ERROR  failed",
+    "protected_structure": true
+  },
+  {
+    "id": "structured_xml_escaped",
+    "category": "structured",
+    "description": "structured xml escaped",
+    "profile": "gentle",
+    "input": "<tag attr=\" a  b\"> x </tag>",
+    "expected": "<tag attr=\" a  b\"> x </tag>",
+    "protected_structure": true
+  },
+  {
+    "id": "structured_json_pretty",
+    "category": "structured",
+    "description": "structured json pretty",
+    "profile": "smart",
+    "input": "{\n  \"name\":  \"test\",\n  \"count\": 1\n}",
+    "expected": "{\n  \"name\":  \"test\",\n  \"count\": 1\n}",
+    "protected_structure": true
+  },
+  {
+    "id": "structured_html",
+    "category": "structured",
+    "description": "structured html",
+    "profile": "deep",
+    "input": "<div>  Copy me </div>",
+    "expected": "<div>  Copy me </div>",
+    "protected_structure": true
+  },
+  {
+    "id": "structured_bash_shebang",
+    "category": "structured",
+    "description": "structured bash shebang",
+    "profile": "gentle",
+    "input": "#!/bin/bash\necho  hi",
+    "expected": "#!/bin/bash\necho  hi",
+    "protected_structure": true
+  },
+  {
+    "id": "structured_path",
+    "category": "structured",
+    "description": "structured path",
+    "profile": "smart",
+    "input": "C:\\Program Files\\CopyFix  Test",
+    "expected": "C:\\Program Files\\CopyFix  Test",
+    "protected_structure": true
+  },
+  {
+    "id": "structured_text_has_link",
+    "category": "structured",
+    "description": "structured text has link",
+    "profile": "deep",
+    "input": "Прочитайте https://example.com  затем ответьте",
+    "expected": "Прочитайте https://example.com  затем ответьте",
+    "protected_structure": true
+  },
+  {
+    "id": "structured_mail_header",
+    "category": "structured",
+    "description": "structured mail header",
+    "profile": "gentle",
+    "input": "To: alice@example.org\nSubject:  Important",
+    "expected": "To: alice@example.org\nSubject:  Important",
+    "protected_structure": true
+  },
+  {
+    "id": "structured_python_indent",
+    "category": "structured",
+    "description": "structured python indent",
+    "profile": "smart",
+    "input": "if x:\n    print(  x)",
+    "expected": "if x:\n    print(  x)",
+    "protected_structure": true
+  },
+  {
+    "id": "structured_quoted_table",
+    "category": "structured",
+    "description": "structured quoted table",
+    "profile": "deep",
+    "input": "A|B|C\n1| 2|3",
+    "expected": "A|B|C\n1| 2|3",
+    "protected_structure": true
+  },
+  {
+    "id": "structured_multiline_command",
+    "category": "structured",
+    "description": "structured multiline command",
+    "profile": "gentle",
+    "input": "curl  https://example.com\\\n  -o a.txt",
+    "expected": "curl  https://example.com\\\n  -o a.txt",
+    "protected_structure": true
+  },
+  {
+    "id": "structured_diff_patch",
+    "category": "structured",
+    "description": "structured diff patch",
+    "profile": "smart",
+    "input": "+ added  line\n- removed  line",
+    "expected": "+ added  line\n- removed  line",
+    "protected_structure": true
+  },
+  {
+    "id": "structured_cli_equals",
+    "category": "structured",
+    "description": "structured cli equals",
+    "profile": "deep",
+    "input": "export KEY =  VALUE",
+    "expected": "export KEY =  VALUE",
+    "protected_structure": true
+  },
+  {
+    "id": "structured_markdown_checkbox",
+    "category": "structured",
+    "description": "structured markdown checkbox",
+    "profile": "gentle",
+    "input": "- [ ]   Task",
+    "expected": "- [ ]   Task",
+    "protected_structure": true
+  },
+  {
+    "id": "structured_structured_tabs",
+    "category": "structured",
+    "description": "structured structured tabs",
+    "profile": "smart",
+    "input": "Таблица\tЗначение\nа\t  б",
+    "expected": "Таблица\tЗначение\nа\t  б",
+    "protected_structure": true
+  },
+  {
+    "id": "structured_timestamp",
+    "category": "structured",
+    "description": "structured timestamp",
+    "profile": "deep",
+    "input": "2026-01-01 00:00:00  INFO",
+    "expected": "2026-01-01 00:00:00  INFO",
+    "protected_structure": true
+  },
+  {
+    "id": "structured_normal_code",
+    "category": "structured",
+    "description": "structured normal code",
+    "profile": "gentle",
+    "input": "function x() { return y; }",
+    "expected": "function x() { return y; }",
+    "protected_structure": true
+  },
+  {
+    "id": "pdf_01",
+    "category": "hyphen_pdf",
+    "description": "pdf 01",
+    "profile": "gentle",
+    "input": "северо-\nзападный",
+    "expected": "северо-\nзападный",
+    "protected_structure": false
+  },
+  {
+    "id": "pdf_02",
+    "category": "hyphen_pdf",
+    "description": "pdf 02",
+    "profile": "smart",
+    "input": "северо-\nзападный",
+    "expected": "северо-\nзападный",
+    "protected_structure": false
+  },
+  {
+    "id": "pdf_03",
+    "category": "hyphen_pdf",
+    "description": "pdf 03",
+    "profile": "gentle",
+    "input": "доку-\nмент",
+    "expected": "доку-\nмент",
+    "protected_structure": false
+  },
+  {
+    "id": "pdf_04",
+    "category": "hyphen_pdf",
+    "description": "pdf 04",
+    "profile": "smart",
+    "input": "доку-\nмент",
+    "expected": "доку-\nмент",
+    "protected_structure": false
+  },
+  {
+    "id": "pdf_05",
+    "category": "hyphen_pdf",
+    "description": "pdf 05",
+    "profile": "deep",
+    "input": "В соответствии с действующими нормативными докумен-\nтами организация обязана",
+    "expected": "В соответствии с действующими нормативными документами организация обязана",
+    "protected_structure": false
+  },
+  {
+    "id": "pdf_06",
+    "category": "hyphen_pdf",
+    "description": "pdf 06",
+    "profile": "smart",
+    "input": "Это достаточно длинная строка на русском языке\nи следующая часть абзаца",
+    "expected": "Это достаточно длинная строка на русском языке и следующая часть абзаца",
+    "protected_structure": false
+  },
+  {
+    "id": "pdf_07",
+    "category": "hyphen_pdf",
+    "description": "pdf 07",
+    "profile": "smart",
+    "input": "Это достаточно длинная строка на русском языке.\nи следующий абзац",
+    "expected": "Это достаточно длинная строка на русском языке.\nи следующий абзац",
+    "protected_structure": false
+  },
+  {
+    "id": "pdf_08",
+    "category": "hyphen_pdf",
+    "description": "pdf 08",
+    "profile": "smart",
+    "input": "Очень длинное окончание пункта списка которое не имеет точки:\nещё один подпункт",
+    "expected": "Очень длинное окончание пункта списка которое не имеет точки:\nещё один подпункт",
+    "protected_structure": false
+  },
+  {
+    "id": "pdf_09",
+    "category": "hyphen_pdf",
+    "description": "pdf 09",
+    "profile": "deep",
+    "input": "Первый абзац.\n\nВторой абзац.",
+    "expected": "Первый абзац.\n\nВторой абзац.",
+    "protected_structure": false
+  },
+  {
+    "id": "pdf_10",
+    "category": "hyphen_pdf",
+    "description": "pdf 10",
+    "profile": "smart",
+    "input": "небольшая\nстрока",
+    "expected": "небольшая\nстрока",
+    "protected_structure": false
+  },
+  {
+    "id": "pdf_11",
+    "category": "hyphen_pdf",
+    "description": "pdf 11",
+    "profile": "deep",
+    "input": "северо-западный регион",
+    "expected": "северо-западный регион",
+    "protected_structure": false
+  },
+  {
+    "id": "preserve_01",
+    "category": "preservation",
+    "description": "preserve 01",
+    "profile": "deep",
+    "input": "```\n😀  unicode\n```",
+    "expected": "```\n😀  unicode\n```",
+    "protected_structure": true
+  },
+  {
+    "id": "preserve_02",
+    "category": "preservation",
+    "description": "preserve 02",
+    "profile": "deep",
+    "input": "•  Русский список",
+    "expected": "•  Русский список",
+    "protected_structure": true
+  },
+  {
+    "id": "preserve_03",
+    "category": "preservation",
+    "description": "preserve 03",
+    "profile": "deep",
+    "input": "1.  Ёж",
+    "expected": "1.  Ёж",
+    "protected_structure": true
+  },
+  {
+    "id": "preserve_04",
+    "category": "preservation",
+    "description": "preserve 04",
+    "profile": "deep",
+    "input": "2)  Яблоко",
+    "expected": "2)  Яблоко",
+    "protected_structure": true
+  },
+  {
+    "id": "preserve_05",
+    "category": "preservation",
+    "description": "preserve 05",
+    "profile": "deep",
+    "input": "<строка>  значение </строка>",
+    "expected": "<строка>  значение </строка>",
+    "protected_structure": true
+  },
+  {
+    "id": "preserve_06",
+    "category": "preservation",
+    "description": "preserve 06",
+    "profile": "deep",
+    "input": "{\"ёж\": \"да\"}",
+    "expected": "{\"ёж\": \"да\"}",
+    "protected_structure": true
+  },
+  {
+    "id": "preserve_07",
+    "category": "preservation",
+    "description": "preserve 07",
+    "profile": "deep",
+    "input": "2026-10-22 18:45:22  WARN",
+    "expected": "2026-10-22 18:45:22  WARN",
+    "protected_structure": true
+  },
+  {
+    "id": "preserve_08",
+    "category": "preservation",
+    "description": "preserve 08",
+    "profile": "deep",
+    "input": "198.51.100.42  203.0.113.17",
+    "expected": "198.51.100.42  203.0.113.17",
+    "protected_structure": true
+  },
+  {
+    "id": "preserve_09",
+    "category": "preservation",
+    "description": "preserve 09",
+    "profile": "deep",
+    "input": "📌  item\tvalue",
+    "expected": "📌  item\tvalue",
+    "protected_structure": true
+  },
+  {
+    "id": "preserve_10",
+    "category": "preservation",
+    "description": "preserve 10",
+    "profile": "deep",
+    "input": "a,b,c\n1, 2,3\n4,5,6",
+    "expected": "a,b,c\n1, 2,3\n4,5,6",
+    "protected_structure": true
+  }
+]
