@@ -14,9 +14,9 @@
 
 Profiles:
 
-- **Бережный** (default): normalize ASCII spaces and line endings, remove leading BOM, limit extra blank lines. Structured text is passed through unchanged.
+- **Бережный**: normalize ASCII spaces and line endings, remove leading BOM, limit extra blank lines. Structured text is passed through unchanged.
 - **Умный**: предлагает объединять переносы внутри обычных абзацев, если следующая строка начинается со строчной буквы (с обязательным предпросмотром).
-- **Глубокий**: дополнительно предлагает исправлять переносы слов: `скопиро-\nван` -> `скопирован`; сохраняет дефис в распознаваемых составных словах вроде `Санкт-Петербург` и `северо-западный`. Неоднозначные изменения требуют подтверждения.
+- **Глубокий** (default for new users; existing registry choice is respected): дополнительно предлагает исправлять переносы слов: `скопиро-\nван` -> `скопирован`; сохраняет дефис в распознаваемых составных словах вроде `Санкт-Петербург` и `северо-западный`. Неоднозначные изменения требуют подтверждения.
 
 No spelling correction, AI, OCR, auto-paste, clipboard monitoring, telemetry, advertisements, external DLLs or registry state. No license has been selected.
 
