@@ -34,7 +34,7 @@ jobs:
         run: |
           ./tools/check-pe.ps1 -Exe 'build/Release/CopyFix.exe' -OutDir 'build/pe-report'
       - name: Export standalone EXE only (not a GitHub Release)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: CopyFix-Windows-x64-EXE-only
           if-no-files-found: error
