@@ -46,5 +46,9 @@ foreach ($name in $bad) {
 # The hex/flags line in DUMPBIN headers contains these exact named flags.
 if ($headers -notmatch '(?i)Dynamic base') { throw 'PE ASLR flag missing' }
 if ($headers -notmatch '(?i)NX compatible') { throw 'PE NX flag missing' }
-if ($headers -notmatch '(?i)Guard CF') { throw 'PE Control Flow Guard flag missing' }
+if ($headers -notmatch '(?i)\b(?:Control Flow Guard|Guard CF)\b' -or
+    $loadconfig -notmatch '(?i)Guard CF function table' -or
+    $loadconfig -notmatch '(?i)Guard Flags') {
+    throw 'PE Control Flow Guard header or load configuration missing'
+}
 Write-Host 'PE runtime import and hardening checks: PASS'
