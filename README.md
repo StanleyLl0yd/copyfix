@@ -34,7 +34,11 @@ The Windows GUI is `build/Release/CopyFix.exe`. Release uses C++20 and static MS
 
 ## Portable configuration
 
-Built-in defaults require no files. Changes to the profile or hotkey may create `copyfix.ini` next to the executable. If the directory is read-only, settings still apply for the current run (but cannot persist).
+Built-in defaults require no files. Settings are stored exclusively in the per-user Windows Registry (`HKEY_CURRENT_USER\Software\CopyFix`, DWORD values `Profile` and `Hotkey`). No `copyfix.ini` is read or created. If the registry cannot be written, settings still apply for the current run. No administrator rights are required.
+
+## Windows interface and test ZIP
+
+The native Win32 preview uses a modernized two-column layout, readable Segoe UI text, and explicit confirmation. Both the original and transformed text are converted to CRLF solely for display and Windows clipboard serialization; paragraph boundaries are not discarded. The GitHub Actions test artifact ZIP contains **only `CopyFix.exe`**; PE audit results remain visible in CI logs. No installer or GitHub Release is produced.
 
 ## Security and limitations
 

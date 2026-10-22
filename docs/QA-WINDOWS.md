@@ -14,6 +14,15 @@
 - [ ] Check idle CPU, private working set and size/performance targets.
 - [ ] Check taskbar explorer restart and relaunch of the tray icon.
 
+## New UX and registry validation
+
+- [ ] Download the latest GitHub Actions ZIP and confirm the only file is `CopyFix.exe`.
+- [ ] Verify the two-column preview preserves blank lines, sentences, spaces, Unicode emoji and line endings (CRLF in Win32 EDIT).
+- [ ] Resize preview; inspect controls at 100%, 125%, 150% and 200% display scaling. Verify keyboard Tab and Escape.
+- [ ] Verify settings saved in `HKEY_CURRENT_USER\Software\CopyFix` (`Profile`, `Hotkey` DWORD). Restart and confirm persistence.
+- [ ] Confirm no `copyfix.ini` is created or read; test running from a read-only directory.
+- [ ] Check that cancelling preview leaves the clipboard unchanged, and that Undo remains functional.
+
 ## Safe clipboard integration (isolated VM/session only)
 
 - [ ] Plain Russian copied from Notepad: trigger hotkey; paste cleaned text.

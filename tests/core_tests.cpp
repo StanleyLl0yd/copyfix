@@ -123,6 +123,20 @@ int main() {
             }
         }
     }
+
+    // Regression for Windows EDIT: LF-only output was displayed as one joined
+    // paragraph, apparently removing word boundaries and empty lines.
+    const std::wstring preview_in = L"Абзац один\nстрока два\n\nАбзац два 🌍\r\nещё текст\rконец";
+    const std::wstring preview_out = L"Абзац один\r\nстрока два\r\n\r\nАбзац два 🌍\r\nещё текст\r\nконец";
+    if (copyfix::ToWindowsLineEndings(preview_in) != preview_out ||
+        copyfix::ToWindowsLineEndings(preview_out) != preview_out) {
+        std::cerr << "FAIL native EDIT CRLF layout/blank line regression\n";
+        ++failed;
+    }
+    if (copyfix::ToWindowsLineEndings(L"a\nb").find(L"a\r\nb") == std::wstring::npos) {
+        std::cerr << "FAIL word-boundary rendering regression\n";
+        ++failed;
+    }
     // Property-like stable tests spanning Russian text, whitespace and line endings.
     for (int n = 0; n < 300; ++n) {
         const std::wstring sample = L"  Тест" + std::wstring(static_cast<std::size_t>(n % 19), L' ') +

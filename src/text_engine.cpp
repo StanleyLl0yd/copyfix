@@ -286,6 +286,22 @@ Result Clean(const std::wstring& source, Profile profile) {
     return result;
 }
 
+std::wstring ToWindowsLineEndings(const std::wstring& source) {
+    std::wstring out;
+    out.reserve(source.size());
+    for (std::size_t i = 0; i < source.size(); ++i) {
+        if (source[i] == L'\r') {
+            out += L'\r';
+            out += L'\n';
+            if (i + 1 < source.size() && source[i + 1] == L'\n') ++i;
+        } else if (source[i] == L'\n') {
+            out += L'\r';
+            out += L'\n';
+        } else out += source[i];
+    }
+    return out;
+}
+
 Result OneLine(const std::wstring& source) {
     Result r{source};
     if (source.empty() || !IsWellFormedUtf16(source) || IsStructured(source)) {
