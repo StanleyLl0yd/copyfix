@@ -17,4 +17,10 @@ struct PreviewDiff {
 // Character offsets in the exact strings rendered in the preview.
 // Bounded memory/time, with a conservative fallback on enormous texts.
 PreviewDiff ComputePreviewDiff(std::wstring_view before, std::wstring_view after);
+
+// Hide cosmetic changes made exclusively of ordinary ASCII spaces or tabs.
+// Hard paragraph/line breaks, Unicode spaces and changes containing visible
+// characters remain highlighted. Original diff and clipboard stay unchanged.
+std::vector<DiffSpan> MeaningfulPreviewSpans(std::wstring_view text,
+                                              const std::vector<DiffSpan>& spans);
 }
