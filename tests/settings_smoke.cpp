@@ -47,8 +47,8 @@ int main() {
 
     g_settings.profile = copyfix::Profile::Smart;
     g_settings.hotkey = 2;
+    cleanup.created_key = true;  // Also clean a partially created key on failure.
     if (!SaveSettings()) return fail(3);
-    cleanup.created_key = true;
 
     HKEY key = nullptr;
     if (RegOpenKeyExW(HKEY_CURRENT_USER, kSettingsKey, 0,
