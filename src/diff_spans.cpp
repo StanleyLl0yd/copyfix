@@ -44,6 +44,21 @@ void Append(std::vector<DiffSpan>& out, std::size_t begin, std::size_t end) {
     if (!out.empty() && out.back().end == begin) out.back().end = end;
     else out.push_back({begin, end});
 }
+// Whitespace edits occur frequently when copying PDF text. Keeping them
+// separate avoids painting dozens of highly saturated small rectangles.
+bool IsFormattingOnly(std::wstring_view text) noexcept {
+    if (text.empty()) return false;
+    for (const auto ch : text) {
+        if (!IsBreak(ch) && !IsSpace(ch)) return false;
+    }
+    return true;
+}
+void Record(std::vector<DiffSpan>& important, std::vector<DiffSpan>& subtle,
+            std::wstring_view source, std::size_t begin, std::size_t end) {
+    if (begin == end) return;
+    auto& target = IsFormattingOnly(source.substr(begin, end - begin)) ? subtle : important;
+    Append(target, begin, end);
+}
 }
 
 PreviewDiff ComputePreviewDiff(std::wstring_view before, std::wstring_view after) {
@@ -59,8 +74,8 @@ PreviewDiff ComputePreviewDiff(std::wstring_view before, std::wstring_view after
         std::size_t suffix = 0;
         while (suffix < before.size() - prefix && suffix < after.size() - prefix &&
                before[before.size()-1-suffix] == after[after.size()-1-suffix]) ++suffix;
-        Append(result.removed, prefix, before.size() - suffix);
-        Append(result.added, prefix, after.size() - suffix);
+        Record(result.removed, result.minorRemoved, before, prefix, before.size() - suffix);
+        Record(result.added, result.minorAdded, after, prefix, after.size() - suffix);
         result.coarse = true;
         return result;
     }
@@ -80,10 +95,10 @@ PreviewDiff ComputePreviewDiff(std::wstring_view before, std::wstring_view after
     while (i < n || j < m) {
         if (i < n && j < m && same(i,j)) { ++i; ++j; }
         else if (i < n && (j == m || dp[(i+1)*columns+j] >= dp[i*columns+j+1])) {
-            Append(result.removed, a[i].begin, a[i].end);
+            Record(result.removed, result.minorRemoved, before, a[i].begin, a[i].end);
             ++i;
         } else {
-            Append(result.added, b[j].begin, b[j].end);
+            Record(result.added, result.minorAdded, after, b[j].begin, b[j].end);
             ++j;
         }
     }
