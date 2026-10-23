@@ -89,4 +89,18 @@ PreviewDiff ComputePreviewDiff(std::wstring_view before, std::wstring_view after
     }
     return result;
 }
+
+std::vector<DiffSpan> MeaningfulPreviewSpans(std::wstring_view text,
+                                              const std::vector<DiffSpan>& spans) {
+    std::vector<DiffSpan> kept;
+    kept.reserve(spans.size());
+    for (const auto& range : spans) {
+        if (range.begin >= range.end || range.end > text.size()) continue;
+        const auto fragment = text.substr(range.begin, range.end - range.begin);
+        const bool ordinary_whitespace = std::all_of(fragment.begin(), fragment.end(),
+            [](wchar_t ch) { return ch == L' ' || ch == L'\\t'; });
+        if (!ordinary_whitespace) kept.push_back(range);
+    }
+    return kept;
+}
 }
