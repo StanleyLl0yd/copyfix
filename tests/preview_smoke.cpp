@@ -33,6 +33,10 @@ int main() {
     g_preview = preview;
     const auto before = GetDlgItem(preview, kPreviewBeforeEdit);
     const auto after = GetDlgItem(preview, kPreviewAfterEdit);
+    // A missing/unavailable RichEdit is a hard preview failure, never an
+    // implicit approval or a destructive clipboard write.
+    if (SetPreviewRichText(nullptr, L"текст") ||
+        RenderPreviewText(nullptr)) return Fail(33);
     if (!before || !after || GetDlgCtrlID(after) == IDCANCEL ||
         GetDlgCtrlID(before) == GetDlgCtrlID(after)) return Fail(12);
     wchar_t class_name[60]{};
