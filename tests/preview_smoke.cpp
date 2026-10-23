@@ -63,6 +63,20 @@ int main() {
                  reinterpret_cast<LPARAM>(toggle));
     if (g_show_breaks || !IsWindow(preview)) return Fail(21);
 
+    // Cosmetic whitespace highlighting must be opt-in and must not close
+    // the preview or alter the underlying proposed clipboard text.
+    const auto spacing = GetDlgItem(preview, kPreviewShowSpaces);
+    if (!spacing || g_show_spaces) return Fail(23);
+    const auto expected_text = g_pending.after.text;
+    SendMessageW(spacing, BM_SETCHECK, BST_CHECKED, 0);
+    SendMessageW(preview, WM_COMMAND, MAKEWPARAM(kPreviewShowSpaces, BN_CLICKED),
+                 reinterpret_cast<LPARAM>(spacing));
+    if (!g_show_spaces || !IsWindow(preview) || g_pending.after.text != expected_text) return Fail(24);
+    SendMessageW(spacing, BM_SETCHECK, BST_UNCHECKED, 0);
+    SendMessageW(preview, WM_COMMAND, MAKEWPARAM(kPreviewShowSpaces, BN_CLICKED),
+                 reinterpret_cast<LPARAM>(spacing));
+    if (g_show_spaces || !IsWindow(preview) || g_pending.after.text != expected_text) return Fail(25);
+
     // Win32 EDIT sends scroll notifications to its parent. These must never
     // be interpreted as Cancel/Apply, and wheel must not destroy the preview.
     for (int i=0; i<20; ++i) {
