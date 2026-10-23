@@ -49,7 +49,8 @@ void Append(std::vector<DiffSpan>& out, std::size_t begin, std::size_t end) {
 bool IsFormattingOnly(std::wstring_view text) noexcept {
     if (text.empty()) return false;
     for (const auto ch : text) {
-        if (!IsBreak(ch) && !IsSpace(ch)) return false;
+        // CR/LF is a semantic line/paragraph boundary, not cosmetic space.
+        if (!IsSpace(ch)) return false;
     }
     return true;
 }
