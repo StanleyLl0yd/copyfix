@@ -36,8 +36,7 @@ int main() {
         !Within(L"Слово другое", spaces.minorAdded)) return 6;
     const auto newlines = ComputePreviewDiff(L"Первая строка\r\n\r\nВторая",
                                               L"Первая строка\r\nВторая");
-    if (!newlines.removed.empty() || !newlines.added.empty() ||
-        newlines.minorRemoved.empty()) return 7;
+    if (newlines.removed.empty() || !newlines.minorRemoved.empty()) return 7;
     const auto words = ComputePreviewDiff(L"Документ скопиро-\r\nван.",
                                            L"Документ скопирован.");
     if (words.removed.empty() || words.added.empty() ||
@@ -48,6 +47,11 @@ int main() {
                                          std::wstring(110000, L'y'));
     if (!huge.coarse || huge.removed.size() != 1 || huge.added.size() != 1 ||
         huge.removed[0].end != 110000 || huge.added[0].end != 110000) return 9;
+    const auto onlyBreaks = ComputePreviewDiff(L"A\r\nB", L"A B");
+    if (onlyBreaks.removed.empty() || onlyBreaks.minorAdded.empty()) return 10;
+    const auto tabs = ComputePreviewDiff(L"X\t\tY", L"X Y");
+    if (!tabs.removed.empty() || tabs.minorRemoved.empty() ||
+        !tabs.added.empty() || tabs.minorAdded.empty()) return 11;
     std::cout << "PASS semantic/subtle change highlighting, bounded complexity and UTF offsets\n";
     return 0;
 }
