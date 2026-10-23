@@ -63,6 +63,33 @@ int main() {
                  reinterpret_cast<LPARAM>(toggle));
     if (g_show_breaks || !IsWindow(preview)) return Fail(21);
 
+    // The marker toggle must not discard an independently scrolled reading
+    // position in either pane. The test remains valid in a headless runner:
+    // if the hidden control cannot scroll, window-lifetime checks still apply.
+    SendMessageW(before, EM_LINESCROLL, 0, 24);
+    SendMessageW(after, EM_LINESCROLL, 0, 42);
+    POINT original_before{}, original_after{};
+    const bool can_read_before = SendMessageW(before, EM_GETSCROLLPOS, 0,
+        reinterpret_cast<LPARAM>(&original_before)) != 0;
+    const bool can_read_after = SendMessageW(after, EM_GETSCROLLPOS, 0,
+        reinterpret_cast<LPARAM>(&original_after)) != 0;
+    SendMessageW(toggle, BM_SETCHECK, BST_CHECKED, 0);
+    SendMessageW(preview, WM_COMMAND, MAKEWPARAM(kPreviewShowBreaks, BN_CLICKED),
+                 reinterpret_cast<LPARAM>(toggle));
+    POINT restored_before{}, restored_after{};
+    SendMessageW(before, EM_GETSCROLLPOS, 0, reinterpret_cast<LPARAM>(&restored_before));
+    SendMessageW(after, EM_GETSCROLLPOS, 0, reinterpret_cast<LPARAM>(&restored_after));
+    if (can_read_before && original_before.y > 0 &&
+        (restored_before.y < original_before.y - 4 ||
+         restored_before.y > original_before.y + 4)) return Fail(23);
+    if (can_read_after && original_after.y > 0 &&
+        (restored_after.y < original_after.y - 4 ||
+         restored_after.y > original_after.y + 4)) return Fail(24);
+    SendMessageW(toggle, BM_SETCHECK, BST_UNCHECKED, 0);
+    SendMessageW(preview, WM_COMMAND, MAKEWPARAM(kPreviewShowBreaks, BN_CLICKED),
+                 reinterpret_cast<LPARAM>(toggle));
+    if (!IsWindow(preview)) return Fail(25);
+
     // Win32 EDIT sends scroll notifications to its parent. These must never
     // be interpreted as Cancel/Apply, and wheel must not destroy the preview.
     for (int i=0; i<20; ++i) {
