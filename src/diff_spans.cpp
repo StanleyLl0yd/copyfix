@@ -98,7 +98,7 @@ std::vector<DiffSpan> MeaningfulPreviewSpans(std::wstring_view text,
         if (range.begin >= range.end || range.end > text.size()) continue;
         const auto fragment = text.substr(range.begin, range.end - range.begin);
         const bool ordinary_whitespace = std::all_of(fragment.begin(), fragment.end(),
-            [](wchar_t ch) { return ch == L' ' || ch == L'\\t'; });
+            [](wchar_t ch) { return ch == L' ' || ch == L'\t'; });
         if (!ordinary_whitespace) kept.push_back(range);
     }
     return kept;
