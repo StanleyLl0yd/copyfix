@@ -399,10 +399,12 @@ std::wstring MakePreviewText(const std::wstring& source, bool show_breaks) {
     return result;
 }
 
-void SetPreviewRichText(HWND control, const std::wstring& text) {
+bool SetPreviewRichText(HWND control, const std::wstring& text) {
+    if (!control) return false;
     SendMessageW(control, EM_EXLIMITTEXT, 0, static_cast<LPARAM>(kMaxPreviewChars*3));
-    SetWindowTextW(control, text.c_str());
+    if (!SetWindowTextW(control, text.c_str())) return false;
     SendMessageW(control, EM_SETBKGNDCOLOR, 0, static_cast<LPARAM>(kSurface));
+    return true;
 }
 
 void MarkChanges(HWND control, const std::vector<copyfix::DiffSpan>& spans, COLORREF background) {
@@ -424,10 +426,11 @@ void MarkChanges(HWND control, const std::vector<copyfix::DiffSpan>& spans, COLO
     InvalidateRect(control, nullptr, TRUE);
 }
 
-void RenderPreviewText(HWND window) {
+bool RenderPreviewText(HWND window) {
     const HWND before = GetDlgItem(window, kPreviewBeforeEdit);
     const HWND after = GetDlgItem(window, kPreviewAfterEdit);
-    if (!before || !after) return;
+    if (!before || !after) return false;
+    try {
     // Toggling hard-break markers rebuilds the text in each RichEdit. Preserve
     // the user's independent reading positions rather than jumping to the top.
     POINT before_scroll{}, after_scroll{};
@@ -438,8 +441,10 @@ void RenderPreviewText(HWND window) {
     const auto raw = MakePreviewText(g_pending.before.text, g_show_breaks);
     const auto cleaned = MakePreviewText(g_pending.after.text, g_show_breaks);
     const auto diff = copyfix::ComputePreviewDiff(raw, cleaned);
-    SetPreviewRichText(before, raw);
-    SetPreviewRichText(after, cleaned);
+    // If either control rejects its text (for example under memory pressure),
+    // the user must not be offered an incomplete confirmation surface.
+    if (!SetPreviewRichText(before, raw) || !SetPreviewRichText(after, cleaned))
+        return false;
     // Subtle formatting marks must be painted before stronger content marks.
     if (g_show_spaces) {
         MarkChanges(before, diff.minorRemoved, RGB(255, 246, 243));
@@ -451,6 +456,10 @@ void RenderPreviewText(HWND window) {
                                           reinterpret_cast<LPARAM>(&before_scroll));
     if (have_after_scroll) SendMessageW(after, EM_SETSCROLLPOS, 0,
                                          reinterpret_cast<LPARAM>(&after_scroll));
+    return true;
+    } catch (const std::bad_alloc&) {
+        return false; // Reject safely; the clipboard is never changed here.
+    }
 }
 
 LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam) {
@@ -496,7 +505,7 @@ LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
         ApplyFont(spaces, g_font_caption);
         g_show_breaks = false;
         g_show_spaces = false;
-        RenderPreviewText(window);
+        if (!RenderPreviewText(window)) return -1;
         CreateWindowW(L"BUTTON", L"Применить", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW,
                       0,0,1,1,window,reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kPreviewAccept)),g_instance,nullptr);
         CreateWindowW(L"BUTTON", L"Отмена", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW,
@@ -544,12 +553,18 @@ LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
         if (notification == BN_CLICKED && from && IsWindow(from)) {
             if (id == kPreviewShowSpaces && from == GetDlgItem(window, kPreviewShowSpaces)) {
                 g_show_spaces = SendMessageW(from, BM_GETCHECK, 0, 0) == BST_CHECKED;
-                RenderPreviewText(window);
+                if (!RenderPreviewText(window)) {
+                    DestroyWindow(window);
+                    Notify(L"Недостаточно памяти для предпросмотра. Буфер не изменён.");
+                }
                 return 0;
             }
             if (id == kPreviewShowBreaks && from == GetDlgItem(window, kPreviewShowBreaks)) {
                 g_show_breaks = SendMessageW(from, BM_GETCHECK, 0, 0) == BST_CHECKED;
-                RenderPreviewText(window);
+                if (!RenderPreviewText(window)) {
+                    DestroyWindow(window);
+                    Notify(L"Недостаточно памяти для предпросмотра. Буфер не изменён.");
+                }
                 return 0;
             }
             if (id == kPreviewAccept && from == GetDlgItem(window, kPreviewAccept)) {
