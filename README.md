@@ -2,7 +2,7 @@
 
 **CopyFix** - лёгкая автономная утилита для очистки скопированного текста в Windows. Работает локально, не отправляет текст в сеть, не записывает историю буфера обмена и не использует перехват клавиатуры.
 
-> Status: **Windows prototype 0.1.0 / NOT RELEASE READY**. MSVC v143 x64 build, Windows CTest, static-runtime import checks and PE hardening **PASS** in [GitHub Actions](https://github.com/StanleyLl0yd/copyfix/actions/runs/39775790874). Interactive GUI/tray/clipboard and clean Windows 10/11 portable runtime remain **NOT VERIFIED**.
+> Status: **Windows prototype 0.1.0 / NOT RELEASE READY**. Current [post-merge Windows CI](https://github.com/StanleyLl0yd/copyfix/actions/runs/39922531574): MSVC v143 Release x64, all 4 CTest suites, static CRT import policy, PE hardening and single-EXE artifact PASS. User screenshots confirm partial Windows GUI testing; clean Windows 10/11, complete clipboard/Undo and portable runtime acceptance remain OPEN.
 
 ## Use
 
@@ -18,7 +18,7 @@ Profiles:
 - **Умный**: предлагает объединять переносы внутри обычных абзацев, если следующая строка начинается со строчной буквы (с обязательным предпросмотром).
 - **Глубокий** (default for new users; existing registry choice is respected): дополнительно предлагает исправлять переносы слов: `скопиро-\nван` -> `скопирован`; сохраняет дефис в распознаваемых составных словах вроде `Санкт-Петербург`, `северо-западный`, `бизнес-план`, `веб-сайт` и `интернет-магазин`. Неоднозначные изменения требуют подтверждения.
 
-No spelling correction, AI, OCR, auto-paste, clipboard monitoring, telemetry, advertisements, external DLLs or registry state. No license has been selected.
+No spelling correction, AI, OCR, auto-paste, clipboard monitoring, telemetry or advertisements. Windows system DLLs are allowed; settings are stored exclusively under HKCU. No license has been selected.
 
 ## Building on Windows 10/11 x64
 
@@ -55,7 +55,7 @@ The native Windows RichEdit preview (built-in `Msftedit.dll`, no bundled depende
 
 - `src/text_engine.*`: platform-independent text transformations.
 - `src/winmain.cpp`: native Win32 shell, clipboard handling and dialogs.
-- `tests/core_tests.cpp`: standalone framework-free tests; 143 deterministic golden cases plus 900 property-like inputs.
+- `tests/core_tests.cpp`: standalone framework-free tests; 141 shared JSON golden cases, 25 built-in core cases and 900 property-like inputs.
 - `tests/golden_cases.json`: UTF-8 shared golden corpus for future Android parity.
 - `tests/perf_tests.cpp`: 10k/100k/1M-unit integrity and timing probe.
 - `docs/QA-WINDOWS.md`: manual Windows 10/11 integration checklist.
