@@ -12,6 +12,10 @@ struct DiffSpan {
 struct PreviewDiff {
     std::vector<DiffSpan> removed;
     std::vector<DiffSpan> added;
+    // Low-emphasis formatting-only changes (spaces, tabs and line endings).
+    // Semantically meaningful edits remain in removed/added.
+    std::vector<DiffSpan> minorRemoved;
+    std::vector<DiffSpan> minorAdded;
     bool coarse = false;
 };
 // Character offsets in the exact strings rendered in the preview.

@@ -430,6 +430,9 @@ void RenderPreviewText(HWND window) {
     const auto diff = copyfix::ComputePreviewDiff(raw, cleaned);
     SetPreviewRichText(before, raw);
     SetPreviewRichText(after, cleaned);
+    // Subtle formatting marks must be painted before stronger content marks.
+    MarkChanges(before, diff.minorRemoved, RGB(255, 246, 243));
+    MarkChanges(after, diff.minorAdded, RGB(242, 250, 246));
     MarkChanges(before, diff.removed, RGB(255, 225, 225));
     MarkChanges(after, diff.added, RGB(218, 247, 231));
 }
@@ -442,7 +445,7 @@ LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
                                  g_settings.profile == copyfix::Profile::Smart ? L"умный" : L"глубокий";
         MakeLabel(window, kPreviewTitle, L"Проверьте изменения", g_font_title);
         MakeLabel(window, kPreviewSubtitle,
-                  L"Розовый: удалено  •  Зелёный: добавлено или изменено. Буфер меняется после подтверждения.", g_font_caption);
+                  L"Розовый: удалено  •  Зелёный: добавлено  •  Бледный: пробелы и переносы. Применение после проверки.", g_font_caption);
         MakeLabel(window, kPreviewBeforeLabel, L"ИСХОДНЫЙ ТЕКСТ", g_font_label);
         MakeLabel(window, kPreviewAfterLabel, L"РЕЗУЛЬТАТ ОБРАБОТКИ", g_font_label);
         const std::wstring status = std::to_wstring(g_pending.after.changes) +
