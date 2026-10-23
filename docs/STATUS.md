@@ -4,14 +4,14 @@ This is evidence of tests performed, not a Windows 1.0 release declaration.
 
 | Area | Current verified state |
 | --- | --- |
-| Repository | Public `StanleyLl0yd/copyfix`, main `3e1ba3fff09eb01efd768c41dc119165efdcb703` before this documentation update |
+| Repository | Public `StanleyLl0yd/copyfix`, main `af80cef43b5d567f8e7e9e5a609124ced96be951` before this documentation update |
 | Original local Git history | Original HEAD `53d27ada541b75e061de5bfbdf986fc1c9a25da6` preserved in `archive/CopyFix-bootstrap-history.bundle` |
 | Native Windows program | C++20 / Win32, no third-party UI runtime; MSVC v143 Release x64 static CRT `/MT` PASS |
 | Test corpus | 141 shared JSON golden fixtures plus 25 built-in core cases and additional targeted PDF/Unicode regressions |
 | Determinism and idempotency | 900 property-like checks in core test, Windows CTest PASS |
-| Windows CI | Four suites: core, preview_diff, perf_integrity, preview_scroll; **4/4 PASS** |
+| Windows CI | Five suites: core, preview_diff, perf_integrity, preview_scroll, clipboard_contract; **5/5 PASS** |
 | PE safety and dependencies | ASLR, NX, CFG and runtime import policy PASS |
-| Current reference EXE | 174,080 bytes; SHA-256 `F82B42B7A689454899177A6CD8C9A462C84615A2823FB8B52E6F32FA8B73B7A7` from post-merge run |
+| Current reference EXE | 174,080 bytes; SHA-256 `0469C0EECCFB2ABB706DCC1267BDF8A68E9ED4399B6B52158EFAC9A367813E32` from post-merge run |
 | Artifact format | GitHub Actions ZIP containing exactly one `CopyFix.exe` (no installer, debug reports or DLL payload) |
 | Local persistence | HKCU\Software\CopyFix Profile/Hotkey only; no INI or clipboard-content log |
 | Interactive Windows evidence | User screenshots on 2026-10-22 confirmed native preview opened, all three profiles could be compared, and text reflow/highlights were rendered; this is **partial QA**, not full acceptance |
@@ -21,7 +21,7 @@ This is evidence of tests performed, not a Windows 1.0 release declaration.
 | License / GitHub Release / Windows 1.0 | NOT CREATED; awaiting Windows runtime/clipboard acceptance |
 | Android | NOT STARTED; deferred until Windows 1.0 |
 
-Current evidence: [post-merge Windows CI #39922531574](https://github.com/StanleyLl0yd/copyfix/actions/runs/39922531574) and its EXE-only artifact `12487696949`.
+Current evidence: [post-merge Windows CI #39923117969](https://github.com/StanleyLl0yd/copyfix/actions/runs/39923117969) and its EXE-only artifact `12488735486`. The clipboard_contract test uses synthetic clipboard data on the Windows CI runner; it does not replace interactive clean-machine QA.
 
 Prior development checks (strict Clang, ASan/UBSan on Linux) passed in their respective earlier source revisions; do not treat these as a fresh sanitizer run on this exact main.
 
