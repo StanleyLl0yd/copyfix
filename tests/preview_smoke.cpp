@@ -90,6 +90,20 @@ int main() {
                  reinterpret_cast<LPARAM>(toggle));
     if (!IsWindow(preview)) return Fail(25);
 
+    // Explicitly enabling cosmetic marks only affects visualization, not the
+    // pending clipboard transformation or the modeless window lifetime.
+    const HWND spaces = GetDlgItem(preview, kPreviewShowSpaces);
+    if (!spaces || g_show_spaces) return Fail(30);
+    const std::wstring proposed = g_pending.after.text;
+    SendMessageW(spaces, BM_SETCHECK, BST_CHECKED, 0);
+    SendMessageW(preview, WM_COMMAND, MAKEWPARAM(kPreviewShowSpaces, BN_CLICKED),
+                 reinterpret_cast<LPARAM>(spaces));
+    if (!g_show_spaces || !IsWindow(preview) || proposed != g_pending.after.text) return Fail(31);
+    SendMessageW(spaces, BM_SETCHECK, BST_UNCHECKED, 0);
+    SendMessageW(preview, WM_COMMAND, MAKEWPARAM(kPreviewShowSpaces, BN_CLICKED),
+                 reinterpret_cast<LPARAM>(spaces));
+    if (g_show_spaces || !IsWindow(preview) || proposed != g_pending.after.text) return Fail(32);
+
     // Win32 EDIT sends scroll notifications to its parent. These must never
     // be interpreted as Cancel/Apply, and wheel must not destroy the preview.
     for (int i=0; i<20; ++i) {
