@@ -16,9 +16,9 @@ Profiles:
 
 - **Бережный**: normalize ASCII spaces and line endings, remove leading BOM, limit extra blank lines. Structured text is passed through unchanged.
 - **Умный**: предлагает объединять переносы внутри обычных абзацев, если следующая строка начинается со строчной буквы (с обязательным предпросмотром).
-- **Глубокий** (default for new users; existing registry choice is respected): дополнительно предлагает исправлять переносы слов: `скопиро-\nван` -> `скопирован`; сохраняет дефис в распознаваемых составных словах вроде `Санкт-Петербург` и `северо-западный`. Неоднозначные изменения требуют подтверждения.
+- **Глубокий** (default for new users; existing registry choice is respected): дополнительно предлагает исправлять переносы слов: `скопиро-\nван` -> `скопирован`; сохраняет дефис в распознаваемых составных словах вроде `Санкт-Петербург` и `северо-западный`, `бизнес-план` и `интернет-магазин`. Неоднозначные изменения требуют подтверждения.
 
-No spelling correction, AI, OCR, auto-paste, clipboard monitoring, telemetry, advertisements, external DLLs or registry state. No license has been selected.
+No spelling correction, AI, OCR, auto-paste, clipboard monitoring, telemetry or advertisements. Windows system DLLs are allowed; settings use only HKCU. No license has been selected.
 
 ## Building on Windows 10/11 x64
 
@@ -38,7 +38,7 @@ Built-in defaults require no files. Settings are stored exclusively in the per-u
 
 ## Windows interface and test ZIP
 
-The native Windows RichEdit preview (built-in `Msftedit.dll`, no bundled dependency) has side-by-side selectable text with pink highlights for deleted text and green highlights for new text. Toggle `↵ Показать настоящие переносы строк` to distinguish source hard line breaks from visual wrapping; markers are for viewing only and are not applied to the clipboard. Actual clipboard serialization still uses CRLF; paragraph boundaries are preserved. The GitHub Actions test artifact ZIP contains **only `CopyFix.exe`**; PE audit results remain visible in CI logs. No installer or GitHub Release is produced.
+The native Windows RichEdit preview (built-in `Msftedit.dll`, no bundled dependency) has side-by-side selectable text with pink highlights for deleted text and green highlights for new text. By default it suppresses cosmetic ASCII-space-only highlight fragments to keep the substantive changes legible; enable **Подсветка пробелов** to review those exact edits. Line-break changes and visible characters are still highlighted by default. Toggle `↵ Показать настоящие переносы строк` to distinguish source hard line breaks from visual wrapping; markers are for viewing only and are not applied to the clipboard. Actual clipboard serialization still uses CRLF; paragraph boundaries are preserved. The GitHub Actions test artifact ZIP contains **only `CopyFix.exe`**; PE audit results remain visible in CI logs. No installer or GitHub Release is produced.
 
 ## Security and limitations
 
