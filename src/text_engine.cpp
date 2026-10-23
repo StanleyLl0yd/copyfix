@@ -188,10 +188,17 @@ bool KeepCompoundHyphen(const std::wstring& prior, wchar_t next) noexcept {
     if (IsUpper(next) && (stem == L"Санкт" || stem == L"Нью" || stem == L"Усть" ||
                            stem == L"Ростов" || stem == L"Йошкар")) return true;
     if (!IsLower(next)) return false;
+    // These prefix compounds normally require a semantic hyphen, even when
+    // a PDF wraps the word after the first component. This is deliberately
+    // not a dictionary: other ambiguous cases still need human confirmation.
     return stem == L"северо" || stem == L"юго" || stem == L"восточно" ||
            stem == L"западно" || stem == L"социально" || stem == L"научно" ||
            stem == L"военно" || stem == L"русско" || stem == L"англо" ||
-           stem == L"историко" || stem == L"медико";
+           stem == L"историко" || stem == L"медико" ||
+           stem == L"интернет" || stem == L"онлайн" || stem == L"офлайн" ||
+           stem == L"бизнес" || stem == L"веб" || stem == L"мини" ||
+           stem == L"макси" || stem == L"пресс" || stem == L"вице" ||
+           stem == L"экс" || stem == L"арт" || stem == L"штаб";
 }
 
 JoinKind DecideJoin(const std::wstring& prior, const std::wstring& next,
