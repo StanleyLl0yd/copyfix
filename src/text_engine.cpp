@@ -1,6 +1,7 @@
 #include "text_engine.h"
 
 #include <cwctype>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -188,10 +189,30 @@ bool KeepCompoundHyphen(const std::wstring& prior, wchar_t next) noexcept {
     if (IsUpper(next) && (stem == L"Санкт" || stem == L"Нью" || stem == L"Усть" ||
                            stem == L"Ростов" || stem == L"Йошкар")) return true;
     if (!IsLower(next)) return false;
-    return stem == L"северо" || stem == L"юго" || stem == L"восточно" ||
-           stem == L"западно" || stem == L"социально" || stem == L"научно" ||
-           stem == L"военно" || stem == L"русско" || stem == L"англо" ||
-           stem == L"историко" || stem == L"медико";
+    // Compare common prefixes case-insensitively, including Cyrillic names
+    // at the beginning of a sentence. Locale-independent and allocation-free.
+    const auto matches = [&stem](std::wstring_view expected) noexcept {
+        if (stem.size() != expected.size()) return false;
+        for (std::size_t i = 0; i < stem.size(); ++i) {
+            wchar_t ch = stem[i];
+            if (ch >= L'A' && ch <= L'Z') ch = static_cast<wchar_t>(ch + (L'a' - L'A'));
+            if (ch >= L'А' && ch <= L'Я') ch = static_cast<wchar_t>(ch + (L'а' - L'А'));
+            if (ch == L'Ё') ch = L'ё';
+            if (ch != expected[i]) return false;
+        }
+        return true;
+    };
+    // These prefix compounds normally require a semantic hyphen, even when
+    // a PDF wraps the word after the first component. This is deliberately
+    // not a dictionary: other ambiguous cases still need human confirmation.
+    return matches(L"северо") || matches(L"юго") || matches(L"восточно") ||
+           matches(L"западно") || matches(L"социально") || matches(L"научно") ||
+           matches(L"военно") || matches(L"русско") || matches(L"англо") ||
+           matches(L"историко") || matches(L"медико") ||
+           matches(L"интернет") || matches(L"онлайн") || matches(L"офлайн") ||
+           matches(L"бизнес") || matches(L"веб") || matches(L"мини") ||
+           matches(L"макси") || matches(L"пресс") || matches(L"вице") ||
+           matches(L"экс") || matches(L"арт") || matches(L"штаб");
 }
 
 JoinKind DecideJoin(const std::wstring& prior, const std::wstring& next,
