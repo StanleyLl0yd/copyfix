@@ -425,6 +425,13 @@ void RenderPreviewText(HWND window) {
     const HWND before = GetDlgItem(window, kPreviewBeforeEdit);
     const HWND after = GetDlgItem(window, kPreviewAfterEdit);
     if (!before || !after) return;
+    // Toggling hard-break markers rebuilds the text in each RichEdit. Preserve
+    // the user's independent reading positions rather than jumping to the top.
+    POINT before_scroll{}, after_scroll{};
+    const bool have_before_scroll = SendMessageW(before, EM_GETSCROLLPOS, 0,
+        reinterpret_cast<LPARAM>(&before_scroll)) != 0;
+    const bool have_after_scroll = SendMessageW(after, EM_GETSCROLLPOS, 0,
+        reinterpret_cast<LPARAM>(&after_scroll)) != 0;
     const auto raw = MakePreviewText(g_pending.before.text, g_show_breaks);
     const auto cleaned = MakePreviewText(g_pending.after.text, g_show_breaks);
     const auto diff = copyfix::ComputePreviewDiff(raw, cleaned);
@@ -435,6 +442,10 @@ void RenderPreviewText(HWND window) {
     MarkChanges(after, diff.minorAdded, RGB(242, 250, 246));
     MarkChanges(before, diff.removed, RGB(255, 225, 225));
     MarkChanges(after, diff.added, RGB(218, 247, 231));
+    if (have_before_scroll) SendMessageW(before, EM_SETSCROLLPOS, 0,
+                                          reinterpret_cast<LPARAM>(&before_scroll));
+    if (have_after_scroll) SendMessageW(after, EM_SETSCROLLPOS, 0,
+                                         reinterpret_cast<LPARAM>(&after_scroll));
 }
 
 LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam) {
