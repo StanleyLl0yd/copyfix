@@ -62,3 +62,9 @@
 ## Known design caveat
 
 Win32 clipboard replacement is not transactional. When `EmptyClipboard` succeeds but `SetClipboardData` fails, the application makes a best-effort restoration of original **plain Unicode text**, not rich formats. Successful unit tests alone do not establish complete clipboard safety or portable runtime compatibility.
+
+## Windows CI clipboard integration
+
+- The `clipboard_contract` CTest creates an isolated synthetic Win32 clipboard payload on the ephemeral Windows runner.
+- It verifies Unicode round-trip, guarded commits, sequence-number rejection of stale snapshots, actual Undo, non-destructive Undo after another copy and detection of additional clipboard formats.
+- This automated test is **not** a substitute for checking clipboard behavior on Windows 10/11 desktops or with real Office/browser content.
