@@ -26,6 +26,30 @@ int main() {
     const std::wstring unicode=L"Ё👩‍💻  слово";
     auto unicodeResult=ComputePreviewDiff(unicode,L"Ё👩‍💻 слово");
     if (!Within(unicode,unicodeResult.removed)) return 5;
+    // Ordinary space-only edits should be reviewable on demand without
+    // creating dozens of pink/green flecks in the default preview.
+    const auto whitespace = ComputePreviewDiff(L"Сегодня   мы  проверяем",
+                                               L"Сегодня мы проверяем");
+    if (whitespace.removed.empty() ||
+        !copyfix::MeaningfulPreviewSpans(L"Сегодня   мы  проверяем",
+                                         whitespace.removed).empty() ||
+        !copyfix::MeaningfulPreviewSpans(L"Сегодня мы проверяем",
+                                         whitespace.added).empty()) return 6;
+    // Physical line-break edits are semantically important, even when the
+    // user has not enabled whitespace highlighting.
+    const auto lines = ComputePreviewDiff(L"Первая строка\r\nвторая строка",
+                                          L"Первая строка вторая строка");
+    if (copyfix::MeaningfulPreviewSpans(L"Первая строка\r\nвторая строка",
+                                        lines.removed).empty()) return 7;
+    const auto real = ComputePreviewDiff(L"скопиро-\r\nван", L"скопирован");
+    if (copyfix::MeaningfulPreviewSpans(L"скопиро-\r\nван",
+                                        real.removed).empty()) return 8;
+    const std::vector<copyfix::DiffSpan> spans{{0, 2}, {2, 5}, {5, 6}};
+    const auto filtered = copyfix::MeaningfulPreviewSpans(L"  \tX  ", spans);
+    if (filtered.size() != 1 || filtered[0].begin != 2 || filtered[0].end != 5) return 9;
+    const auto significant_nbsp =
+        copyfix::MeaningfulPreviewSpans(L"\u00a0", {{0,1}});
+    if (significant_nbsp.size() != 1) return 10;
     std::cout << "PASS bounded change highlighting and UTF offsets\n";
     return 0;
 }
