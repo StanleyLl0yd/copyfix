@@ -35,6 +35,7 @@ constexpr UINT kMenuOneLine = 209;
 constexpr UINT kPreviewBeforeEdit = 510;
 constexpr UINT kPreviewAfterEdit = 511;
 constexpr UINT kPreviewShowBreaks = 512;
+constexpr UINT kPreviewShowSpaces = 513;
 constexpr UINT kPreviewAccept = 300;
 constexpr UINT kPreviewCancel = 301;
 constexpr UINT kSettingsSave = 400;
@@ -97,6 +98,7 @@ Undo g_undo;
 HANDLE g_instance_mutex = nullptr;
 HMODULE g_richedit_module = nullptr;
 bool g_show_breaks = false;
+bool g_show_spaces = false;
 UINT g_hotkey_id = kHotkeyA;
 UINT g_taskbar_created = 0;
 bool g_hotkey_registered = false;
@@ -375,7 +377,8 @@ void LayoutPreview(HWND window) {
     Position(window, kPreviewBeforeEdit, margin, edit_y, column, edit_height, dpi);
     Position(window, kPreviewAfterEdit, margin + column + gap, edit_y, column, edit_height, dpi);
     Position(window, kPreviewNote, margin, h - 98, std::max(160,w-300), 23, dpi);
-    Position(window, kPreviewShowBreaks, margin, h - 70, std::max(190,w-420), 25, dpi);
+    Position(window, kPreviewShowBreaks, margin, h - 70, 215, 25, dpi);
+    Position(window, kPreviewShowSpaces, margin + 222, h - 70, 205, 25, dpi);
     Position(window, kPreviewCancel, w - 282, h - 84, 112, 44, dpi);
     Position(window, kPreviewAccept, w - 162, h - 84, 136, 44, dpi);
     InvalidateRect(window, nullptr, TRUE);
@@ -430,8 +433,10 @@ void RenderPreviewText(HWND window) {
     const auto diff = copyfix::ComputePreviewDiff(raw, cleaned);
     SetPreviewRichText(before, raw);
     SetPreviewRichText(after, cleaned);
-    MarkChanges(before, diff.removed, RGB(255, 225, 225));
-    MarkChanges(after, diff.added, RGB(218, 247, 231));
+    MarkChanges(before, g_show_spaces ? diff.removed : copyfix::MeaningfulPreviewSpans(raw, diff.removed),
+                RGB(255, 225, 225));
+    MarkChanges(after, g_show_spaces ? diff.added : copyfix::MeaningfulPreviewSpans(cleaned, diff.added),
+                RGB(218, 247, 231));
 }
 
 LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam) {
@@ -442,7 +447,7 @@ LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
                                  g_settings.profile == copyfix::Profile::Smart ? L"умный" : L"глубокий";
         MakeLabel(window, kPreviewTitle, L"Проверьте изменения", g_font_title);
         MakeLabel(window, kPreviewSubtitle,
-                  L"Розовый: удалено  •  Зелёный: добавлено или изменено. Буфер меняется после подтверждения.", g_font_caption);
+                  L"Розовый: удалено  •  Зелёный: добавлено. Мелкие пробелы скрыты, включаются ниже.", g_font_caption);
         MakeLabel(window, kPreviewBeforeLabel, L"ИСХОДНЫЙ ТЕКСТ", g_font_label);
         MakeLabel(window, kPreviewAfterLabel, L"РЕЗУЛЬТАТ ОБРАБОТКИ", g_font_label);
         const std::wstring status = std::to_wstring(g_pending.after.changes) +
@@ -463,13 +468,20 @@ LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
         ApplyFont(after, g_font_body);
         SendMessageW(before, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(12,12));
         SendMessageW(after, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(12,12));
-        HWND toggle = CreateWindowExW(0, L"BUTTON", L"↵ Показать настоящие переносы строк",
+        HWND toggle = CreateWindowExW(0, L"BUTTON", L"↵ Разрывы строк", 
                                       WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
                                       0,0,1,1,window,
                                       reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kPreviewShowBreaks)),
                                       g_instance,nullptr);
         ApplyFont(toggle, g_font_caption);
+        HWND spaces = CreateWindowExW(0, L"BUTTON", L"Подсветка пробелов",
+                                      WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
+                                      0,0,1,1,window,
+                                      reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kPreviewShowSpaces)),
+                                      g_instance,nullptr);
+        ApplyFont(spaces, g_font_caption);
         g_show_breaks = false;
+        g_show_spaces = false;
         RenderPreviewText(window);
         CreateWindowW(L"BUTTON", L"Применить", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW,
                       0,0,1,1,window,reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kPreviewAccept)),g_instance,nullptr);
@@ -516,6 +528,11 @@ LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
         // Multiline EDIT sends EN_VSCROLL/EN_HSCROLL as WM_COMMAND. Never
         // confuse child notifications with the standard IDCANCEL command (2).
         if (notification == BN_CLICKED && from && IsWindow(from)) {
+            if (id == kPreviewShowSpaces && from == GetDlgItem(window, kPreviewShowSpaces)) {
+                g_show_spaces = SendMessageW(from, BM_GETCHECK, 0, 0) == BST_CHECKED;
+                RenderPreviewText(window);
+                return 0;
+            }
             if (id == kPreviewShowBreaks && from == GetDlgItem(window, kPreviewShowBreaks)) {
                 g_show_breaks = SendMessageW(from, BM_GETCHECK, 0, 0) == BST_CHECKED;
                 RenderPreviewText(window);
