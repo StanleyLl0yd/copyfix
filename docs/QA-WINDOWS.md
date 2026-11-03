@@ -75,7 +75,8 @@ Win32 clipboard replacement is not transactional. When `EmptyClipboard` succeeds
 - [ ] Fresh settings default to Ctrl+Alt+F9 and Deep, including after first launch.
 - [ ] Legacy registry DWORD values 0/1/2 retain their original hotkey meanings after upgrade.
 - [ ] Press Ctrl+Shift+F8 in the native hotkey field, save, trigger from another app, restart and verify persistence.
-- [ ] Occupied chord: save warns, settings remain open, prior hotkey still works, registry unchanged.
+- [ ] Occupied global chord (use PowerShell to hold Ctrl+Alt+F8): warn immediately during shortcut entry, restore the old chord rather than leaving «Нет», keep the old registration and registry unchanged.
+- [ ] When the hotkey editor is empty after an intercepted keystroke, warn after modifier release instead of silently showing «Нет». Confirm a save-time race is still handled.
 - [ ] Cancel tentative changes and reject Ctrl+V (plus common clipboard/editing chords), unmodified, Shift-only, Win/F12/mouse-button combinations.
 - [ ] Press the current active shortcut while Settings is foreground: clipboard unchanged.
 - [ ] Test letters, digits, function and navigation keys under US/Russian layouts, 100/150/200% DPI.
