@@ -9,19 +9,12 @@
 
 namespace {
 bool g_saw_warning = false;
-LRESULT CALLBACK AutoDismissWarning(int code, WPARAM wparam, LPARAM lparam) {
-    if (code == HCBT_ACTIVATE) {
-        const HWND dialog = reinterpret_cast<HWND>(wparam);
-        wchar_t classname[32]{};
-        GetClassNameW(dialog, classname, static_cast<int>(std::size(classname)));
-        // The MessageBox title can be assigned after CBT activation, whereas
-        // the system dialog window class is already known at that point.
-        if (wcscmp(classname, L"#32770") == 0) {
-            g_saw_warning = true;
-            PostMessageW(dialog, WM_COMMAND, IDOK, 0);
-        }
-    }
-    return CallNextHookEx(nullptr, code, wparam, lparam);
+int WINAPI RecordWarning(HWND window, LPCWSTR message, LPCWSTR title, UINT flags) {
+    g_saw_warning = IsWindow(window) &&
+        (flags & MB_ICONWARNING) == MB_ICONWARNING &&
+        wcscmp(title, L"CopyFix — горячая клавиша") == 0 &&
+        wcsstr(message, L"занято") != nullptr;
+    return IDOK;
 }
 struct Cleanup {
     bool created_key = false;
@@ -244,10 +237,10 @@ int main() {
             SendMessageW(combo, CB_SETCURSEL, blockedIndex, 0);
             if (ReadHotkeyChoice(g_settings_window) != blocked) return fail(34);
             g_saw_warning = false;
-            HHOOK hook = SetWindowsHookExW(WH_CBT, AutoDismissWarning, nullptr, GetCurrentThreadId());
-            if (!hook) return fail(35);
+            const auto defaultWarning = g_hotkey_warning_dialog;
+            g_hotkey_warning_dialog = RecordWarning;
             SendMessageW(g_settings_window, WM_COMMAND, kSettingsSave, 0);
-            UnhookWindowsHookEx(hook);
+            g_hotkey_warning_dialog = defaultWarning;
             if (!g_saw_warning || !IsWindow(g_settings_window) ||
                 g_hotkey_id != original_id || g_registered_hotkey != original ||
                 ReadHotkeyChoice(g_settings_window) != g_settings.hotkey)
