@@ -85,11 +85,21 @@ void ShowAbout(HWND parent) noexcept {
     config.pszContent = kAboutDescription;
     config.pszFooter = kAboutWebsiteLink;
     config.pfCallback = AboutCallback;
-    if (FAILED(TaskDialogIndirect(&config, nullptr, nullptr, nullptr))) {
-        const std::wstring fallback = std::wstring(kAboutVersion) + L"\n" +
-            kAboutDescription + L"\n" + kAboutWebsite;
-        MessageBoxW(parent, fallback.c_str(), L"О CopyFix", MB_OK | MB_ICONINFORMATION);
+    using TaskDialogFunction = HRESULT (WINAPI*)(const TASKDIALOGCONFIG*, int*, int*, BOOL*);
+    if (HMODULE controls = LoadLibraryExW(L"comctl32.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32)) {
+        auto* show_dialog = reinterpret_cast<TaskDialogFunction>(
+            GetProcAddress(controls, "TaskDialogIndirect"));
+        const bool shown = show_dialog && SUCCEEDED(show_dialog(&config, nullptr, nullptr, nullptr));
+        FreeLibrary(controls);
+        if (shown) return;
     }
+    constexpr wchar_t fallback[] =
+        L"CopyFix " COPYFIX_VERSION_WSTR L"\n"
+        L"Нативная офлайн-утилита для очистки текста.\n"
+        L"Автоматически сохраняет структурированные фрагменты.\n"
+        L"Изменение форматов HTML/RTF требует подтверждения.\n"
+        L"https://stanleyll0yd.github.io/apps/copyfix/";
+    MessageBoxW(parent, fallback, L"О CopyFix", MB_OK | MB_ICONINFORMATION);
 }
 
 constexpr COLORREF kCanvas = RGB(247, 249, 252);
