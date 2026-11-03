@@ -76,7 +76,9 @@ Win32 clipboard replacement is not transactional. When `EmptyClipboard` succeeds
 - [ ] Legacy registry DWORD values 0/1/2 retain their original hotkey meanings after upgrade.
 - [ ] Press Ctrl+Shift+F8 in the native hotkey field, save, trigger from another app, restart and verify persistence.
 - [ ] Occupied chord: save warns, settings remain open, prior hotkey still works, registry unchanged.
-- [ ] Cancel tentative changes and reject unsupported unmodified, Shift-only, Win/F12/mouse-button combinations.
+- [ ] Cancel tentative changes and reject Ctrl+V (plus common clipboard/editing chords), unmodified, Shift-only, Win/F12/mouse-button combinations.
 - [ ] Press the current active shortcut while Settings is foreground: clipboard unchanged.
 - [ ] Test letters, digits, function and navigation keys under US/Russian layouts, 100/150/200% DPI.
+- [ ] Settings and preview windows open centered within the cursor monitor's working area, using their actual window dimensions; About remains centered. Check multiple monitors and non-100% DPI.
+- [ ] Settings contains no technical HKCU/INI footer.
 - [ ] Windows 10/11 manual acceptance, About/VersionInfo 1.1.0, one portable EXE, no low-level hooks or new runtime/network.
