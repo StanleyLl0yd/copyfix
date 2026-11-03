@@ -2,7 +2,7 @@
 
 **CopyFix** - лёгкая автономная утилита для очистки скопированного текста в Windows. Работает локально, не отправляет текст в сеть, не записывает историю буфера обмена и не использует перехват клавиатуры.
 
-> Status: **Windows prototype 0.1.0 / NOT RELEASE READY**. [Repository-wide audit and safe cleanup](docs/REPOSITORY-AUDIT-2026-11-03.md) is verified on [PR #35 exact-head CI #41624443571](https://github.com/StanleyLl0yd/copyfix/actions/runs/41624443571): Windows MSVC v143 Release x64 `/MT` **8/8 CTest PASS**, PE/ICO/VersionInfo checks PASS, Clang ASan/UBSan **3/3 PASS**, and one portable EXE. The owner reported earlier Windows 10/11 clean/workstation and functional/edge-case acceptance ([issue #7](https://github.com/StanleyLl0yd/copyfix/issues/7)); the newer About hyperlink is not yet manually approved. The protected main PR gate is active. **GitHub Release 1.0.0 is not authorized; code signing is deferred.**
+> Status: **Windows 1.0.0 release-candidate source / UNRELEASED**. Version is generated from CMake for About and Windows EXE VersionInfo; publishing a GitHub Release still requires **separate owner authorization** and final QA. The preceding audited `0.1.0` [exact-main CI #41625261532](https://github.com/StanleyLl0yd/copyfix/actions/runs/41625261532) passed Windows MSVC x64 `/MT` **8/8**, PE/ICO/VersionInfo checks, Clang ASan/UBSan **3/3** and fixture/archive validation. Existing clean/workstation Windows 10/11 acceptance predates the updated About hyperlink and the 1.0.0 candidate; version/link click/keyboard/DPI remain manual acceptance gates ([issue #7](https://github.com/StanleyLl0yd/copyfix/issues/7)). Code signing is deferred; any eventual published EXE must be described as **unsigned**.
 
 ## Use
 
