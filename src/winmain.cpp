@@ -904,6 +904,8 @@ void ObserveShortcutKey(HWND window, const RAWKEYBOARD& keyboard) noexcept {
         // sees it; keep its visual representation in sync with physical input.
         SendMessageW(GetDlgItem(window, kHotkeyInput), HKM_SETHOTKEY,
                      HotkeyControlValue(candidate), 0);
+        if (HWND status = GetDlgItem(window, kSettingsFeedback))
+            SetWindowTextW(status, L"");
         return;
     }
     g_settings_conflict_pending = PostMessageW(
