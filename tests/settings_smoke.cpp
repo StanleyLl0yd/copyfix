@@ -12,9 +12,11 @@ bool g_saw_warning = false;
 LRESULT CALLBACK AutoDismissWarning(int code, WPARAM wparam, LPARAM lparam) {
     if (code == HCBT_ACTIVATE) {
         const HWND dialog = reinterpret_cast<HWND>(wparam);
-        wchar_t title[96]{};
-        GetWindowTextW(dialog, title, static_cast<int>(std::size(title)));
-        if (wcscmp(title, L"CopyFix — горячая клавиша") == 0) {
+        wchar_t classname[32]{};
+        GetClassNameW(dialog, classname, static_cast<int>(std::size(classname)));
+        // The MessageBox title can be assigned after CBT activation, whereas
+        // the system dialog window class is already known at that point.
+        if (wcscmp(classname, L"#32770") == 0) {
             g_saw_warning = true;
             PostMessageW(dialog, WM_COMMAND, IDOK, 0);
         }
