@@ -547,8 +547,15 @@ LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
         MakeLabel(window, kPreviewBeforeLabel, L"ИСХОДНЫЙ ТЕКСТ", g_font_label);
         MakeLabel(window, kPreviewAfterLabel, L"РЕЗУЛЬТАТ ОБРАБОТКИ", g_font_label);
         wchar_t status[128]{};
-        swprintf_s(status, L"%zu изменений  |  Профиль: %ls",
-                   g_pending.after.changes, profile);
+        std::size_t number = g_pending.after.changes;
+        std::size_t digits = 0;
+        do {
+            status[digits++] = static_cast<wchar_t>(L'0' + number % 10);
+            number /= 10;
+        } while (number);
+        std::reverse(status, status + digits);
+        wcscat_s(status, L" изменений  |  Профиль: ");
+        wcscat_s(status, profile);
         MakeLabel(window, kPreviewNote, status, g_font_caption);
         const DWORD style = WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_TABSTOP | ES_MULTILINE |
                             ES_AUTOVSCROLL | ES_READONLY | ES_NOHIDESEL;
