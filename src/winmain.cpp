@@ -25,8 +25,9 @@ constexpr UINT kTrayMessage = WM_APP + 1;
 constexpr UINT kHotkeyA = 100;
 constexpr UINT kHotkeyB = 101;
 constexpr UINT kHotkeyProbe = 102;
-constexpr UINT kSettingsConflictMessage = WM_APP + 2;
-constexpr UINT kSettingsNormalKeyMessage = WM_APP + 3;
+constexpr UINT kSettingsCtrl = 404;
+constexpr UINT kSettingsAlt = 405;
+constexpr UINT kSettingsShift = 406;
 constexpr UINT kMaxChars = 1000000;
 constexpr UINT kMaxPreviewChars = 100000;
 constexpr UINT kMenuFix = 200;
@@ -151,46 +152,6 @@ struct HotkeyChord {
     bool operator==(const HotkeyChord&) const = default;
 };
 
-// One source of truth for keyboard capture: physical Raw Input make/break
-// events, not timing-sensitive GetAsyncKeyState or HOTKEY_CLASS text.
-struct ShortcutCapture {
-    UINT modifiers = 0;
-    UINT heldKey = 0;
-    bool winHeld = false;
-
-    void Reset() noexcept {
-        modifiers = 0;
-        heldKey = 0;
-        winHeld = false;
-    }
-
-    HotkeyChord Consume(UINT key, bool released) noexcept {
-        UINT mask = 0;
-        if (key == VK_CONTROL || key == VK_LCONTROL || key == VK_RCONTROL)
-            mask = MOD_CONTROL;
-        else if (key == VK_MENU || key == VK_LMENU || key == VK_RMENU)
-            mask = MOD_ALT;
-        else if (key == VK_SHIFT || key == VK_LSHIFT || key == VK_RSHIFT)
-            mask = MOD_SHIFT;
-        if (mask) {
-            if (released) modifiers &= ~mask;
-            else modifiers |= mask;
-            return {0, 0};
-        }
-        if (key == VK_LWIN || key == VK_RWIN) {
-            winHeld = !released;
-            return {0, 0};
-        }
-        if (key == 0 || key == 0xFF) return {0, 0};
-        if (released) {
-            if (heldKey == key) heldKey = 0;
-            return {0, 0};
-        }
-        if (key == heldKey) return {0, 0};
-        heldKey = key;
-        return winHeld ? HotkeyChord{0, 0} : HotkeyChord{modifiers, key};
-    }
-};
 struct Settings {
     copyfix::Profile profile = copyfix::Profile::Deep;
     HotkeyChord hotkey;
@@ -232,12 +193,6 @@ UINT g_hotkey_id = kHotkeyA;
 UINT g_taskbar_created = 0;
 bool g_hotkey_registered = false;
 HotkeyChord g_registered_hotkey;
-bool g_settings_raw_input = false;
-bool g_settings_conflict_pending = false;
-ShortcutCapture g_shortcut_capture;
-HotkeyChord g_settings_candidate;
-UINT g_settings_pending_key = 0;
-
 int Scale(int px, int dpi) noexcept { return MulDiv(px, dpi, 96); }
 HFONT MakeFont(int points, int weight, int dpi) {
     return CreateFontW(-MulDiv(points, dpi, 72), 0, 0, 0, weight,
@@ -350,33 +305,100 @@ DWORD EncodeHotkey(HotkeyChord chord) noexcept {
     if (chord == HotkeyChord{MOD_CONTROL | MOD_ALT, L'C'}) return 2;
     return kCustomHotkeyFlag | (chord.modifiers << 8) | chord.key;
 }
-// Extended virtual keys need the correct scan-code prefix for key names.
-bool IsExtendedHotkeyKey(UINT key) noexcept {
-    switch (key) {
-    case VK_PRIOR: case VK_NEXT: case VK_END: case VK_HOME:
-    case VK_LEFT: case VK_UP: case VK_RIGHT: case VK_DOWN:
-    case VK_INSERT: case VK_DELETE: case VK_DIVIDE:
-        return true;
-    default: return false;
-    }
+
+struct HotkeyKeyItem { const wchar_t* name; UINT key; };
+
+constexpr HotkeyKeyItem kSpecialHotkeyKeys[] = {
+    {L"Backspace", VK_BACK}, {L"Tab", VK_TAB}, {L"Enter", VK_RETURN},
+    {L"Space", VK_SPACE}, {L"Esc", VK_ESCAPE},
+    {L"Home", VK_HOME}, {L"End", VK_END},
+    {L"Page Up", VK_PRIOR}, {L"Page Down", VK_NEXT},
+    {L"Insert", VK_INSERT}, {L"Delete", VK_DELETE},
+    {L"Left", VK_LEFT}, {L"Right", VK_RIGHT},
+    {L"Up", VK_UP}, {L"Down", VK_DOWN},
+    {L"Numpad 0", VK_NUMPAD0}, {L"Numpad 1", VK_NUMPAD1},
+    {L"Numpad 2", VK_NUMPAD2}, {L"Numpad 3", VK_NUMPAD3},
+    {L"Numpad 4", VK_NUMPAD4}, {L"Numpad 5", VK_NUMPAD5},
+    {L"Numpad 6", VK_NUMPAD6}, {L"Numpad 7", VK_NUMPAD7},
+    {L"Numpad 8", VK_NUMPAD8}, {L"Numpad 9", VK_NUMPAD9},
+    {L"Numpad +", VK_ADD}, {L"Numpad -", VK_SUBTRACT},
+    {L"Numpad *", VK_MULTIPLY}, {L"Numpad /", VK_DIVIDE},
+    {L"Numpad .", VK_DECIMAL},
+    {L"OEM ;", VK_OEM_1}, {L"OEM +", VK_OEM_PLUS},
+    {L"OEM ,", VK_OEM_COMMA}, {L"OEM -", VK_OEM_MINUS},
+    {L"OEM .", VK_OEM_PERIOD}, {L"OEM /", VK_OEM_2},
+    {L"OEM ~", VK_OEM_3}, {L"OEM [", VK_OEM_4},
+    {L"OEM \\", VK_OEM_5}, {L"OEM ]", VK_OEM_6},
+    {L"OEM quote", VK_OEM_7},
+};
+
+void AddHotkeyOption(HWND combo, const wchar_t* name, UINT key) noexcept {
+    const auto i = SendMessageW(combo, CB_ADDSTRING, 0,
+                                reinterpret_cast<LPARAM>(name));
+    if (i != CB_ERR && i != CB_ERRSPACE)
+        SendMessageW(combo, CB_SETITEMDATA, static_cast<WPARAM>(i), key);
 }
-void FormatHotkey(HotkeyChord chord, wchar_t (&text)[128]) noexcept {
-    text[0] = L'\0';
-    if (chord.modifiers & MOD_CONTROL) wcscat_s(text, L"Ctrl + ");
-    if (chord.modifiers & MOD_ALT) wcscat_s(text, L"Alt + ");
-    if (chord.modifiers & MOD_SHIFT) wcscat_s(text, L"Shift + ");
-    wchar_t name[64]{};
-    if ((chord.key >= L'A' && chord.key <= L'Z') ||
-        (chord.key >= L'0' && chord.key <= L'9')) {
-        swprintf_s(name, L"%lc", static_cast<wchar_t>(chord.key));
-    } else {
-        const UINT scan = MapVirtualKeyW(chord.key, MAPVK_VK_TO_VSC);
-        const LONG param = static_cast<LONG>((scan & 0xFFU) << 16) |
-            (IsExtendedHotkeyKey(chord.key) ? (1L << 24) : 0);
-        if (!scan || !GetKeyNameTextW(param, name, static_cast<int>(std::size(name))))
-            swprintf_s(name, L"VK %02X", chord.key);
+
+void PopulateHotkeyKeys(HWND combo, UINT selectedKey) noexcept {
+    wchar_t name[40]{};
+    for (UINT key = L'A'; key <= L'Z'; ++key) {
+        swprintf_s(name, L"%lc", static_cast<wchar_t>(key));
+        AddHotkeyOption(combo, name, key);
     }
-    wcscat_s(text, name);
+    for (UINT key = L'0'; key <= L'9'; ++key) {
+        swprintf_s(name, L"%lc", static_cast<wchar_t>(key));
+        AddHotkeyOption(combo, name, key);
+    }
+    for (UINT key = VK_F1; key <= VK_F24; ++key) {
+        if (key == VK_F12) continue;
+        swprintf_s(name, L"F%u", key - VK_F1 + 1);
+        AddHotkeyOption(combo, name, key);
+    }
+    for (const auto& item : kSpecialHotkeyKeys)
+        AddHotkeyOption(combo, item.name, item.key);
+    const int count = static_cast<int>(SendMessageW(combo, CB_GETCOUNT, 0, 0));
+    for (int i = 0; i < count; ++i) {
+        if (static_cast<UINT>(SendMessageW(combo, CB_GETITEMDATA, i, 0)) ==
+            selectedKey) {
+            SendMessageW(combo, CB_SETCURSEL, i, 0);
+            return;
+        }
+    }
+    SendMessageW(combo, CB_SETCURSEL, 0, 0);
+}
+
+HotkeyChord ReadHotkeyChoice(HWND window) noexcept {
+    UINT mods = 0;
+    if (SendDlgItemMessageW(window, kSettingsCtrl, BM_GETCHECK, 0, 0) == BST_CHECKED)
+        mods |= MOD_CONTROL;
+    if (SendDlgItemMessageW(window, kSettingsAlt, BM_GETCHECK, 0, 0) == BST_CHECKED)
+        mods |= MOD_ALT;
+    if (SendDlgItemMessageW(window, kSettingsShift, BM_GETCHECK, 0, 0) == BST_CHECKED)
+        mods |= MOD_SHIFT;
+    const HWND combo = GetDlgItem(window, kHotkeyInput);
+    const LRESULT index = SendMessageW(combo, CB_GETCURSEL, 0, 0);
+    if (index == CB_ERR) return {0, 0};
+    const LRESULT data = SendMessageW(combo, CB_GETITEMDATA, index, 0);
+    return data == CB_ERR ? HotkeyChord{0, 0} : HotkeyChord{mods, static_cast<UINT>(data)};
+}
+
+void ResetHotkeyChoice(HWND window) noexcept {
+    const UINT mods = g_settings.hotkey.modifiers;
+    SendDlgItemMessageW(window, kSettingsCtrl, BM_SETCHECK,
+        (mods & MOD_CONTROL) ? BST_CHECKED : BST_UNCHECKED, 0);
+    SendDlgItemMessageW(window, kSettingsAlt, BM_SETCHECK,
+        (mods & MOD_ALT) ? BST_CHECKED : BST_UNCHECKED, 0);
+    SendDlgItemMessageW(window, kSettingsShift, BM_SETCHECK,
+        (mods & MOD_SHIFT) ? BST_CHECKED : BST_UNCHECKED, 0);
+    const HWND combo = GetDlgItem(window, kHotkeyInput);
+    const int count = static_cast<int>(SendMessageW(combo, CB_GETCOUNT, 0, 0));
+    for (int i = 0; i < count; ++i) {
+        if (static_cast<UINT>(SendMessageW(combo, CB_GETITEMDATA, i, 0)) ==
+            g_settings.hotkey.key) {
+            SendMessageW(combo, CB_SETCURSEL, i, 0);
+            return;
+        }
+    }
 }
 
 // Per-user settings: no INI, files, elevated privileges, or roaming surprises.
@@ -901,121 +923,17 @@ void UndoLast() {
     } else Notify(L"Не удалось восстановить текст, буфер не изменён или занят.");
 }
 
-void SetShortcutEditor(HWND window, HotkeyChord chord) noexcept {
-    wchar_t label[128]{};
-    FormatHotkey(chord, label);
-    if (HWND input = GetDlgItem(window, kHotkeyInput))
-        SetWindowTextW(input, label);
-}
-
-void ResetShortcutEditor(HWND window) noexcept {
-    g_settings_candidate = g_settings.hotkey;
-    SetShortcutEditor(window, g_settings_candidate);
-}
-
 void ShowShortcutWarning(HWND window, bool occupied) noexcept {
     if (!IsWindow(window)) return;
-    ResetShortcutEditor(window);
+    ResetHotkeyChoice(window);
     const wchar_t* message = occupied
         ? L"Сочетание уже занято другой программой или зарезервировано Windows. "
           L"Прежняя комбинация сохранена."
-        : L"Эта комбинация недоступна для CopyFix. "
-          L"Используйте Ctrl или Alt и другую клавишу, не занятую стандартными командами.";
+        : L"Комбинация недопустима. Выберите Ctrl или Alt, при желании Shift, "
+          L"и клавишу из списка.";
     if (HWND status = GetDlgItem(window, kSettingsFeedback))
         SetWindowTextW(status, message);
     MessageBoxW(window, message, L"CopyFix — горячая клавиша", MB_OK | MB_ICONWARNING);
-    // Modal dialogs consume key-up messages, so reset both capture paths.
-    g_shortcut_capture.Reset();
-    g_settings_pending_key = 0;
-    ResetShortcutEditor(window);
-    // Return keyboard focus to the capture field for the next attempt.
-    if (IsWindow(window) && GetForegroundWindow() == window)
-        SetFocus(GetDlgItem(window, kHotkeyInput));
-}
-
-bool AcceptShortcutCandidate(HWND window, HotkeyChord candidate) noexcept {
-    if (!ValidHotkey(candidate)) return false;
-    if (!HotkeyAvailable(candidate)) return false;
-    g_settings_candidate = candidate;
-    SetShortcutEditor(window, candidate);
-    if (HWND status = GetDlgItem(window, kSettingsFeedback))
-        SetWindowTextW(status, L"");
-    return true;
-}
-
-// Both physical Raw Input and normal EDIT messages feed the same transaction.
-// Native EDIT key messages provide a reliable path even if Raw Input is unavailable.
-void ProcessShortcutCandidate(HWND window, HotkeyChord chord) noexcept {
-    if (!chord.key || g_settings_conflict_pending ||
-        g_settings_pending_key == chord.key) return;
-    g_settings_pending_key = chord.key;
-    if (ValidHotkey(chord) && AcceptShortcutCandidate(window, chord)) return;
-    if ((chord.modifiers & (MOD_CONTROL | MOD_ALT)) == 0) {
-        g_settings_pending_key = 0;
-        if (HWND status = GetDlgItem(window, kSettingsFeedback))
-            SetWindowTextW(status, L"Для сочетания удерживайте Ctrl или Alt.");
-        return;
-    }
-    g_settings_conflict_pending = PostMessageW(
-        window, kSettingsConflictMessage, ValidHotkey(chord) ? 1 : 0, 0) != FALSE;
-}
-
-void ObserveShortcutKey(HWND window, const RAWKEYBOARD& keyboard) noexcept {
-    if (GetForegroundWindow() != window ||
-        GetFocus() != GetDlgItem(window, kHotkeyInput)) {
-        g_shortcut_capture.Reset();
-        g_settings_pending_key = 0;
-        return;
-    }
-    if ((keyboard.Flags & RI_KEY_BREAK) != 0 &&
-        keyboard.VKey == g_settings_pending_key)
-        g_settings_pending_key = 0;
-    const HotkeyChord chord = g_shortcut_capture.Consume(
-        keyboard.VKey, (keyboard.Flags & RI_KEY_BREAK) != 0);
-    ProcessShortcutCandidate(window, chord);
-}
-
-UINT KeyboardModifiers() noexcept {
-    UINT modifiers = 0;
-    if (GetKeyState(VK_CONTROL) & 0x8000) modifiers |= MOD_CONTROL;
-    if (GetKeyState(VK_MENU) & 0x8000) modifiers |= MOD_ALT;
-    if (GetKeyState(VK_SHIFT) & 0x8000) modifiers |= MOD_SHIFT;
-    return modifiers;
-}
-
-// Subclassing only this single EDIT avoids global hooks and captures ordinary
-// virtual keys even when IsDialogMessage is translating dialog navigation.
-LRESULT CALLBACK ShortcutEditorProc(HWND input, UINT msg, WPARAM wparam,
-                                     LPARAM lparam, UINT_PTR, DWORD_PTR) {
-    switch (msg) {
-    case WM_GETDLGCODE:
-        return DefSubclassProc(input, msg, wparam, lparam) | DLGC_WANTALLKEYS;
-    case WM_KEYDOWN:
-    case WM_SYSKEYDOWN:
-        if (wparam >= VK_BACK && wparam <= 0xFE) {
-            const UINT key = static_cast<UINT>(wparam);
-            if (key != VK_CONTROL && key != VK_MENU && key != VK_SHIFT &&
-                key != VK_LCONTROL && key != VK_RCONTROL &&
-                key != VK_LMENU && key != VK_RMENU &&
-                key != VK_LSHIFT && key != VK_RSHIFT) {
-                PostMessageW(GetParent(input), kSettingsNormalKeyMessage,
-                             KeyboardModifiers(), key);
-            }
-        }
-        return 0;
-    case WM_KEYUP:
-    case WM_SYSKEYUP:
-        if (g_settings_pending_key == wparam)
-            g_settings_pending_key = 0;
-        return 0;
-    case WM_CHAR:
-    case WM_SYSCHAR:
-        return 0;
-    case WM_NCDESTROY:
-        RemoveWindowSubclass(input, ShortcutEditorProc, 1);
-        break;
-    }
-    return DefSubclassProc(input, msg, wparam, lparam);
 }
 
 void LayoutSettings(HWND window) {
@@ -1026,9 +944,12 @@ void LayoutSettings(HWND window) {
     Position(window, kSettingsTitle, 26, 22, w-52, 38, dpi);
     Position(window, kSettingsSubtitle, 26, 64, w-52, 40, dpi);
     Position(window, 420, 26, 124, w-52, 24, dpi);
-    Position(window, kHotkeyInput, 26, 154, w-52, 34, dpi);
-    Position(window, 421, 26, 222, w-52, 24, dpi);
-    Position(window, kComboProfile, 26, 252, w-52, 250, dpi);
+    Position(window, kSettingsCtrl, 26, 154, 120, 30, dpi);
+    Position(window, kSettingsAlt, 164, 154, 110, 30, dpi);
+    Position(window, kSettingsShift, 302, 154, 145, 30, dpi);
+    Position(window, kHotkeyInput, 26, 192, w-52, 240, dpi);
+    Position(window, 421, 26, 249, w-52, 24, dpi);
+    Position(window, kComboProfile, 26, 279, w-52, 240, dpi);
     Position(window, kSettingsFeedback, 26, h-113, w-52, 46, dpi);
     Position(window, kSettingsCancel, w-286, h-64, 122, 42, dpi);
     Position(window, kSettingsSave, w-156, h-64, 130, 42, dpi);
@@ -1040,16 +961,30 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
         g_settings_dpi = static_cast<int>(GetDpiForWindow(window));
         MakeLabel(window,kSettingsTitle,L"Настройки",g_font_title);
         MakeLabel(window,kSettingsSubtitle,
-                  L"Нажмите сочетание в поле. Ctrl или Alt обязательны; Shift — дополнительно.",
+                  L"Отметьте Ctrl или Alt, при необходимости Shift, затем выберите клавишу.",
                   g_font_caption);
         MakeLabel(window,420,L"ГОРЯЧАЯ КЛАВИША",g_font_label);
-        HWND hotkey = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr,
-            WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_READONLY,
+        const HotkeyKeyItem modifiers[] = {
+            {L"Ctrl", kSettingsCtrl}, {L"Alt", kSettingsAlt},
+            {L"Shift", kSettingsShift},
+        };
+        for (const auto& option : modifiers) {
+            HWND control = CreateWindowW(L"BUTTON", option.name,
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
+                0, 0, 1, 1, window,
+                reinterpret_cast<HMENU>(static_cast<UINT_PTR>(option.key)),
+                g_instance, nullptr);
+            if (!control) return -1;
+            ApplyFont(control, g_font_body);
+        }
+        HWND hotkey = CreateWindowW(L"COMBOBOX", nullptr,
+            WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST | WS_VSCROLL,
             0, 0, 1, 1, window,
-            reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kHotkeyInput)), g_instance, nullptr);
-        if (!hotkey || !SetWindowSubclass(hotkey, ShortcutEditorProc, 1, 0)) return -1;
-        g_settings_candidate = g_settings.hotkey;
-        SetShortcutEditor(window, g_settings_candidate);
+            reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kHotkeyInput)),
+            g_instance, nullptr);
+        if (!hotkey) return -1;
+        PopulateHotkeyKeys(hotkey, g_settings.hotkey.key);
+        ResetHotkeyChoice(window);
         ApplyFont(hotkey,g_font_body);
         MakeLabel(window,421,L"ПРОФИЛЬ ОБРАБОТКИ",g_font_label);
         HWND profile=CreateWindowW(L"COMBOBOX",nullptr,WS_CHILD | WS_VISIBLE | WS_TABSTOP |
@@ -1068,34 +1003,6 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
         return 0;
     }
     case WM_SIZE: LayoutSettings(window); return 0;
-    case WM_INPUT: {
-        RAWINPUT input{};
-        UINT size = sizeof(input);
-        const UINT got = GetRawInputData(reinterpret_cast<HRAWINPUT>(lparam),
-            RID_INPUT, &input, &size, sizeof(RAWINPUTHEADER));
-        if (got != static_cast<UINT>(-1) && got == size &&
-            input.header.dwType == RIM_TYPEKEYBOARD)
-            ObserveShortcutKey(window, input.data.keyboard);
-        return DefWindowProcW(window, msg, wparam, lparam);
-    }
-    case kSettingsConflictMessage:
-        if (g_settings_conflict_pending) {
-            g_settings_conflict_pending = false;
-            ShowShortcutWarning(window, wparam != 0);
-        }
-        return 0;
-    case kSettingsNormalKeyMessage:
-        if (GetForegroundWindow() == window &&
-            GetFocus() == GetDlgItem(window, kHotkeyInput))
-            ProcessShortcutCandidate(window,
-                {static_cast<UINT>(wparam), static_cast<UINT>(lparam)});
-        return 0;
-    case WM_ACTIVATE:
-        if (LOWORD(wparam) == WA_INACTIVE) {
-            g_shortcut_capture.Reset();
-            g_settings_pending_key = 0;
-        }
-        break;
     case WM_CTLCOLORSTATIC: {
         auto dc = reinterpret_cast<HDC>(wparam);
         SetBkMode(dc,TRANSPARENT);
@@ -1106,21 +1013,12 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
     }
     case WM_DRAWITEM: DrawActionButton(reinterpret_cast<const DRAWITEMSTRUCT*>(lparam));return TRUE;
     case WM_COMMAND:
-        if (LOWORD(wparam) == kHotkeyInput &&
-            (HIWORD(wparam) == EN_SETFOCUS || HIWORD(wparam) == EN_KILLFOCUS)) {
-            g_shortcut_capture.Reset();
-            g_settings_pending_key = 0;
-            return 0;
-        }
         if (LOWORD(wparam) == kSettingsSave) {
-            const HotkeyChord next_hotkey = g_settings_candidate;
+            const HotkeyChord next_hotkey = ReadHotkeyChoice(window);
             const int next_profile = static_cast<int>(SendMessageW(GetDlgItem(window, kComboProfile), CB_GETCURSEL, 0, 0));
             if (next_profile < 0 || next_profile > 2) return 0;
             if (!ValidHotkey(next_hotkey)) {
-                MessageBoxW(window,
-                    L"Комбинация недопустима: выберите Ctrl или Alt с другой клавишей. "
-                    L"Стандартные команды (например, Ctrl+V), Win, F12 и кнопки мыши недоступны.",
-                    L"CopyFix", MB_OK | MB_ICONWARNING);
+                ShowShortcutWarning(window, false);
                 return 0;
             }
             if (!RegisterChosenHotkey(next_hotkey)) {
@@ -1140,18 +1038,7 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
         }
         break;
     case WM_CLOSE: DestroyWindow(window); return 0;
-    case WM_DESTROY: {
-        if (g_settings_raw_input) {
-            RAWINPUTDEVICE remove{0x01, 0x06, RIDEV_REMOVE, nullptr};
-            RegisterRawInputDevices(&remove, 1, sizeof(remove));
-            g_settings_raw_input = false;
-        }
-        g_settings_conflict_pending = false;
-        g_shortcut_capture.Reset();
-        g_settings_pending_key = 0;
-        g_settings_window = nullptr;
-        return 0;
-    }
+    case WM_DESTROY: g_settings_window = nullptr; return 0;
     }
     return DefWindowProcW(window,msg,wparam,lparam);
 }
@@ -1160,7 +1047,7 @@ void OpenSettings() {
     if (g_settings_window) { SetForegroundWindow(g_settings_window); return; }
     g_settings_window = CreateWindowExW(WS_EX_APPWINDOW,L"CopyFixSettings",L"CopyFix - настройки",
         WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
-        CW_USEDEFAULT,CW_USEDEFAULT,Scale(510,96),Scale(468,96),
+        CW_USEDEFAULT,CW_USEDEFAULT,Scale(510,96),Scale(492,96),
         nullptr,nullptr,g_instance,nullptr);
     if (!g_settings_window) return;
     POINT cursor{};
@@ -1168,20 +1055,7 @@ void OpenSettings() {
         ? MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST)
         : MonitorFromWindow(g_message, MONITOR_DEFAULTTONEAREST);
     CenterWindowOnMonitor(g_settings_window, monitor);
-    g_settings_conflict_pending = false;
-    g_shortcut_capture.Reset();
-    g_settings_pending_key = 0;
-    // Receive occupied combinations as well as ordinary focus-owned key events.
-    // Only process Raw Input while Settings and its editor are foreground/focused.
-    const RAWINPUTDEVICE keyboard{0x01, 0x06, RIDEV_INPUTSINK, g_settings_window};
-    g_settings_raw_input = RegisterRawInputDevices(&keyboard, 1, sizeof(keyboard)) != FALSE;
     ShowWindow(g_settings_window, SW_SHOWNORMAL);
-    SetForegroundWindow(g_settings_window);
-    SetFocus(GetDlgItem(g_settings_window, kHotkeyInput));
-    if (!g_settings_raw_input) {
-        SetWindowTextW(GetDlgItem(g_settings_window, kSettingsFeedback),
-                       L"Можно вводить сочетания. Проверка перехваченных комбинаций недоступна.");
-    }
 }
 
 void ShowMenu() {
