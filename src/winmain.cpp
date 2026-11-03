@@ -53,7 +53,6 @@ constexpr UINT kPreviewAfterLabel = 413;
 constexpr UINT kPreviewNote = 414;
 constexpr UINT kSettingsTitle = 415;
 constexpr UINT kSettingsSubtitle = 416;
-constexpr UINT kSettingsFooter = 417;
 
 constexpr wchar_t kAboutVersion[] = L"CopyFix " COPYFIX_VERSION_WSTR;
 constexpr wchar_t kAboutWebsite[] = L"https://stanleyll0yd.github.io/apps/copyfix/";
@@ -64,7 +63,7 @@ constexpr wchar_t kAboutDescription[] =
     L"Автоматически сохраняет структурированные фрагменты.\n"
     L"Изменение форматов HTML/RTF требует подтверждения.";
 
-void CenterAboutWindow(HWND dialog, HMONITOR monitor) noexcept {
+void CenterWindowOnMonitor(HWND dialog, HMONITOR monitor) noexcept {
     MONITORINFO info{sizeof(info)};
     RECT window{};
     if (!monitor || !GetMonitorInfoW(monitor, &info) || !GetWindowRect(dialog, &window))
@@ -83,7 +82,7 @@ void CenterAboutWindow(HWND dialog, HMONITOR monitor) noexcept {
 HRESULT CALLBACK AboutCallback(HWND window, UINT notification, WPARAM, LPARAM data,
                               LONG_PTR callbackData) noexcept {
     if (notification == TDN_CREATED) {
-        CenterAboutWindow(window, reinterpret_cast<HMONITOR>(callbackData));
+        CenterWindowOnMonitor(window, reinterpret_cast<HMONITOR>(callbackData));
     } else if (notification == TDN_HYPERLINK_CLICKED && data) {
         const auto* url = reinterpret_cast<const wchar_t*>(data);
         if (wcscmp(url, kAboutWebsite) == 0)
@@ -248,10 +247,32 @@ void DrawActionButton(const DRAWITEMSTRUCT* item) {
 constexpr UINT kHotkeyModifierMask = MOD_ALT | MOD_CONTROL | MOD_SHIFT;
 constexpr DWORD kCustomHotkeyFlag = 0x00010000U;
 
+bool IsCommonAppShortcut(HotkeyChord chord) noexcept {
+    // Local editor shortcuts cannot be detected by RegisterHotKey. Reject
+    // universal editing combinations before attempting global registration.
+    if (chord.modifiers == MOD_CONTROL) {
+        switch (chord.key) {
+        case L'A': case L'C': case L'V': case L'X':
+        case L'Z': case L'Y': return true;
+        default: break;
+        }
+    }
+    if (chord.modifiers == (MOD_CONTROL | MOD_SHIFT) &&
+        chord.key == L'V') return true;
+    // Windows uses these for task switching and system window controls.
+    if (chord.modifiers == MOD_ALT &&
+        (chord.key == VK_TAB || chord.key == VK_ESCAPE ||
+         chord.key == VK_F4 || chord.key == VK_SPACE)) return true;
+    if (chord.modifiers == (MOD_CONTROL | MOD_SHIFT) &&
+        chord.key == VK_ESCAPE) return true;
+    return false;
+}
+
 bool ValidHotkey(HotkeyChord chord) noexcept {
     if ((chord.modifiers & ~kHotkeyModifierMask) != 0 ||
         (chord.modifiers & (MOD_CONTROL | MOD_ALT)) == 0 ||
-        chord.key < VK_BACK || chord.key > 0xFE) return false;
+        chord.key < VK_BACK || chord.key > 0xFE ||
+        IsCommonAppShortcut(chord)) return false;
     switch (chord.key) {
     case VK_SHIFT: case VK_CONTROL: case VK_MENU:
     case VK_LSHIFT: case VK_RSHIFT:
@@ -753,9 +774,19 @@ LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
 void OpenPreview() {
     if (g_preview) { SetForegroundWindow(g_preview); return; }
     g_preview = CreateWindowExW(WS_EX_APPWINDOW, L"CopyFixPreview", L"CopyFix - проверка текста",
-        WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT,
+        WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, CW_USEDEFAULT, CW_USEDEFAULT,
         Scale(1040,96), Scale(690,96), nullptr, nullptr, g_instance, nullptr);
-    if (!g_preview) { ClearPending(); Notify(L"Не удалось открыть предпросмотр."); }
+    if (!g_preview) {
+        ClearPending();
+        Notify(L"Не удалось открыть предпросмотр.");
+        return;
+    }
+    POINT cursor{};
+    const HMONITOR monitor = GetCursorPos(&cursor)
+        ? MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST)
+        : MonitorFromWindow(g_message, MONITOR_DEFAULTTONEAREST);
+    CenterWindowOnMonitor(g_preview, monitor);
+    ShowWindow(g_preview, SW_SHOWNORMAL);
 }
 
 void FixClipboard(bool force_preview, bool one_line = false) {
@@ -818,7 +849,6 @@ void LayoutSettings(HWND window) {
     Position(window, kHotkeyInput, 26, 154, w-52, 34, dpi);
     Position(window, 421, 26, 222, w-52, 24, dpi);
     Position(window, kComboProfile, 26, 252, w-52, 250, dpi);
-    Position(window, kSettingsFooter, 26, h-104, w-52, 36, dpi);
     Position(window, kSettingsCancel, w-286, h-64, 122, 42, dpi);
     Position(window, kSettingsSave, w-156, h-64, 130, 42, dpi);
 }
@@ -846,7 +876,6 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
             SendMessageW(profile,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(name));
         SendMessageW(profile,CB_SETCURSEL,static_cast<WPARAM>(g_settings.profile),0);
         ApplyFont(profile,g_font_body);
-        MakeLabel(window,kSettingsFooter,L"HKCU\\Software\\CopyFix  |  Без INI-файлов",g_font_caption);
         CreateWindowW(L"BUTTON",L"Сохранить",WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW,
             0,0,1,1,window,reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kSettingsSave)),g_instance,nullptr);
         CreateWindowW(L"BUTTON",L"Отмена",WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW,
@@ -870,15 +899,15 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
             if (next_profile < 0 || next_profile > 2) return 0;
             if (!ValidHotkey(next_hotkey)) {
                 MessageBoxW(window,
-                    L"Нажмите Ctrl или Alt вместе с другой клавишей (Shift — по желанию). "
-                    L"Одиночные клавиши, Win, F12 и кнопки мыши не поддерживаются.",
+                    L"Комбинация недопустима: выберите Ctrl или Alt с другой клавишей. "
+                    L"Стандартные команды (например, Ctrl+V), Win, F12 и кнопки мыши недоступны.",
                     L"CopyFix", MB_OK | MB_ICONWARNING);
                 return 0;
             }
             if (!RegisterChosenHotkey(next_hotkey)) {
                 MessageBoxW(window,
-                    L"Не удалось зарегистрировать сочетание: оно занято или "
-                    L"зарезервировано Windows. Прежняя комбинация продолжает работать.",
+                    L"Windows не позволяет зарегистрировать сочетание: оно уже занято "
+                    L"глобально или зарезервировано системой. Прежняя комбинация сохранена.",
                     L"CopyFix", MB_OK | MB_ICONWARNING);
                 return 0;
             }
@@ -903,9 +932,16 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
 void OpenSettings() {
     if (g_settings_window) { SetForegroundWindow(g_settings_window); return; }
     g_settings_window = CreateWindowExW(WS_EX_APPWINDOW,L"CopyFixSettings",L"CopyFix - настройки",
-        WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_VISIBLE,
+        WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
         CW_USEDEFAULT,CW_USEDEFAULT,Scale(510,96),Scale(468,96),
         nullptr,nullptr,g_instance,nullptr);
+    if (!g_settings_window) return;
+    POINT cursor{};
+    const HMONITOR monitor = GetCursorPos(&cursor)
+        ? MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST)
+        : MonitorFromWindow(g_message, MONITOR_DEFAULTTONEAREST);
+    CenterWindowOnMonitor(g_settings_window, monitor);
+    ShowWindow(g_settings_window, SW_SHOWNORMAL);
 }
 
 void ShowMenu() {
