@@ -72,18 +72,14 @@ Win32 clipboard replacement is not transactional. When `EmptyClipboard` succeeds
 
 ## Windows 1.1.0 custom hotkey acceptance (not yet performed)
 
-- [ ] Fresh settings default to Ctrl+Alt+F9 and Deep, including after first launch.
-- [ ] Legacy registry DWORD values 0/1/2 retain their original hotkey meanings after upgrade.
-- [ ] Press Ctrl+Shift+F8 in the native hotkey field, save, trigger from another app, restart and verify persistence.
-- [ ] Occupied global chord (use PowerShell to hold Ctrl+Alt+F8): warn immediately during shortcut entry, restore the old chord rather than leaving «Нет», keep the old registration and registry unchanged.
-- [ ] Repeatedly press an externally occupied chord (e.g., Ctrl+Alt+F8): each fresh key-down sequence produces a warning; the field always shows the previous chord (never «Нет») and the old shortcut remains working.
-- [ ] With the capture field focused, alternate valid Ctrl+Shift+F8, occupied Ctrl+Alt+F8, then valid Ctrl+Alt+N; confirm no stale warning, typematic duplicate dialogs, or missed modifier releases, and Save-time registration race remains guarded.
-- [ ] Immediately after opening Settings, press an ordinary allowed chord: the field must update (not remain static). After dismissing a conflict warning, focus must return to the field and a second/third attempt must work.
-- [ ] Simulate a normal WM_KEYDOWN through the native EDIT subclass in CI and assert it updates the visible field and pending chord; check fallback if Raw Input cannot be registered.
-- [ ] Change focus during capture, close/reopen Settings, and press the active shortcut while Settings is foreground: no clipboard modification and no lingering Raw Input capture.
-- [ ] Cancel tentative changes and reject Ctrl+V (plus common clipboard/editing chords), unmodified, Shift-only, Win/F12/mouse-button combinations.
-- [ ] Press the current active shortcut while Settings is foreground: clipboard unchanged.
-- [ ] Test letters, digits, function and navigation keys under US/Russian layouts, 100/150/200% DPI.
-- [ ] Settings and preview windows open centered within the cursor monitor's working area, using their actual window dimensions; About remains centered. Check multiple monitors and non-100% DPI.
-- [ ] Settings contains no technical HKCU/INI footer.
-- [ ] Windows 10/11 manual acceptance, About/VersionInfo 1.1.0, one portable EXE, no low-level hooks or new runtime/network.
+- [ ] New settings default to checked Ctrl + Alt, unchecked Shift, F9 selected, Deep profile.
+- [ ] Saved legacy DWORD 0/1/2 preset combinations remain preserved on upgrade.
+- [ ] Choose Ctrl + Shift + F8 using checkboxes and the key list, save, trigger from another app, restart, verify persistence.
+- [ ] While a separate program globally owns Ctrl + Alt + F8, select the same combination from the controls (without pressing the keys), click Save: a warning **must appear every time**, settings stay open, previous chord is restored in the controls and remains active, registry unchanged.
+- [ ] Repeat conflict three times, then choose a valid free key; confirm successful save without stale status text.
+- [ ] Invalid combinations such as Ctrl + V, Shift-only, or missing Ctrl/Alt give an explicit warning and keep previous binding.
+- [ ] Cancel an unsaved change, confirm previous registered shortcut still works.
+- [ ] Test letters, digits, navigation, OEM and function keys; US/Russian keyboard layouts; DPI 100/150/200%.
+- [ ] Settings, preview and About are centered on the cursor monitor using actual window sizes.
+- [ ] No registry/INI technical footer; no hooks, Raw Input, logging, extra DLL/INI files or networking.
+- [ ] Windows 10/11 real-machine tests, one unsigned portable EXE, About/VersionInfo 1.1.0, exact-main CI after protected PR merge.
