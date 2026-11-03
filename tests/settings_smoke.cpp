@@ -108,7 +108,15 @@ int main() {
         ValidHotkey({MOD_SHIFT, L'A'}) ||
         ValidHotkey({MOD_WIN | MOD_CONTROL, L'A'}) ||
         ValidHotkey({MOD_CONTROL, VK_F12}) ||
-        ValidHotkey({MOD_ALT, VK_LBUTTON})) {
+        ValidHotkey({MOD_ALT, VK_LBUTTON}) ||
+        ValidHotkey({MOD_CONTROL, L'V'}) ||
+        ValidHotkey({MOD_CONTROL, L'C'}) ||
+        ValidHotkey({MOD_CONTROL, L'X'}) ||
+        ValidHotkey({MOD_CONTROL | MOD_SHIFT, L'V'}) ||
+        ValidHotkey({MOD_ALT, VK_TAB}) ||
+        ValidHotkey({MOD_ALT, VK_F4}) ||
+        !ValidHotkey({MOD_CONTROL | MOD_ALT, VK_F8}) ||
+        !ValidHotkey({MOD_CONTROL | MOD_SHIFT, VK_F8})) {
         RegCloseKey(key); return fail(14);
     }
     g_settings.hotkey = custom;
@@ -154,6 +162,35 @@ int main() {
                                 nullptr, nullptr, g_instance, nullptr);
     if (!g_message) return fail(11);
 
+    // Exercise the real Settings entry point, its native field, and monitor placement.
+    g_canvas_brush = CreateSolidBrush(kCanvas);
+    const WNDCLASSEXW settings_class{sizeof(WNDCLASSEXW), 0, SettingsProc, 0, 0, g_instance,
+        nullptr, nullptr, g_canvas_brush, nullptr, L"CopyFixSettings", nullptr};
+    if (!g_canvas_brush || !RegisterClassExW(&settings_class)) return fail(21);
+    OpenSettings();
+    if (!g_settings_window || !IsWindow(g_settings_window)) return fail(22);
+    POINT cursor{};
+    if (!GetCursorPos(&cursor)) return fail(23);
+    const HMONITOR monitor = MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST);
+    MONITORINFO info{sizeof(info)};
+    RECT bounds{};
+    if (!monitor || !GetMonitorInfoW(monitor, &info) ||
+        !GetWindowRect(g_settings_window, &bounds)) return fail(24);
+    const int width = bounds.right - bounds.left;
+    const int height = bounds.bottom - bounds.top;
+    const int workWidth = info.rcWork.right - info.rcWork.left;
+    const int workHeight = info.rcWork.bottom - info.rcWork.top;
+    const int expectedX = info.rcWork.left + (workWidth > width ? (workWidth - width) / 2 : 0);
+    const int expectedY = info.rcWork.top + (workHeight > height ? (workHeight - height) / 2 : 0);
+    if (bounds.left != expectedX || bounds.top != expectedY ||
+        GetDlgItem(g_settings_window, 417) ||
+        !GetDlgItem(g_settings_window, kHotkeyInput)) return fail(25);
+    DestroyWindow(g_settings_window);
+    if (g_settings_window) return fail(26);
+    DeleteObject(g_canvas_brush);
+    g_canvas_brush = nullptr;
+    UnregisterClassW(L"CopyFixSettings", g_instance);
+
     // Global hotkeys may be used by the CI desktop; only enforce registration
     // and rollback when the initial combination is actually available.
     const HotkeyChord original{MOD_CONTROL | MOD_ALT, VK_F9};
@@ -172,6 +209,6 @@ int main() {
                 return fail(13);
         }
     }
-    std::cout << "PASS legacy/custom HKCU chords, native input and rollback\n";
+    std::cout << "PASS custom chords, standard-editing shortcut rejection, settings centering and hotkey rollback\n";
     return 0;
 }
