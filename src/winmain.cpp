@@ -388,10 +388,6 @@ bool WriteIfUnchanged(const ClipSnapshot& expected, const std::wstring& text,
     return written;
 }
 
-std::wstring ToClipboardLineEndings(const std::wstring& source) {
-    return copyfix::ToWindowsLineEndings(source);
-}
-
 // Compare clipboard-normalized CRLF without allocating a second text buffer.
 bool EqualsClipboardLineEndings(std::wstring_view source, std::wstring_view actual) noexcept {
     std::size_t offset = 0;
@@ -414,7 +410,7 @@ void ClearUndo() { g_undo = Undo{}; }
 
 void AcceptPending() {
     try {
-        const auto final_text = ToClipboardLineEndings(g_pending.after.text);
+        const auto final_text = copyfix::ToWindowsLineEndings(g_pending.after.text);
         // Prepare Undo before mutating clipboard; OOM must not leave an
         // already-modified clipboard without a valid Undo snapshot.
         Undo next_undo;
