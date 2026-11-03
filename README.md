@@ -2,7 +2,7 @@
 
 **CopyFix** - лёгкая автономная утилита для очистки скопированного текста в Windows. Работает локально, не отправляет текст в сеть, не записывает историю буфера обмена и не использует перехват клавиатуры.
 
-> Status: **Windows prototype 0.1.0 / NOT RELEASE READY**. Current [post-merge Windows CI](https://github.com/StanleyLl0yd/copyfix/actions/runs/41603937294): MSVC v143 Release x64, all 7 CTest suites (including verification of embedded multi-size icon resources) (including clipboard contention/Undo, preview and HKCU/hotkey contracts), static CRT import policy, PE hardening and single-EXE artifact PASS. User-reported manual acceptance on 2026-11-03: 15/15 functional/UX checks PASS (see [issue #7](https://github.com/StanleyLl0yd/copyfix/issues/7)), OS version unspecified. Clean Windows 10/11 and no-extra-runtime acceptance, required PR gate and owner release decision remain OPEN.
+> Status: **Windows prototype 0.1.0 / NOT RELEASE READY**. [Exact-code-main Windows + sanitizer CI #41607441538](https://github.com/StanleyLl0yd/copyfix/actions/runs/41607441538): MSVC v143 Release x64 `/MT`, 7/7 native CTest, PE/ICO checks and one portable EXE PASS; Clang ASan/UBSan 3/3 PASS. User-reported manual acceptance on 2026-11-03: 15/15 functional/UX checks PASS (see [issue #7](https://github.com/StanleyLl0yd/copyfix/issues/7)), OS/build unspecified. The [Windows 1.0 exit audit](docs/WINDOWS-EXIT-AUDIT.md) records completed code remediation and outstanding clean Windows 10/11, PR gate, licensing and release authorization.
 
 ## Use
 
@@ -69,6 +69,7 @@ The native Windows RichEdit preview (built-in `Msftedit.dll`, no bundled depende
 - `tests/perf_tests.cpp`: 10k/100k/1M-unit integrity and timing probe.
 - `docs/QA-WINDOWS.md`: manual Windows 10/11 integration checklist.
 - `docs/STATUS.md`: verified vs unverified milestone gates.
+- `docs/WINDOWS-EXIT-AUDIT.md`: two-pass code/security audit, evidence and remaining Windows 1.0 acceptance gates.
 - `.github/workflows/ci.yml`: MSVC x64 Release build, tests, PE audit and artifact upload (not GitHub Release).
 - `tools/check-pe.ps1`: dependency, size, PE security and hash diagnostics.
 
