@@ -127,7 +127,24 @@ int main() {
         WS_CHILD | WS_VISIBLE, 0, 0, 200, 24, host, nullptr, g_instance, nullptr);
     if (!editor) { DestroyWindow(host); RegCloseKey(key); return fail(19); }
     SendMessageW(editor, HKM_SETHOTKEY, HotkeyControlValue(custom), 0);
-    const bool control_ok = ReadHotkeyControl(editor) == custom;
+    bool control_ok = ReadHotkeyControl(editor) == custom;
+    const HotkeyChord examples[] = {
+        {MOD_CONTROL, L'A'},
+        {MOD_ALT, L'9'},
+        {MOD_CONTROL | MOD_ALT | MOD_SHIFT, VK_F8},
+        {MOD_CONTROL | MOD_SHIFT, VK_LEFT},
+        {MOD_CONTROL | MOD_ALT, VK_DIVIDE},
+        {MOD_ALT | MOD_SHIFT, VK_OEM_3},
+    };
+    for (const auto& example : examples) {
+        if (!ValidHotkey(example) ||
+            DecodeHotkey(EncodeHotkey(example)) != example) control_ok = false;
+        SendMessageW(editor, HKM_SETHOTKEY, HotkeyControlValue(example), 0);
+        if (ReadHotkeyControl(editor) != example) control_ok = false;
+    }
+    if (DecodeHotkey(1) != HotkeyChord{MOD_CONTROL | MOD_SHIFT, VK_F9} ||
+        DecodeHotkey(2) != HotkeyChord{MOD_CONTROL | MOD_ALT, L'C'} ||
+        !IsExtendedHotkeyKey(VK_LEFT) || IsExtendedHotkeyKey(VK_F8)) control_ok = false;
     DestroyWindow(host);
     if (!control_ok) { RegCloseKey(key); return fail(20); }
     RegCloseKey(key);
