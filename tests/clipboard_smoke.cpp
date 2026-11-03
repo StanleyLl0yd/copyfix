@@ -114,7 +114,8 @@ int main() {
     if (!PutText(original)) return fail(2);
 
     ClipSnapshot snapshot;
-    if (!Snapshot(snapshot) || snapshot.text != original || snapshot.rich_formats) return fail(3);
+    if (!Snapshot(snapshot) || snapshot.sequence == 0 ||
+        snapshot.text != original || snapshot.rich_formats) return fail(3);
     const auto cleaned = copyfix::Clean(snapshot.text, copyfix::Profile::Deep);
     if (cleaned.protected_structure || !cleaned.requires_confirmation ||
         cleaned.text != L"Текст был скопирован из PDF.") return fail(4);
