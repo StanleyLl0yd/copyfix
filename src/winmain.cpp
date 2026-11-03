@@ -26,6 +26,7 @@ constexpr UINT kHotkeyA = 100;
 constexpr UINT kHotkeyB = 101;
 constexpr UINT kHotkeyProbe = 102;
 constexpr UINT kSettingsConflictMessage = WM_APP + 2;
+constexpr UINT kSettingsNormalKeyMessage = WM_APP + 3;
 constexpr UINT kMaxChars = 1000000;
 constexpr UINT kMaxPreviewChars = 100000;
 constexpr UINT kMenuFix = 200;
@@ -235,6 +236,7 @@ bool g_settings_raw_input = false;
 bool g_settings_conflict_pending = false;
 ShortcutCapture g_shortcut_capture;
 HotkeyChord g_settings_candidate;
+UINT g_settings_pending_key = 0;
 
 int Scale(int px, int dpi) noexcept { return MulDiv(px, dpi, 96); }
 HFONT MakeFont(int points, int weight, int dpi) {
@@ -922,8 +924,9 @@ void ShowShortcutWarning(HWND window, bool occupied) noexcept {
     if (HWND status = GetDlgItem(window, kSettingsFeedback))
         SetWindowTextW(status, message);
     MessageBoxW(window, message, L"CopyFix — горячая клавиша", MB_OK | MB_ICONWARNING);
-    // A modal dialog may consume key-up events. Require a fresh chord afterwards.
+    // Modal dialogs consume key-up messages, so reset both capture paths.
     g_shortcut_capture.Reset();
+    g_settings_pending_key = 0;
     ResetShortcutEditor(window);
 }
 
@@ -937,25 +940,79 @@ bool AcceptShortcutCandidate(HWND window, HotkeyChord candidate) noexcept {
     return true;
 }
 
-// Unlike HOTKEY_CLASS, the read-only EDIT never displays a blank "None" when
-// Windows consumes a globally registered chord before WM_KEYDOWN delivery.
-void ObserveShortcutKey(HWND window, const RAWKEYBOARD& keyboard) noexcept {
-    if (GetForegroundWindow() != window ||
-        GetFocus() != GetDlgItem(window, kHotkeyInput)) {
-        g_shortcut_capture.Reset();
-        return;
-    }
-    const HotkeyChord chord = g_shortcut_capture.Consume(
-        keyboard.VKey, (keyboard.Flags & RI_KEY_BREAK) != 0);
-    if (!chord.key || g_settings_conflict_pending) return;
+// Both physical Raw Input and normal EDIT messages feed the same transaction.
+// Native EDIT key messages provide a reliable path even if Raw Input is unavailable.
+void ProcessShortcutCandidate(HWND window, HotkeyChord chord) noexcept {
+    if (!chord.key || g_settings_conflict_pending ||
+        g_settings_pending_key == chord.key) return;
+    g_settings_pending_key = chord.key;
     if (ValidHotkey(chord) && AcceptShortcutCandidate(window, chord)) return;
     if ((chord.modifiers & (MOD_CONTROL | MOD_ALT)) == 0) {
+        g_settings_pending_key = 0;
         if (HWND status = GetDlgItem(window, kSettingsFeedback))
             SetWindowTextW(status, L"Для сочетания удерживайте Ctrl или Alt.");
         return;
     }
     g_settings_conflict_pending = PostMessageW(
         window, kSettingsConflictMessage, ValidHotkey(chord) ? 1 : 0, 0) != FALSE;
+}
+
+void ObserveShortcutKey(HWND window, const RAWKEYBOARD& keyboard) noexcept {
+    if (GetForegroundWindow() != window ||
+        GetFocus() != GetDlgItem(window, kHotkeyInput)) {
+        g_shortcut_capture.Reset();
+        g_settings_pending_key = 0;
+        return;
+    }
+    if ((keyboard.Flags & RI_KEY_BREAK) != 0 &&
+        keyboard.VKey == g_settings_pending_key)
+        g_settings_pending_key = 0;
+    const HotkeyChord chord = g_shortcut_capture.Consume(
+        keyboard.VKey, (keyboard.Flags & RI_KEY_BREAK) != 0);
+    ProcessShortcutCandidate(window, chord);
+}
+
+UINT KeyboardModifiers() noexcept {
+    UINT modifiers = 0;
+    if (GetKeyState(VK_CONTROL) & 0x8000) modifiers |= MOD_CONTROL;
+    if (GetKeyState(VK_MENU) & 0x8000) modifiers |= MOD_ALT;
+    if (GetKeyState(VK_SHIFT) & 0x8000) modifiers |= MOD_SHIFT;
+    return modifiers;
+}
+
+// Subclassing only this single EDIT avoids global hooks and captures ordinary
+// virtual keys even when IsDialogMessage is translating dialog navigation.
+LRESULT CALLBACK ShortcutEditorProc(HWND input, UINT msg, WPARAM wparam,
+                                     LPARAM lparam, UINT_PTR, DWORD_PTR) {
+    switch (msg) {
+    case WM_GETDLGCODE:
+        return DefSubclassProc(input, msg, wparam, lparam) | DLGC_WANTALLKEYS;
+    case WM_KEYDOWN:
+    case WM_SYSKEYDOWN:
+        if (wparam >= VK_BACK && wparam <= 0xFE) {
+            const UINT key = static_cast<UINT>(wparam);
+            if (key != VK_CONTROL && key != VK_MENU && key != VK_SHIFT &&
+                key != VK_LCONTROL && key != VK_RCONTROL &&
+                key != VK_LMENU && key != VK_RMENU &&
+                key != VK_LSHIFT && key != VK_RSHIFT) {
+                PostMessageW(GetParent(input), kSettingsNormalKeyMessage,
+                             KeyboardModifiers(), key);
+            }
+        }
+        return 0;
+    case WM_KEYUP:
+    case WM_SYSKEYUP:
+        if (g_settings_pending_key == wparam)
+            g_settings_pending_key = 0;
+        return 0;
+    case WM_CHAR:
+    case WM_SYSCHAR:
+        return 0;
+    case WM_NCDESTROY:
+        RemoveWindowSubclass(input, ShortcutEditorProc, 1);
+        break;
+    }
+    return DefSubclassProc(input, msg, wparam, lparam);
 }
 
 void LayoutSettings(HWND window) {
@@ -987,7 +1044,7 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
             WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_READONLY,
             0, 0, 1, 1, window,
             reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kHotkeyInput)), g_instance, nullptr);
-        if (!hotkey) return -1;
+        if (!hotkey || !SetWindowSubclass(hotkey, ShortcutEditorProc, 1, 0)) return -1;
         g_settings_candidate = g_settings.hotkey;
         SetShortcutEditor(window, g_settings_candidate);
         ApplyFont(hotkey,g_font_body);
@@ -1024,8 +1081,17 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
             ShowShortcutWarning(window, wparam != 0);
         }
         return 0;
+    case kSettingsNormalKeyMessage:
+        if (GetForegroundWindow() == window &&
+            GetFocus() == GetDlgItem(window, kHotkeyInput))
+            ProcessShortcutCandidate(window,
+                {static_cast<UINT>(wparam), static_cast<UINT>(lparam)});
+        return 0;
     case WM_ACTIVATE:
-        if (LOWORD(wparam) == WA_INACTIVE) g_shortcut_capture.Reset();
+        if (LOWORD(wparam) == WA_INACTIVE) {
+            g_shortcut_capture.Reset();
+            g_settings_pending_key = 0;
+        }
         break;
     case WM_CTLCOLORSTATIC: {
         auto dc = reinterpret_cast<HDC>(wparam);
@@ -1040,6 +1106,7 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
         if (LOWORD(wparam) == kHotkeyInput &&
             (HIWORD(wparam) == EN_SETFOCUS || HIWORD(wparam) == EN_KILLFOCUS)) {
             g_shortcut_capture.Reset();
+            g_settings_pending_key = 0;
             return 0;
         }
         if (LOWORD(wparam) == kSettingsSave) {
@@ -1078,6 +1145,7 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
         }
         g_settings_conflict_pending = false;
         g_shortcut_capture.Reset();
+        g_settings_pending_key = 0;
         g_settings_window = nullptr;
         return 0;
     }
@@ -1099,14 +1167,18 @@ void OpenSettings() {
     CenterWindowOnMonitor(g_settings_window, monitor);
     g_settings_conflict_pending = false;
     g_shortcut_capture.Reset();
-    const RAWINPUTDEVICE keyboard{0x01, 0x06, 0, g_settings_window};
+    g_settings_pending_key = 0;
+    // Receive occupied combinations as well as ordinary focus-owned key events.
+    // Only process Raw Input while Settings and its editor are foreground/focused.
+    const RAWINPUTDEVICE keyboard{0x01, 0x06, RIDEV_INPUTSINK, g_settings_window};
     g_settings_raw_input = RegisterRawInputDevices(&keyboard, 1, sizeof(keyboard)) != FALSE;
-    if (!g_settings_raw_input) {
-        EnableWindow(GetDlgItem(g_settings_window, kHotkeyInput), FALSE);
-        SetWindowTextW(GetDlgItem(g_settings_window, kSettingsFeedback),
-                       L"Захват клавиш недоступен. Прежняя комбинация сохранена.");
-    }
     ShowWindow(g_settings_window, SW_SHOWNORMAL);
+    SetForegroundWindow(g_settings_window);
+    SetFocus(GetDlgItem(g_settings_window, kHotkeyInput));
+    if (!g_settings_raw_input) {
+        SetWindowTextW(GetDlgItem(g_settings_window, kSettingsFeedback),
+                       L"Можно вводить сочетания. Проверка перехваченных комбинаций недоступна.");
+    }
 }
 
 void ShowMenu() {
