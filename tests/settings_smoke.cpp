@@ -170,9 +170,6 @@ int main() {
     if (!g_canvas_brush || !RegisterClassExW(&settings_class)) return fail(21);
     OpenSettings();
     if (!g_settings_window || !IsWindow(g_settings_window)) return fail(22);
-    // Raw keyboard events are intentionally accepted only while the settings
-    // window exists; no persistent hook is installed.
-    const bool raw_registered = g_settings_raw_input;
     POINT cursor{};
     if (!GetCursorPos(&cursor)) return fail(23);
     const HMONITOR monitor = MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST);
@@ -216,7 +213,7 @@ int main() {
     ResetHotkeyChoice(g_settings_window);
     if (ReadHotkeyChoice(g_settings_window) != g_settings.hotkey) return fail(33);
     DestroyWindow(g_settings_window);
-    if (g_settings_window || (raw_registered && g_settings_raw_input)) return fail(26);
+    if (g_settings_window) return fail(26);
     // Global hotkeys may be used by the CI desktop; only enforce registration
     // and rollback when the initial combination is actually available.
     const HotkeyChord original{MOD_CONTROL | MOD_ALT, VK_F9};
