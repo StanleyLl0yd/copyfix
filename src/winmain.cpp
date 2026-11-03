@@ -24,6 +24,9 @@ namespace {
 constexpr UINT kTrayMessage = WM_APP + 1;
 constexpr UINT kHotkeyA = 100;
 constexpr UINT kHotkeyB = 101;
+constexpr UINT kHotkeyProbe = 102;
+constexpr UINT kSettingsConflictMessage = WM_APP + 2;
+constexpr UINT_PTR kSettingsEmptyHotkeyTimer = 1;
 constexpr UINT kMaxChars = 1000000;
 constexpr UINT kMaxPreviewChars = 100000;
 constexpr UINT kMenuFix = 200;
@@ -53,6 +56,7 @@ constexpr UINT kPreviewAfterLabel = 413;
 constexpr UINT kPreviewNote = 414;
 constexpr UINT kSettingsTitle = 415;
 constexpr UINT kSettingsSubtitle = 416;
+constexpr UINT kSettingsFeedback = 417;
 
 constexpr wchar_t kAboutVersion[] = L"CopyFix " COPYFIX_VERSION_WSTR;
 constexpr wchar_t kAboutWebsite[] = L"https://stanleyll0yd.github.io/apps/copyfix/";
@@ -187,6 +191,9 @@ UINT g_hotkey_id = kHotkeyA;
 UINT g_taskbar_created = 0;
 bool g_hotkey_registered = false;
 HotkeyChord g_registered_hotkey;
+bool g_settings_raw_input = false;
+bool g_settings_conflict_pending = false;
+UINT g_settings_last_keydown = 0;
 
 int Scale(int px, int dpi) noexcept { return MulDiv(px, dpi, 96); }
 HFONT MakeFont(int points, int weight, int dpi) {
@@ -373,6 +380,17 @@ void Notify(const wchar_t* message) {
     wcsncpy_s(g_tray.szInfo, message, _TRUNCATE);
     g_tray.dwInfoFlags = NIIF_INFO | NIIF_NOSOUND;
     Shell_NotifyIconW(NIM_MODIFY, &g_tray);
+}
+
+// Probe without touching the active shortcut. A successful probe is not a
+// guarantee: another process may reserve the chord before Save.
+bool HotkeyAvailable(HotkeyChord chord) noexcept {
+    if (!ValidHotkey(chord)) return false;
+    if (g_hotkey_registered && chord == g_registered_hotkey) return true;
+    if (!g_message ||
+        !RegisterHotKey(g_message, kHotkeyProbe, chord.modifiers | MOD_NOREPEAT, chord.key))
+        return false;
+    return UnregisterHotKey(g_message, kHotkeyProbe) != FALSE;
 }
 
 bool RegisterChosenHotkey(HotkeyChord chord) {
@@ -838,6 +856,54 @@ void UndoLast() {
     } else Notify(L"Не удалось восстановить текст, буфер не изменён или занят.");
 }
 
+void ResetShortcutEditor(HWND window) noexcept {
+    if (HWND input = GetDlgItem(window, kHotkeyInput))
+        SendMessageW(input, HKM_SETHOTKEY, HotkeyControlValue(g_settings.hotkey), 0);
+}
+
+void ShowShortcutConflict(HWND window, bool confirmed) noexcept {
+    if (!IsWindow(window)) return;
+    KillTimer(window, kSettingsEmptyHotkeyTimer);
+    ResetShortcutEditor(window);
+    const wchar_t* message = confirmed
+        ? L"Сочетание уже занято другой программой или зарезервировано Windows. "
+          L"Прежняя комбинация сохранена."
+        : L"Не удалось распознать сочетание (возможно, оно перехвачено системой). "
+          L"Прежняя комбинация сохранена. Выберите другое.";
+    if (HWND status = GetDlgItem(window, kSettingsFeedback))
+        SetWindowTextW(status, message);
+    MessageBoxW(window, message, L"CopyFix — горячая клавиша", MB_OK | MB_ICONWARNING);
+    ResetShortcutEditor(window);
+}
+
+// Raw keyboard input is enabled only while Settings is open, foreground-only.
+// This sees a key even when another application's RegisterHotKey consumes the
+// regular WM_KEYDOWN before it reaches the native HOTKEY_CLASS editor.
+void ObserveShortcutKey(HWND window, const RAWKEYBOARD& keyboard) noexcept {
+    const UINT key = keyboard.VKey;
+    if (keyboard.Flags & RI_KEY_BREAK) {
+        if (g_settings_last_keydown == key) g_settings_last_keydown = 0;
+        return;
+    }
+    if (g_settings_conflict_pending || key == g_settings_last_keydown) return;
+    if (key == 0 || key == 0xFF || key == VK_SHIFT || key == VK_CONTROL ||
+        key == VK_MENU || key == VK_LSHIFT || key == VK_RSHIFT ||
+        key == VK_LCONTROL || key == VK_RCONTROL ||
+        key == VK_LMENU || key == VK_RMENU) return;
+    if (GetForegroundWindow() != window || GetFocus() != GetDlgItem(window, kHotkeyInput))
+        return;
+    g_settings_last_keydown = key;
+    UINT modifiers = 0;
+    if (GetAsyncKeyState(VK_CONTROL) & 0x8000) modifiers |= MOD_CONTROL;
+    if (GetAsyncKeyState(VK_MENU) & 0x8000) modifiers |= MOD_ALT;
+    if (GetAsyncKeyState(VK_SHIFT) & 0x8000) modifiers |= MOD_SHIFT;
+    const HotkeyChord candidate{modifiers, key};
+    if (!ValidHotkey(candidate)) return;
+    if (HotkeyAvailable(candidate)) return;
+    g_settings_conflict_pending = PostMessageW(
+        window, kSettingsConflictMessage, 1, 0) != FALSE;
+}
+
 void LayoutSettings(HWND window) {
     RECT bounds{}; GetClientRect(window, &bounds);
     const int dpi = g_settings_dpi;
@@ -849,6 +915,7 @@ void LayoutSettings(HWND window) {
     Position(window, kHotkeyInput, 26, 154, w-52, 34, dpi);
     Position(window, 421, 26, 222, w-52, 24, dpi);
     Position(window, kComboProfile, 26, 252, w-52, 250, dpi);
+    Position(window, kSettingsFeedback, 26, h-113, w-52, 46, dpi);
     Position(window, kSettingsCancel, w-286, h-64, 122, 42, dpi);
     Position(window, kSettingsSave, w-156, h-64, 130, 42, dpi);
 }
@@ -876,6 +943,7 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
             SendMessageW(profile,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(name));
         SendMessageW(profile,CB_SETCURSEL,static_cast<WPARAM>(g_settings.profile),0);
         ApplyFont(profile,g_font_body);
+        MakeLabel(window,kSettingsFeedback,L"",g_font_caption);
         CreateWindowW(L"BUTTON",L"Сохранить",WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW,
             0,0,1,1,window,reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kSettingsSave)),g_instance,nullptr);
         CreateWindowW(L"BUTTON",L"Отмена",WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW,
@@ -884,15 +952,54 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
         return 0;
     }
     case WM_SIZE: LayoutSettings(window); return 0;
+    case WM_INPUT: {
+        RAWINPUT input{};
+        UINT size = sizeof(input);
+        const UINT got = GetRawInputData(reinterpret_cast<HRAWINPUT>(lparam),
+            RID_INPUT, &input, &size, sizeof(RAWINPUTHEADER));
+        if (got != static_cast<UINT>(-1) && got == size &&
+            input.header.dwType == RIM_TYPEKEYBOARD)
+            ObserveShortcutKey(window, input.data.keyboard);
+        return DefWindowProcW(window, msg, wparam, lparam);
+    }
+    case kSettingsConflictMessage:
+        if (g_settings_conflict_pending) {
+            g_settings_conflict_pending = false;
+            ShowShortcutConflict(window, true);
+        }
+        return 0;
+    case WM_TIMER:
+        if (wparam == kSettingsEmptyHotkeyTimer) {
+            KillTimer(window, kSettingsEmptyHotkeyTimer);
+            const HWND input = GetDlgItem(window, kHotkeyInput);
+            if (GetForegroundWindow() == window && GetFocus() == input &&
+                ReadHotkeyControl(input).key == 0 &&
+                !(GetAsyncKeyState(VK_CONTROL) & 0x8000) &&
+                !(GetAsyncKeyState(VK_MENU) & 0x8000) &&
+                !(GetAsyncKeyState(VK_SHIFT) & 0x8000) &&
+                !g_settings_conflict_pending)
+                ShowShortcutConflict(window, false);
+            return 0;
+        }
+        break;
     case WM_CTLCOLORSTATIC: {
         auto dc = reinterpret_cast<HDC>(wparam);
         SetBkMode(dc,TRANSPARENT);
         const UINT id = static_cast<UINT>(GetDlgCtrlID(reinterpret_cast<HWND>(lparam)));
-        SetTextColor(dc,id==kSettingsTitle||id==420||id==421 ? kInk : kMuted);
+        SetTextColor(dc,id==kSettingsFeedback ? RGB(172,38,38) :
+            (id==kSettingsTitle||id==420||id==421 ? kInk : kMuted));
         return reinterpret_cast<LRESULT>(g_canvas_brush);
     }
     case WM_DRAWITEM: DrawActionButton(reinterpret_cast<const DRAWITEMSTRUCT*>(lparam));return TRUE;
     case WM_COMMAND:
+        if (LOWORD(wparam) == kHotkeyInput && HIWORD(wparam) == EN_CHANGE &&
+            reinterpret_cast<HWND>(lparam) == GetDlgItem(window, kHotkeyInput)) {
+            KillTimer(window, kSettingsEmptyHotkeyTimer);
+            if (GetFocus() == GetDlgItem(window, kHotkeyInput) &&
+                ReadHotkeyControl(reinterpret_cast<HWND>(lparam)).key == 0)
+                SetTimer(window, kSettingsEmptyHotkeyTimer, 350, nullptr);
+            return 0;
+        }
         if (LOWORD(wparam) == kSettingsSave) {
             const HotkeyChord next_hotkey = ReadHotkeyControl(GetDlgItem(window, kHotkeyInput));
             const int next_profile = static_cast<int>(SendMessageW(GetDlgItem(window, kComboProfile), CB_GETCURSEL, 0, 0));
@@ -924,7 +1031,18 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
         }
         break;
     case WM_CLOSE: DestroyWindow(window); return 0;
-    case WM_DESTROY: g_settings_window = nullptr; return 0;
+    case WM_DESTROY: {
+        KillTimer(window, kSettingsEmptyHotkeyTimer);
+        if (g_settings_raw_input) {
+            RAWINPUTDEVICE remove{0x01, 0x06, RIDEV_REMOVE, nullptr};
+            RegisterRawInputDevices(&remove, 1, sizeof(remove));
+            g_settings_raw_input = false;
+        }
+        g_settings_conflict_pending = false;
+        g_settings_last_keydown = 0;
+        g_settings_window = nullptr;
+        return 0;
+    }
     }
     return DefWindowProcW(window,msg,wparam,lparam);
 }
@@ -941,6 +1059,10 @@ void OpenSettings() {
         ? MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST)
         : MonitorFromWindow(g_message, MONITOR_DEFAULTTONEAREST);
     CenterWindowOnMonitor(g_settings_window, monitor);
+    g_settings_conflict_pending = false;
+    g_settings_last_keydown = 0;
+    const RAWINPUTDEVICE keyboard{0x01, 0x06, 0, g_settings_window};
+    g_settings_raw_input = RegisterRawInputDevices(&keyboard, 1, sizeof(keyboard)) != FALSE;
     ShowWindow(g_settings_window, SW_SHOWNORMAL);
 }
 
