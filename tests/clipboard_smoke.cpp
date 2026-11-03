@@ -101,6 +101,15 @@ int main() {
     g_message = CreateWindowExW(0, L"STATIC", L"CopyFix clipboard test", WS_OVERLAPPED,
                                 0, 0, 1, 1, nullptr, nullptr, g_instance, nullptr);
     if (!g_message) return fail(1);
+    // CR, LF and CRLF normalization must compare exactly without allocating.
+    for (const auto* value : {L"", L"plain", L"A\nB", L"A\rB",
+                              L"A\r\nB", L"A\n\r\nB", L"\r", L"\n", L"\r\n"}) {
+        if (!EqualsClipboardLineEndings(value, copyfix::ToWindowsLineEndings(value)))
+            return fail(33);
+    }
+    if (EqualsClipboardLineEndings(L"A\nB", L"A\nB") ||
+        EqualsClipboardLineEndings(L"A\nB", L"A\rB") ||
+        EqualsClipboardLineEndings(L"A", L"A\r\n")) return fail(34);
     const auto original = std::wstring(L"Текст был скопиро-\r\nван из PDF.");
     if (!PutText(original)) return fail(2);
 
@@ -182,6 +191,8 @@ int main() {
     if (!PutText(maximum)) return fail(28);
     ClipSnapshot maximum_snapshot;
     if (!Snapshot(maximum_snapshot) || maximum_snapshot.text != maximum) return fail(29);
+    if (!EqualsClipboardLineEndings(maximum, maximum) ||
+        EqualsClipboardLineEndings(maximum, maximum + L"extra")) return fail(35);
     if (AllocateClipboardString(std::wstring(kMaxChars + 1, L'Я')) != nullptr)
         return fail(30);
 

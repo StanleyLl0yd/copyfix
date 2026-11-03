@@ -15,6 +15,7 @@
 #include <iterator>
 #include <new>
 #include <string>
+#include <string_view>
 #include <utility>
 
 namespace {
@@ -341,6 +342,23 @@ std::wstring ToClipboardLineEndings(const std::wstring& source) {
     return copyfix::ToWindowsLineEndings(source);
 }
 
+// Compare clipboard-normalized CRLF without allocating a second text buffer.
+bool EqualsClipboardLineEndings(std::wstring_view source, std::wstring_view actual) noexcept {
+    std::size_t offset = 0;
+    for (std::size_t i = 0; i < source.size(); ++i) {
+        const auto ch = source[i];
+        if (ch == L'\r' || ch == L'\n') {
+            if (actual.size() - offset < 2 || actual[offset] != L'\r' ||
+                actual[offset + 1] != L'\n') return false;
+            offset += 2;
+            if (ch == L'\r' && i + 1 < source.size() && source[i + 1] == L'\n') ++i;
+        } else if (offset == actual.size() || actual[offset++] != ch) {
+            return false;
+        }
+    }
+    return offset == actual.size();
+}
+
 void ClearPending() { g_pending = Pending{}; }
 void ClearUndo() { g_undo = Undo{}; }
 
@@ -614,7 +632,7 @@ void FixClipboard(bool force_preview, bool one_line = false) {
         return;
     }
     if (cleaned.protected_structure) { Notify(L"Обнаружен структурированный текст: оставлен без изменений."); return; }
-    if (cleaned.text == snapshot.text || ToClipboardLineEndings(cleaned.text) == snapshot.text) {
+    if (cleaned.text == snapshot.text || EqualsClipboardLineEndings(cleaned.text, snapshot.text)) {
         Notify(L"Изменений не найдено.");
         return;
     }
