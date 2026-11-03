@@ -45,6 +45,7 @@ if(WIN32)
     add_test(NAME settings_registry COMMAND copyfix_settings_smoke)
     # Inspect the actual embedded Windows icon resource without shipping test binaries.
     add_executable(copyfix_icon_smoke tests/icon_smoke.cpp)
+    target_compile_definitions(copyfix_icon_smoke PRIVATE UNICODE _UNICODE)
     target_include_directories(copyfix_icon_smoke PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
     target_link_libraries(copyfix_icon_smoke PRIVATE user32)
     add_test(NAME icon_resources COMMAND copyfix_icon_smoke "$<TARGET_FILE:CopyFix>" "${CMAKE_CURRENT_SOURCE_DIR}/artwork/tray-16x16.png")
