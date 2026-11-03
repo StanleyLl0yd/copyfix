@@ -315,6 +315,7 @@ bool ReadUnderLock(ClipSnapshot& result) {
     GlobalUnlock(handle);
     if (!success) return false;
     result.sequence = GetClipboardSequenceNumber();
+    if (result.sequence == 0) return false;
     result.rich_formats = false;
     UINT format = 0;
     while ((format = EnumClipboardFormats(format)) != 0) {
