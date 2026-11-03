@@ -2,7 +2,7 @@
 
 **CopyFix** - лёгкая автономная утилита для очистки скопированного текста в Windows. Работает локально, не отправляет текст в сеть, не записывает историю буфера обмена и не использует перехват клавиатуры.
 
-> Status: **Windows prototype 0.1.0 / NOT RELEASE READY**. [Exact-code-main Windows + sanitizer CI #41607441538](https://github.com/StanleyLl0yd/copyfix/actions/runs/41607441538): MSVC v143 Release x64 `/MT`, 7/7 native CTest, PE/ICO checks and one portable EXE PASS; Clang ASan/UBSan 3/3 PASS. User-reported manual acceptance on 2026-11-03: 15/15 functional/UX checks PASS (see [issue #7](https://github.com/StanleyLl0yd/copyfix/issues/7)), OS/build unspecified. The [Windows 1.0 exit audit](docs/WINDOWS-EXIT-AUDIT.md) records completed code remediation and outstanding clean Windows 10/11, PR gate, licensing and release authorization.
+> Status: **Windows prototype 0.1.0 / NOT RELEASE READY**. [Exact-main CI #41609035641](https://github.com/StanleyLl0yd/copyfix/actions/runs/41609035641): MSVC v143 Release x64 `/MT`, 7/7 Windows CTest and PE/ICO PASS; Clang ASan/UBSan 3/3 PASS, one portable EXE. On 2026-11-03 the owner reported **15/15 functional/UX PASS**, plus Windows 10 and 11 testing on clean and working machines and outstanding desktop edge cases PASS ([issue #7](https://github.com/StanleyLl0yd/copyfix/issues/7)); exact OS builds and separate runtime inventory were not recorded. [Two-pass Windows 1.0 exit audit](docs/WINDOWS-EXIT-AUDIT.md) completed; GitHub PR/CI gate verified. **No GitHub Release 1.0.0 is authorized yet.**
 
 ## Use
 
@@ -18,7 +18,7 @@ Profiles:
 - **Умный**: предлагает объединять переносы внутри обычных абзацев, если следующая строка начинается со строчной буквы (с обязательным предпросмотром).
 - **Глубокий** (default for new users; existing registry choice is respected): дополнительно предлагает исправлять переносы слов: `скопиро-\nван` -> `скопирован`; сохраняет дефис в распознаваемых составных словах вроде `Санкт-Петербург`, `северо-западный`, `бизнес-план`, `веб-сайт` и `интернет-магазин`. Неоднозначные изменения требуют подтверждения.
 
-No spelling correction, AI, OCR, auto-paste, clipboard monitoring, telemetry or advertisements. Windows system DLLs are allowed; settings are stored exclusively under HKCU. No license has been selected.
+No spelling correction, AI, OCR, auto-paste, clipboard monitoring, telemetry or advertisements. Windows system DLLs are allowed; settings are stored exclusively under HKCU. Source and distribution terms: [MIT License](LICENSE), copyright (c) 2026 Stanley Lloyd.
 
 ## Building on Windows 10/11 x64
 
@@ -58,7 +58,7 @@ The native Windows RichEdit preview (built-in `Msftedit.dll`, no bundled depende
 - Structured content detection is deliberately conservative, **not a complete format parser**; it may skip editable plain text. No fixed heuristics can safely infer every real paragraph boundary or preserve every compound word, so potentially destructive joins require explicit confirmation.
 - Avoid copying passwords or secrets if you do not wish them to pass through the CopyFix process memory. CopyFix does not retain a clipboard history or log input/output text.
 - Smart/Deep PDF reflow is heuristic and cannot determine every hyphenated compound without a dictionary or semantic context; do not accept ambiguous transformations without reviewing the highlighted result.
-- No claim of clean-system runtime compatibility or complete security audit is made before actual testing.
+- The owner reports PASS on clean and working Windows 10/11 installations; exact OS builds and installed runtime inventory are not independently documented. The completed two-pass source/security audit and its remaining limitations are documented in [the exit-audit report](docs/WINDOWS-EXIT-AUDIT.md).
 
 ## Repository
 
