@@ -175,6 +175,9 @@ int main() {
     if (!g_canvas_brush || !RegisterClassExW(&settings_class)) return fail(21);
     OpenSettings();
     if (!g_settings_window || !IsWindow(g_settings_window)) return fail(22);
+    // Raw keyboard events are intentionally accepted only while the settings
+    // window exists; no persistent hook is installed.
+    const bool raw_registered = g_settings_raw_input;
     POINT cursor{};
     if (!GetCursorPos(&cursor)) return fail(23);
     const HMONITOR monitor = MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST);
@@ -192,7 +195,7 @@ int main() {
         GetDlgItem(g_settings_window, 417) ||
         !GetDlgItem(g_settings_window, kHotkeyInput)) return fail(25);
     DestroyWindow(g_settings_window);
-    if (g_settings_window) return fail(26);
+    if (g_settings_window || (raw_registered && g_settings_raw_input)) return fail(26);
     DeleteObject(g_canvas_brush);
     g_canvas_brush = nullptr;
     UnregisterClassW(L"CopyFixSettings", g_instance);
@@ -210,11 +213,14 @@ int main() {
         cleanup.blocked_combo = RegisterHotKey(
             cleanup.blocker, 750, blocked.modifiers | MOD_NOREPEAT, blocked.key) != FALSE;
         if (cleanup.blocked_combo) {
-            if (RegisterChosenHotkey(blocked) || !g_hotkey_registered ||
+            // The UI's early conflict probe must detect the same collision
+            // before a Save attempt, without displacing the previous binding.
+            if (HotkeyAvailable(blocked) || !HotkeyAvailable(original) ||
+                RegisterChosenHotkey(blocked) || !g_hotkey_registered ||
                 g_hotkey_id != original_id || g_registered_hotkey != original)
                 return fail(13);
         }
     }
-    std::cout << "PASS custom chords, standard-editing shortcut rejection, settings centering and hotkey rollback\n";
+    std::cout << "PASS custom chords, early occupied-shortcut detection, settings centering and hotkey rollback\n";
     return 0;
 }
