@@ -26,11 +26,24 @@ int main() {
     const WNDCLASSEXW klass{sizeof(WNDCLASSEXW), 0, PreviewProc, 0, 0, g_instance,
         nullptr, nullptr, g_canvas_brush, nullptr, L"CopyFixPreview", nullptr};
     if (!RegisterClassExW(&klass)) return Fail(10);
-    HWND preview = CreateWindowExW(0, L"CopyFixPreview", L"Preview regression",
-        WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, CW_USEDEFAULT, CW_USEDEFAULT,
-        920, 650, nullptr, nullptr, g_instance, nullptr);
+    OpenPreview();
+    HWND preview = g_preview;
     if (!preview) return Fail(11);
-    g_preview = preview;
+    POINT cursor{};
+    if (!GetCursorPos(&cursor)) return Fail(35);
+    const HMONITOR monitor = MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST);
+    MONITORINFO monitorInfo{sizeof(monitorInfo)};
+    RECT windowBounds{};
+    if (!monitor || !GetMonitorInfoW(monitor, &monitorInfo) ||
+        !GetWindowRect(preview, &windowBounds)) return Fail(36);
+    const int width = windowBounds.right - windowBounds.left;
+    const int height = windowBounds.bottom - windowBounds.top;
+    const int workWidth = monitorInfo.rcWork.right - monitorInfo.rcWork.left;
+    const int workHeight = monitorInfo.rcWork.bottom - monitorInfo.rcWork.top;
+    const int expectedX = monitorInfo.rcWork.left + (workWidth > width ? (workWidth - width) / 2 : 0);
+    const int expectedY = monitorInfo.rcWork.top + (workHeight > height ? (workHeight - height) / 2 : 0);
+    if (windowBounds.left != expectedX || windowBounds.top != expectedY)
+        return Fail(37);
     const auto before = GetDlgItem(preview, kPreviewBeforeEdit);
     const auto after = GetDlgItem(preview, kPreviewAfterEdit);
     wchar_t status[128]{};
