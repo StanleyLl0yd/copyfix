@@ -42,11 +42,11 @@ int main() {
     Cleanup cleanup;
     g_instance = GetModuleHandleW(nullptr);
     g_settings = Settings{};
-    if (g_settings.profile != copyfix::Profile::Deep || g_settings.hotkey != 0)
+    if (g_settings.profile != copyfix::Profile::Deep || g_settings.hotkey != HotkeyChord{})
         return fail(2);
 
     g_settings.profile = copyfix::Profile::Smart;
-    g_settings.hotkey = 2;
+    g_settings.hotkey = {MOD_CONTROL | MOD_ALT, L'C'};
     cleanup.created_key = true;  // Also clean a partially created key on failure.
     if (!SaveSettings()) return fail(3);
 
@@ -69,7 +69,7 @@ int main() {
 
     g_settings = Settings{};
     LoadSettings();
-    if (g_settings.profile != copyfix::Profile::Smart || g_settings.hotkey != 2) {
+    if (g_settings.profile != copyfix::Profile::Smart || g_settings.hotkey != HotkeyChord{MOD_CONTROL | MOD_ALT, L'C'}) {
         RegCloseKey(key); return fail(6);
     }
 
@@ -85,7 +85,7 @@ int main() {
     }
     g_settings = Settings{};
     LoadSettings();
-    if (g_settings.profile != copyfix::Profile::Deep || g_settings.hotkey != 0) {
+    if (g_settings.profile != copyfix::Profile::Deep || g_settings.hotkey != HotkeyChord{}) {
         RegCloseKey(key); return fail(8);
     }
     const wchar_t not_a_number[] = L"deep";
@@ -99,6 +99,37 @@ int main() {
     if (g_settings.profile != copyfix::Profile::Deep) {
         RegCloseKey(key); return fail(10);
     }
+    // Preserve old DWORD presets and reject corrupt custom values.
+    const HotkeyChord custom{MOD_CONTROL | MOD_SHIFT, VK_F8};
+    if (!ValidHotkey(custom) || EncodeHotkey(custom) <= 2 ||
+        DecodeHotkey(EncodeHotkey(custom)) != custom ||
+        DecodeHotkey(999) != HotkeyChord{} ||
+        ValidHotkey({0, L'A'}) ||
+        ValidHotkey({MOD_SHIFT, L'A'}) ||
+        ValidHotkey({MOD_WIN | MOD_CONTROL, L'A'}) ||
+        ValidHotkey({MOD_CONTROL, VK_F12}) ||
+        ValidHotkey({MOD_ALT, VK_LBUTTON})) {
+        RegCloseKey(key); return fail(14);
+    }
+    g_settings.hotkey = custom;
+    if (!SaveSettings()) { RegCloseKey(key); return fail(15); }
+    g_settings = Settings{};
+    LoadSettings();
+    if (g_settings.hotkey != custom) { RegCloseKey(key); return fail(16); }
+
+    const INITCOMMONCONTROLSEX controls{sizeof(INITCOMMONCONTROLSEX), ICC_HOTKEY_CLASS};
+    if (!InitCommonControlsEx(&controls)) { RegCloseKey(key); return fail(17); }
+    HWND host = CreateWindowExW(0, L"STATIC", L"hotkey test",
+                              WS_OVERLAPPED, 0, 0, 200, 50,
+                              nullptr, nullptr, g_instance, nullptr);
+    if (!host) { RegCloseKey(key); return fail(18); }
+    HWND editor = CreateWindowExW(0, HOTKEY_CLASSW, nullptr,
+        WS_CHILD | WS_VISIBLE, 0, 0, 200, 24, host, nullptr, g_instance, nullptr);
+    if (!editor) { DestroyWindow(host); RegCloseKey(key); return fail(19); }
+    SendMessageW(editor, HKM_SETHOTKEY, HotkeyControlValue(custom), 0);
+    const bool control_ok = ReadHotkeyControl(editor) == custom;
+    DestroyWindow(host);
+    if (!control_ok) { RegCloseKey(key); return fail(20); }
     RegCloseKey(key);
 
     g_message = CreateWindowExW(0, L"STATIC", L"CopyFix settings smoke",
@@ -108,20 +139,22 @@ int main() {
 
     // Global hotkeys may be used by the CI desktop; only enforce registration
     // and rollback when the initial combination is actually available.
-    if (RegisterChosenHotkey(0)) {
+    const HotkeyChord original{MOD_CONTROL | MOD_ALT, VK_F9};
+    if (RegisterChosenHotkey(original)) {
         const UINT original_id = g_hotkey_id;
         cleanup.blocker = CreateWindowExW(0, L"STATIC", L"Occupied hotkey",
                                           WS_OVERLAPPED, 0, 0, 1, 1,
                                           nullptr, nullptr, g_instance, nullptr);
         if (!cleanup.blocker) return fail(12);
+        const HotkeyChord blocked{MOD_CONTROL | MOD_SHIFT, VK_F9};
         cleanup.blocked_combo = RegisterHotKey(
-            cleanup.blocker, 750, HotkeyModifiers(1) | MOD_NOREPEAT,
-            HotkeyVirtualKey(1)) != FALSE;
+            cleanup.blocker, 750, blocked.modifiers | MOD_NOREPEAT, blocked.key) != FALSE;
         if (cleanup.blocked_combo) {
-            if (RegisterChosenHotkey(1) || !g_hotkey_registered ||
-                g_hotkey_id != original_id) return fail(13);
+            if (RegisterChosenHotkey(blocked) || !g_hotkey_registered ||
+                g_hotkey_id != original_id || g_registered_hotkey != original)
+                return fail(13);
         }
     }
-    std::cout << "PASS HKCU DWORD persistence, invalid-value fallback and hotkey rollback\n";
+    std::cout << "PASS legacy/custom HKCU chords, native input and rollback\n";
     return 0;
 }
