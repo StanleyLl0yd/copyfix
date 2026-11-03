@@ -69,7 +69,7 @@ int wmain(int argc, wchar_t** argv) {
     HMODULE image = LoadLibraryExW(argv[1], nullptr,
         LOAD_LIBRARY_AS_DATAFILE | LOAD_LIBRARY_AS_IMAGE_RESOURCE);
     if (!image) return fail(10);
-    const HRSRC resource = FindResourceW(image, MAKEINTRESOURCEW(1), RT_MANIFEST);
+    const HRSRC resource = FindResourceW(image, MAKEINTRESOURCEW(1), MAKEINTRESOURCEW(24));
     bool manifest_ok = false;
     if (resource) {
         const HGLOBAL resource_data = LoadResource(image, resource);
