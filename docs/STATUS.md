@@ -13,6 +13,7 @@ This is evidence of tests performed, not a Windows 1.0 release declaration.
 | PE safety and dependencies | ASLR, NX, CFG and runtime import policy PASS |
 | Current reference EXE | 174,080 bytes; SHA-256 `BFE67B8C2D39332E17A1B12AD8D7D025828A0ED2FC63417C003E5DAAF9AF929F` from post-merge run |
 | Artifact format | GitHub Actions ZIP containing exactly one `CopyFix.exe` (no installer, debug reports or DLL payload) |
+| Icon integration | Approved original `artwork/app-icon.png` and 16×16 `artwork/tray-16x16.png` preserved with SHA-256; seven-size ICO embedded through native Win32 resource, binary/visual acceptance tracked separately |
 | Local persistence | HKCU\Software\CopyFix Profile/Hotkey only; no INI or clipboard-content log |
 | Interactive Windows evidence | User attested **15/15 functional and UX scenarios PASS on 2026-11-03** ([issue #7](https://github.com/StanleyLl0yd/copyfix/issues/7)); Windows version and clean-runtime environment not specified |
 | Clean Windows 10 and Windows 11 | NOT VERIFIED separately on clean machines without development runtimes |
