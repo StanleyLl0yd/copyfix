@@ -2,7 +2,7 @@
 
 **CopyFix** - лёгкая автономная утилита для очистки скопированного текста в Windows. Работает локально, не отправляет текст в сеть, не записывает историю буфера обмена и не использует перехват клавиатуры.
 
-> Status: **Windows prototype 0.1.0 / NOT RELEASE READY**. [Exact-main CI #41609035641](https://github.com/StanleyLl0yd/copyfix/actions/runs/41609035641): MSVC v143 Release x64 `/MT`, 7/7 Windows CTest and PE/ICO PASS; Clang ASan/UBSan 3/3 PASS, one portable EXE. On 2026-11-03 the owner reported **15/15 functional/UX PASS**, plus Windows 10 and 11 testing on clean and working machines and outstanding desktop edge cases PASS ([issue #7](https://github.com/StanleyLl0yd/copyfix/issues/7)); exact OS builds and separate runtime inventory were not recorded. [Two-pass Windows 1.0 exit audit](docs/WINDOWS-EXIT-AUDIT.md) completed; GitHub PR/CI gate verified. **No GitHub Release 1.0.0 is authorized yet.**
+> Status: **Windows prototype 0.1.0 / NOT RELEASE READY**. [Repository-wide audit and safe cleanup](docs/REPOSITORY-AUDIT-2026-11-03.md) is verified on [PR #35 exact-head CI #41623342037](https://github.com/StanleyLl0yd/copyfix/actions/runs/41623342037): Windows MSVC v143 Release x64 `/MT` **8/8 CTest PASS**, PE/ICO/VersionInfo checks PASS, Clang ASan/UBSan **3/3 PASS**, and one portable EXE. The owner reported earlier Windows 10/11 clean/workstation and functional/edge-case acceptance ([issue #7](https://github.com/StanleyLl0yd/copyfix/issues/7)); the newer About hyperlink is not yet manually approved. The protected main PR gate is active. **GitHub Release 1.0.0 is not authorized; code signing is deferred.**
 
 ## Use
 
@@ -30,7 +30,7 @@ cmake --build build --config Release --parallel
 ctest --test-dir build -C Release --output-on-failure
 ```
 
-The Windows GUI is `build/Release/CopyFix.exe`. Release uses C++20 and static MSVC runtime `/MT`; PE imports and clean-system runtime behavior must be separately verified. `tools/check-pe.ps1` checks imports and basic PE hardening and writes SHA-256 diagnostics.
+The Windows GUI is `build/Release/CopyFix.exe`. Release uses C++20 and static MSVC runtime `/MT`; PE imports are checked by CI. Clean and working Windows 10/11 operation was owner-reported for the preceding build; exact OS builds/runtime inventories and the new About interaction are not independently documented. `tools/check-pe.ps1` checks imports and basic PE hardening and writes SHA-256 diagnostics.
 
 ## Portable configuration
 
@@ -69,7 +69,8 @@ The native Windows RichEdit preview (built-in `Msftedit.dll`, no bundled depende
 - `tests/perf_tests.cpp`: 10k/100k/1M-unit integrity and timing probe.
 - `docs/QA-WINDOWS.md`: manual Windows 10/11 integration checklist.
 - `docs/STATUS.md`: verified vs unverified milestone gates.
-- `docs/WINDOWS-EXIT-AUDIT.md`: two-pass code/security audit, evidence and remaining Windows 1.0 acceptance gates.
+- `docs/WINDOWS-EXIT-AUDIT.md`: historical two-pass code/security audit at the earlier baseline.
+- `docs/REPOSITORY-AUDIT-2026-11-03.md`: current repository-wide two-pass review, remediations, measurements, and remaining limitations.
 - `.github/workflows/ci.yml`: MSVC x64 Release build, tests, PE audit and artifact upload (not GitHub Release).
 - `tools/check-pe.ps1`: dependency, size, PE security and hash diagnostics.
 

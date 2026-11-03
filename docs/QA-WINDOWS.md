@@ -1,6 +1,6 @@
 # CopyFix Windows QA checklist
 
-**Important**: The 15 functional/UX items [reported PASS on 2026-11-03](https://github.com/StanleyLl0yd/copyfix/issues/7) are accepted as user-reported evidence. They do **not** prove clean Windows 10 and Windows 11 separately, installed-runtime independence, or every stress case below. Keep unverified checks open; this is not a release sign-off.
+**Important**: The owner [reported PASS on 2026-11-03](https://github.com/StanleyLl0yd/copyfix/issues/7) for 15/15 functional/UX cases, clean and working Windows 10/11 systems, and the listed desktop stress/visual cases. These were owner attestations on earlier builds, not independent measurements on the newest About/metadata changes. Exact OS builds and installed runtime inventories were not recorded. The unchecked items below remain a reusable QA checklist, not a claim that each test was independently rerun; this is **not** a 1.0.0 release authorization.
 
 ## Release build (Windows 10 and Windows 11, x64)
 
