@@ -125,42 +125,47 @@ int main() {
     LoadSettings();
     if (g_settings.hotkey != custom) { RegCloseKey(key); return fail(16); }
 
-    const INITCOMMONCONTROLSEX controls{sizeof(INITCOMMONCONTROLSEX), ICC_HOTKEY_CLASS};
-    if (!InitCommonControlsEx(&controls)) { RegCloseKey(key); return fail(17); }
-    HWND host = CreateWindowExW(0, L"STATIC", L"hotkey test",
-                              WS_OVERLAPPED, 0, 0, 200, 50,
-                              nullptr, nullptr, g_instance, nullptr);
-    if (!host) { RegCloseKey(key); return fail(18); }
-    HWND editor = CreateWindowExW(0, HOTKEY_CLASSW, nullptr,
-        WS_CHILD | WS_VISIBLE, 0, 0, 200, 24, host, nullptr, g_instance, nullptr);
-    if (!editor) { DestroyWindow(host); RegCloseKey(key); return fail(19); }
-    SendMessageW(editor, HKM_SETHOTKEY, HotkeyControlValue(custom), 0);
-    bool control_ok = ReadHotkeyControl(editor) == custom;
+    // Event-driven capture must reconstruct a chord even when Windows consumes
+    // regular key messages, without consulting GetAsyncKeyState.
+    ShortcutCapture capture;
+    if (capture.Consume(VK_CONTROL, false).key ||
+        capture.Consume(VK_MENU, false).key ||
+        capture.Consume(VK_F8, false) != HotkeyChord{MOD_CONTROL | MOD_ALT, VK_F8} ||
+        capture.Consume(VK_F8, false).key ||
+        capture.Consume(VK_F8, true).key ||
+        capture.Consume(VK_F8, false) != HotkeyChord{MOD_CONTROL | MOD_ALT, VK_F8})
+        return fail(17);
+    capture.Consume(VK_F8, true);
+    capture.Consume(VK_MENU, true);
+    if (capture.Consume(L'Q', false) != HotkeyChord{MOD_CONTROL, L'Q'})
+        return fail(18);
+    capture.Reset();
+    if (capture.Consume(L'Q', false) != HotkeyChord{0, L'Q'} ||
+        capture.Consume(VK_LWIN, false).key ||
+        capture.Consume(L'N', false).key ||
+        capture.Consume(VK_LWIN, true).key)
+        return fail(19);
+    wchar_t label[128]{};
+    FormatHotkey(custom, label);
+    if (!wcsstr(label, L"Ctrl") || !wcsstr(label, L"Shift") ||
+        !wcsstr(label, L"F8")) return fail(20);
     const HotkeyChord examples[] = {
-        {MOD_CONTROL, L'K'},
-        {MOD_ALT, L'9'},
+        {MOD_CONTROL, L'K'}, {MOD_ALT, L'9'},
         {MOD_CONTROL | MOD_ALT | MOD_SHIFT, VK_F8},
         {MOD_CONTROL | MOD_SHIFT, VK_LEFT},
         {MOD_CONTROL | MOD_ALT, VK_DIVIDE},
-        {MOD_ALT | MOD_SHIFT, VK_OEM_3},
+        {MOD_ALT | MOD_SHIFT, VK_OEM_3}
     };
     for (const auto& example : examples) {
-        if (!ValidHotkey(example) ||
-            DecodeHotkey(EncodeHotkey(example)) != example) {
-            std::cerr << "CASE_REJECTED_" << example.key << "\n";
-            control_ok = false;
-        }
-        SendMessageW(editor, HKM_SETHOTKEY, HotkeyControlValue(example), 0);
-        if (ReadHotkeyControl(editor) != example) {
-            std::cerr << "CONTROL_ROUNDTRIP_FAILED_" << example.key << "\n";
-            control_ok = false;
-        }
+        if (!ValidHotkey(example) || DecodeHotkey(EncodeHotkey(example)) != example)
+            return fail(20);
+        FormatHotkey(example, label);
+        if (label[0] == L'\0') return fail(20);
     }
     if (DecodeHotkey(1) != HotkeyChord{MOD_CONTROL | MOD_SHIFT, VK_F9} ||
         DecodeHotkey(2) != HotkeyChord{MOD_CONTROL | MOD_ALT, L'C'} ||
-        !IsExtendedHotkeyKey(VK_LEFT) || IsExtendedHotkeyKey(VK_F8)) control_ok = false;
-    DestroyWindow(host);
-    if (!control_ok) { RegCloseKey(key); return fail(20); }
+        !IsExtendedHotkeyKey(VK_LEFT) || IsExtendedHotkeyKey(VK_F8))
+        return fail(20);
     RegCloseKey(key);
 
     g_message = CreateWindowExW(0, L"STATIC", L"CopyFix settings smoke",
@@ -193,9 +198,16 @@ int main() {
     const int expectedY = info.rcWork.top + (workHeight > height ? (workHeight - height) / 2 : 0);
     wchar_t feedback[128]{};
     const HWND status = GetDlgItem(g_settings_window, kSettingsFeedback);
+    HWND editor = GetDlgItem(g_settings_window, kHotkeyInput);
+    wchar_t visible[128]{}, expected[128]{};
+    FormatHotkey(g_settings.hotkey, expected);
     if (bounds.left != expectedX || bounds.top != expectedY ||
         !status || GetWindowTextW(status, feedback, 128) != 0 ||
-        !GetDlgItem(g_settings_window, kHotkeyInput)) return fail(25);
+        !editor || !GetWindowTextW(editor, visible, 128) ||
+        wcscmp(visible, expected) != 0) return fail(25);
+    wchar_t editorClass[32]{};
+    GetClassNameW(editor, editorClass, static_cast<int>(std::size(editorClass)));
+    if (_wcsicmp(editorClass, L"Edit") != 0) return fail(25);
     DestroyWindow(g_settings_window);
     if (g_settings_window || (raw_registered && g_settings_raw_input)) return fail(26);
     DeleteObject(g_canvas_brush);
@@ -215,14 +227,21 @@ int main() {
         cleanup.blocked_combo = RegisterHotKey(
             cleanup.blocker, 750, blocked.modifiers | MOD_NOREPEAT, blocked.key) != FALSE;
         if (cleanup.blocked_combo) {
-            // The UI's early conflict probe must detect the same collision
-            // before a Save attempt, without displacing the previous binding.
+            // Verify the editor never loses its displayed value on a conflict.
+            OpenSettings();
+            if (!g_settings_window) return fail(27);
+            HWND input = GetDlgItem(g_settings_window, kHotkeyInput);
+            wchar_t before[128]{}, after[128]{};
+            if (!input || !GetWindowTextW(input, before, 128)) return fail(28);
             if (HotkeyAvailable(blocked) || !HotkeyAvailable(original) ||
+                AcceptShortcutCandidate(g_settings_window, blocked) ||
                 RegisterChosenHotkey(blocked) || !g_hotkey_registered ||
-                g_hotkey_id != original_id || g_registered_hotkey != original)
+                g_hotkey_id != original_id || g_registered_hotkey != original ||
+                !GetWindowTextW(input, after, 128) || wcscmp(before, after) != 0)
                 return fail(13);
+            DestroyWindow(g_settings_window);
         }
     }
-    std::cout << "PASS custom chords, early occupied-shortcut detection, settings centering and hotkey rollback\n";
+    std::cout << "PASS deterministic Raw Input capture, occupied-shortcut editor preservation, settings centering and hotkey rollback\n";
     return 0;
 }
