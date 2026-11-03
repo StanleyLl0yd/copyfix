@@ -54,6 +54,8 @@ jobs:
         run: |
           python3 tools/generate-golden-header.py
           git diff --exit-code -- tests/golden_cases.inc
+      - name: Validate archived bootstrap Git bundle without executing history
+        run: python3 tools/check-history-bundle.py
       - name: Configure strict C++20 with sanitizers
         run: |
           clang++ --version
