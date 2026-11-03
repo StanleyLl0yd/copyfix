@@ -5,6 +5,7 @@
 
 #include <cwchar>
 #include <iostream>
+#include <string_view>
 #include <vector>
 
 int wmain(int argc, wchar_t** argv) {
@@ -65,6 +66,24 @@ int wmain(int argc, wchar_t** argv) {
         !raw || length < 4) return fail(8);
     const auto* translation = static_cast<const WORD*>(raw);
     if (translation[0] != 0x0409 || translation[1] != 1200) return fail(9);
-    std::cout << "CopyFix version metadata matches CMake project version and publisher fields\n";
+    HMODULE image = LoadLibraryExW(argv[1], nullptr,
+        LOAD_LIBRARY_AS_DATAFILE | LOAD_LIBRARY_AS_IMAGE_RESOURCE);
+    if (!image) return fail(10);
+    const HRSRC resource = FindResourceW(image, MAKEINTRESOURCEW(1), RT_MANIFEST);
+    bool manifest_ok = false;
+    if (resource) {
+        const HGLOBAL resource_data = LoadResource(image, resource);
+        const void* bytes_data = resource_data ? LockResource(resource_data) : nullptr;
+        const DWORD bytes_size = SizeofResource(image, resource);
+        if (bytes_data && bytes_size) {
+            const std::string_view manifest(static_cast<const char*>(bytes_data), bytes_size);
+            manifest_ok = manifest.find("Microsoft.Windows.Common-Controls") != std::string_view::npos
+                && manifest.find("6.0.0.0") != std::string_view::npos;
+        }
+    }
+    FreeLibrary(image);
+    if (!manifest_ok) return fail(11);
+
+    std::cout << "VersionInfo and Common Controls 6 manifest match CopyFix build metadata\n";
     return 0;
 }
