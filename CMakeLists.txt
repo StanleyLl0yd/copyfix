@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 cmake_policy(SET CMP0091 NEW)
-project(CopyFix LANGUAGES CXX VERSION 1.0.0)
+project(CopyFix LANGUAGES CXX VERSION 1.1.0)
 configure_file(resources/version.h.in "${CMAKE_CURRENT_BINARY_DIR}/generated/copyfix_version.h" @ONLY)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
