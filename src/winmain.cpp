@@ -2,7 +2,9 @@
 #define NOMINMAX
 #include <windows.h>
 #include <shellapi.h>
+#include <commctrl.h>
 #include <richedit.h>
+#include "copyfix_version.h"
 #include "diff_spans.h"
 #include "resource_ids.h"
 
@@ -52,6 +54,53 @@ constexpr UINT kPreviewNote = 414;
 constexpr UINT kSettingsTitle = 415;
 constexpr UINT kSettingsSubtitle = 416;
 constexpr UINT kSettingsFooter = 417;
+
+constexpr wchar_t kAboutVersion[] = L"CopyFix " COPYFIX_VERSION_WSTR;
+constexpr wchar_t kAboutWebsite[] = L"https://stanleyll0yd.github.io/apps/copyfix/";
+constexpr wchar_t kAboutWebsiteLink[] =
+    L"<a href=\"https://stanleyll0yd.github.io/apps/copyfix/\">https://stanleyll0yd.github.io/apps/copyfix/</a>";
+constexpr wchar_t kAboutDescription[] =
+    L"Нативная офлайн-утилита для очистки текста.\n"
+    L"Автоматически сохраняет структурированные фрагменты.\n"
+    L"Изменение форматов HTML/RTF требует подтверждения.";
+
+HRESULT CALLBACK AboutCallback(HWND window, UINT notification, WPARAM, LPARAM data, LONG_PTR) noexcept {
+    if (notification == TDN_HYPERLINK_CLICKED && data) {
+        const auto* url = reinterpret_cast<const wchar_t*>(data);
+        if (wcscmp(url, kAboutWebsite) == 0)
+            ShellExecuteW(window, L"open", kAboutWebsite, nullptr, nullptr, SW_SHOWNORMAL);
+    }
+    return S_OK;
+}
+
+void ShowAbout(HWND parent) noexcept {
+    TASKDIALOGCONFIG config{};
+    config.cbSize = sizeof(config);
+    config.hwndParent = parent;
+    config.dwFlags = TDF_ENABLE_HYPERLINKS | TDF_POSITION_RELATIVE_TO_WINDOW;
+    config.dwCommonButtons = TDCBF_OK_BUTTON;
+    config.pszWindowTitle = L"О CopyFix";
+    config.pszMainInstruction = kAboutVersion;
+    config.pszMainIcon = TD_INFORMATION_ICON;
+    config.pszContent = kAboutDescription;
+    config.pszFooter = kAboutWebsiteLink;
+    config.pfCallback = AboutCallback;
+    using TaskDialogFunction = HRESULT (WINAPI*)(const TASKDIALOGCONFIG*, int*, int*, BOOL*);
+    if (HMODULE controls = LoadLibraryExW(L"comctl32.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32)) {
+        auto* show_dialog = reinterpret_cast<TaskDialogFunction>(
+            GetProcAddress(controls, "TaskDialogIndirect"));
+        const bool shown = show_dialog && SUCCEEDED(show_dialog(&config, nullptr, nullptr, nullptr));
+        FreeLibrary(controls);
+        if (shown) return;
+    }
+    constexpr wchar_t fallback[] =
+        L"CopyFix " COPYFIX_VERSION_WSTR L"\n"
+        L"Нативная офлайн-утилита для очистки текста.\n"
+        L"Автоматически сохраняет структурированные фрагменты.\n"
+        L"Изменение форматов HTML/RTF требует подтверждения.\n"
+        L"https://stanleyll0yd.github.io/apps/copyfix/";
+    MessageBoxW(parent, fallback, L"О CopyFix", MB_OK | MB_ICONINFORMATION);
+}
 
 constexpr COLORREF kCanvas = RGB(247, 249, 252);
 constexpr COLORREF kSurface = RGB(255, 255, 255);
@@ -835,11 +884,7 @@ LRESULT CALLBACK MessageProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
             if (!SaveSettings()) Notify(L"Не удалось сохранить профиль в реестре HKCU.");
             break;
         case kMenuSettings: OpenSettings(); break;
-        case kMenuAbout:
-            MessageBoxW(window, L"CopyFix 0.1.0\nНативная офлайн-утилита для очистки текста.\n"
-                L"Автоматически сохраняет структурированные фрагменты.\n"
-                L"Изменение форматов HTML/RTF требует подтверждения.",
-                L"О CopyFix", MB_OK | MB_ICONINFORMATION); break;
+        case kMenuAbout: ShowAbout(window); break;
         case kMenuExit: DestroyWindow(window); break;
         default: break;
         }
