@@ -1,6 +1,6 @@
 # CopyFix Windows QA checklist
 
-**Important**: This is a checklist, not a record of tests already performed. Every item must be explicitly verified on Windows before calling the application ready for release.
+**Important**: The 15 functional/UX items [reported PASS on 2026-11-03](https://github.com/StanleyLl0yd/copyfix/issues/7) are accepted as user-reported evidence. They do **not** prove clean Windows 10 and Windows 11 separately, installed-runtime independence, or every stress case below. Keep unverified checks open; this is not a release sign-off.
 
 ## Release build (Windows 10 and Windows 11, x64)
 
