@@ -2,7 +2,7 @@
 
 **CopyFix** - лёгкая автономная утилита для очистки скопированного текста в Windows. Работает локально, не отправляет текст в сеть, не записывает историю буфера обмена и не использует перехват клавиатуры.
 
-> Status: **Windows prototype 0.1.0 / NOT RELEASE READY**. [Repository-wide audit and safe cleanup](docs/REPOSITORY-AUDIT-2026-11-03.md) is verified on [PR #35 exact-head CI #41623342037](https://github.com/StanleyLl0yd/copyfix/actions/runs/41623342037): Windows MSVC v143 Release x64 `/MT` **8/8 CTest PASS**, PE/ICO/VersionInfo checks PASS, Clang ASan/UBSan **3/3 PASS**, and one portable EXE. The owner reported earlier Windows 10/11 clean/workstation and functional/edge-case acceptance ([issue #7](https://github.com/StanleyLl0yd/copyfix/issues/7)); the newer About hyperlink is not yet manually approved. The protected main PR gate is active. **GitHub Release 1.0.0 is not authorized; code signing is deferred.**
+> Status: **Windows prototype 0.1.0 / NOT RELEASE READY**. [Repository-wide audit and safe cleanup](docs/REPOSITORY-AUDIT-2026-11-03.md) is verified on [PR #35 exact-head CI #41624443571](https://github.com/StanleyLl0yd/copyfix/actions/runs/41624443571): Windows MSVC v143 Release x64 `/MT` **8/8 CTest PASS**, PE/ICO/VersionInfo checks PASS, Clang ASan/UBSan **3/3 PASS**, and one portable EXE. The owner reported earlier Windows 10/11 clean/workstation and functional/edge-case acceptance ([issue #7](https://github.com/StanleyLl0yd/copyfix/issues/7)); the newer About hyperlink is not yet manually approved. The protected main PR gate is active. **GitHub Release 1.0.0 is not authorized; code signing is deferred.**
 
 ## Use
 
@@ -72,6 +72,7 @@ The native Windows RichEdit preview (built-in `Msftedit.dll`, no bundled depende
 - `docs/WINDOWS-EXIT-AUDIT.md`: historical two-pass code/security audit at the earlier baseline.
 - `docs/REPOSITORY-AUDIT-2026-11-03.md`: current repository-wide two-pass review, remediations, measurements, and remaining limitations.
 - `.github/workflows/ci.yml`: MSVC x64 Release build, tests, PE audit and artifact upload (not GitHub Release).
-- `tools/check-pe.ps1`: dependency, size, PE security and hash diagnostics.
+- `tools/check-pe.ps1`: dependency, offline-import policy, PE security and hash diagnostics.
+- `tools/check-history-bundle.py`: CI-only historical Git bundle integrity and limited credential-pattern screening.
 
 Android (Kotlin + Compose) is **deferred until Windows 1.0 is accepted**. No backend, shared heavyweight framework, or network permission is planned.
