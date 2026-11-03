@@ -69,3 +69,14 @@ Win32 clipboard replacement is not transactional. When `EmptyClipboard` succeeds
 - The `clipboard_contract` CTest creates an isolated synthetic Win32 clipboard payload on the ephemeral Windows runner.
 - It verifies Unicode round-trip, guarded commits, sequence-number rejection of stale snapshots, actual Undo, non-destructive Undo after another copy and detection of additional clipboard formats.
 - This automated test is **not** a substitute for checking clipboard behavior on Windows 10/11 desktops or with real Office/browser content.
+
+## Windows 1.1.0 custom hotkey acceptance (not yet performed)
+
+- [ ] Fresh settings default to Ctrl+Alt+F9 and Deep, including after first launch.
+- [ ] Legacy registry DWORD values 0/1/2 retain their original hotkey meanings after upgrade.
+- [ ] Press Ctrl+Shift+F8 in the native hotkey field, save, trigger from another app, restart and verify persistence.
+- [ ] Occupied chord: save warns, settings remain open, prior hotkey still works, registry unchanged.
+- [ ] Cancel tentative changes and reject unsupported unmodified, Shift-only, Win/F12/mouse-button combinations.
+- [ ] Press the current active shortcut while Settings is foreground: clipboard unchanged.
+- [ ] Test letters, digits, function and navigation keys under US/Russian layouts, 100/150/200% DPI.
+- [ ] Windows 10/11 manual acceptance, About/VersionInfo 1.1.0, one portable EXE, no low-level hooks or new runtime/network.
