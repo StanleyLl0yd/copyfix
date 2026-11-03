@@ -137,7 +137,7 @@ int main() {
     SendMessageW(editor, HKM_SETHOTKEY, HotkeyControlValue(custom), 0);
     bool control_ok = ReadHotkeyControl(editor) == custom;
     const HotkeyChord examples[] = {
-        {MOD_CONTROL, L'A'},
+        {MOD_CONTROL, L'K'},
         {MOD_ALT, L'9'},
         {MOD_CONTROL | MOD_ALT | MOD_SHIFT, VK_F8},
         {MOD_CONTROL | MOD_SHIFT, VK_LEFT},
@@ -146,9 +146,15 @@ int main() {
     };
     for (const auto& example : examples) {
         if (!ValidHotkey(example) ||
-            DecodeHotkey(EncodeHotkey(example)) != example) control_ok = false;
+            DecodeHotkey(EncodeHotkey(example)) != example) {
+            std::cerr << "CASE_REJECTED_" << example.key << "\n";
+            control_ok = false;
+        }
         SendMessageW(editor, HKM_SETHOTKEY, HotkeyControlValue(example), 0);
-        if (ReadHotkeyControl(editor) != example) control_ok = false;
+        if (ReadHotkeyControl(editor) != example) {
+            std::cerr << "CONTROL_ROUNDTRIP_FAILED_" << example.key << "\n";
+            control_ok = false;
+        }
     }
     if (DecodeHotkey(1) != HotkeyChord{MOD_CONTROL | MOD_SHIFT, VK_F9} ||
         DecodeHotkey(2) != HotkeyChord{MOD_CONTROL | MOD_ALT, L'C'} ||
