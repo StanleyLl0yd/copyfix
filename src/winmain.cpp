@@ -26,7 +26,6 @@ constexpr UINT kHotkeyA = 100;
 constexpr UINT kHotkeyB = 101;
 constexpr UINT kHotkeyProbe = 102;
 constexpr UINT kSettingsConflictMessage = WM_APP + 2;
-constexpr UINT_PTR kSettingsEmptyHotkeyTimer = 1;
 constexpr UINT kMaxChars = 1000000;
 constexpr UINT kMaxPreviewChars = 100000;
 constexpr UINT kMenuFix = 200;
@@ -150,6 +149,47 @@ struct HotkeyChord {
     UINT key = VK_F9;
     bool operator==(const HotkeyChord&) const = default;
 };
+
+// One source of truth for keyboard capture: physical Raw Input make/break
+// events, not timing-sensitive GetAsyncKeyState or HOTKEY_CLASS text.
+struct ShortcutCapture {
+    UINT modifiers = 0;
+    UINT heldKey = 0;
+    bool winHeld = false;
+
+    void Reset() noexcept {
+        modifiers = 0;
+        heldKey = 0;
+        winHeld = false;
+    }
+
+    HotkeyChord Consume(UINT key, bool released) noexcept {
+        UINT mask = 0;
+        if (key == VK_CONTROL || key == VK_LCONTROL || key == VK_RCONTROL)
+            mask = MOD_CONTROL;
+        else if (key == VK_MENU || key == VK_LMENU || key == VK_RMENU)
+            mask = MOD_ALT;
+        else if (key == VK_SHIFT || key == VK_LSHIFT || key == VK_RSHIFT)
+            mask = MOD_SHIFT;
+        if (mask) {
+            if (released) modifiers &= ~mask;
+            else modifiers |= mask;
+            return {0, 0};
+        }
+        if (key == VK_LWIN || key == VK_RWIN) {
+            winHeld = !released;
+            return {0, 0};
+        }
+        if (key == 0 || key == 0xFF) return {0, 0};
+        if (released) {
+            if (heldKey == key) heldKey = 0;
+            return {0, 0};
+        }
+        if (key == heldKey) return {0, 0};
+        heldKey = key;
+        return winHeld ? HotkeyChord{0, 0} : HotkeyChord{modifiers, key};
+    }
+};
 struct Settings {
     copyfix::Profile profile = copyfix::Profile::Deep;
     HotkeyChord hotkey;
@@ -193,7 +233,8 @@ bool g_hotkey_registered = false;
 HotkeyChord g_registered_hotkey;
 bool g_settings_raw_input = false;
 bool g_settings_conflict_pending = false;
-UINT g_settings_last_keydown = 0;
+ShortcutCapture g_shortcut_capture;
+HotkeyChord g_settings_candidate;
 
 int Scale(int px, int dpi) noexcept { return MulDiv(px, dpi, 96); }
 HFONT MakeFont(int points, int weight, int dpi) {
@@ -307,7 +348,7 @@ DWORD EncodeHotkey(HotkeyChord chord) noexcept {
     if (chord == HotkeyChord{MOD_CONTROL | MOD_ALT, L'C'}) return 2;
     return kCustomHotkeyFlag | (chord.modifiers << 8) | chord.key;
 }
-// Extended virtual keys need the native editor's extended-key display flag.
+// Extended virtual keys need the correct scan-code prefix for key names.
 bool IsExtendedHotkeyKey(UINT key) noexcept {
     switch (key) {
     case VK_PRIOR: case VK_NEXT: case VK_END: case VK_HOME:
@@ -317,21 +358,23 @@ bool IsExtendedHotkeyKey(UINT key) noexcept {
     default: return false;
     }
 }
-WORD HotkeyControlValue(HotkeyChord chord) noexcept {
-    BYTE flags = IsExtendedHotkeyKey(chord.key) ? HOTKEYF_EXT : 0;
-    if (chord.modifiers & MOD_ALT) flags |= HOTKEYF_ALT;
-    if (chord.modifiers & MOD_CONTROL) flags |= HOTKEYF_CONTROL;
-    if (chord.modifiers & MOD_SHIFT) flags |= HOTKEYF_SHIFT;
-    return MAKEWORD(static_cast<BYTE>(chord.key), flags);
-}
-HotkeyChord ReadHotkeyControl(HWND control) noexcept {
-    const WORD raw = static_cast<WORD>(SendMessageW(control, HKM_GETHOTKEY, 0, 0));
-    const BYTE flags = HIBYTE(raw);
-    UINT mods = 0;
-    if (flags & HOTKEYF_ALT) mods |= MOD_ALT;
-    if (flags & HOTKEYF_CONTROL) mods |= MOD_CONTROL;
-    if (flags & HOTKEYF_SHIFT) mods |= MOD_SHIFT;
-    return {mods, LOBYTE(raw)};
+void FormatHotkey(HotkeyChord chord, wchar_t (&text)[128]) noexcept {
+    text[0] = L'\0';
+    if (chord.modifiers & MOD_CONTROL) wcscat_s(text, L"Ctrl + ");
+    if (chord.modifiers & MOD_ALT) wcscat_s(text, L"Alt + ");
+    if (chord.modifiers & MOD_SHIFT) wcscat_s(text, L"Shift + ");
+    wchar_t name[64]{};
+    if ((chord.key >= L'A' && chord.key <= L'Z') ||
+        (chord.key >= L'0' && chord.key <= L'9')) {
+        swprintf_s(name, L"%lc", static_cast<wchar_t>(chord.key));
+    } else {
+        const UINT scan = MapVirtualKeyW(chord.key, MAPVK_VK_TO_VSC);
+        const LONG param = static_cast<LONG>((scan & 0xFFU) << 16) |
+            (IsExtendedHotkeyKey(chord.key) ? (1L << 24) : 0);
+        if (!scan || !GetKeyNameTextW(param, name, static_cast<int>(std::size(name))))
+            swprintf_s(name, L"VK %02X", chord.key);
+    }
+    wcscat_s(text, name);
 }
 
 // Per-user settings: no INI, files, elevated privileges, or roaming surprises.
@@ -856,60 +899,63 @@ void UndoLast() {
     } else Notify(L"Не удалось восстановить текст, буфер не изменён или занят.");
 }
 
-void ResetShortcutEditor(HWND window) noexcept {
+void SetShortcutEditor(HWND window, HotkeyChord chord) noexcept {
+    wchar_t label[128]{};
+    FormatHotkey(chord, label);
     if (HWND input = GetDlgItem(window, kHotkeyInput))
-        SendMessageW(input, HKM_SETHOTKEY, HotkeyControlValue(g_settings.hotkey), 0);
+        SetWindowTextW(input, label);
 }
 
-void ShowShortcutConflict(HWND window, bool confirmed) noexcept {
+void ResetShortcutEditor(HWND window) noexcept {
+    g_settings_candidate = g_settings.hotkey;
+    SetShortcutEditor(window, g_settings_candidate);
+}
+
+void ShowShortcutWarning(HWND window, bool occupied) noexcept {
     if (!IsWindow(window)) return;
-    KillTimer(window, kSettingsEmptyHotkeyTimer);
     ResetShortcutEditor(window);
-    const wchar_t* message = confirmed
+    const wchar_t* message = occupied
         ? L"Сочетание уже занято другой программой или зарезервировано Windows. "
           L"Прежняя комбинация сохранена."
-        : L"Не удалось распознать сочетание (возможно, оно перехвачено системой). "
-          L"Прежняя комбинация сохранена. Выберите другое.";
+        : L"Эта комбинация недоступна для CopyFix. "
+          L"Используйте Ctrl или Alt и другую клавишу, не занятую стандартными командами.";
     if (HWND status = GetDlgItem(window, kSettingsFeedback))
         SetWindowTextW(status, message);
     MessageBoxW(window, message, L"CopyFix — горячая клавиша", MB_OK | MB_ICONWARNING);
+    // A modal dialog may consume key-up events. Require a fresh chord afterwards.
+    g_shortcut_capture.Reset();
     ResetShortcutEditor(window);
 }
 
-// Raw keyboard input is enabled only while Settings is open, foreground-only.
-// This sees a key even when another application's RegisterHotKey consumes the
-// regular WM_KEYDOWN before it reaches the native HOTKEY_CLASS editor.
+bool AcceptShortcutCandidate(HWND window, HotkeyChord candidate) noexcept {
+    if (!ValidHotkey(candidate)) return false;
+    if (!HotkeyAvailable(candidate)) return false;
+    g_settings_candidate = candidate;
+    SetShortcutEditor(window, candidate);
+    if (HWND status = GetDlgItem(window, kSettingsFeedback))
+        SetWindowTextW(status, L"");
+    return true;
+}
+
+// Unlike HOTKEY_CLASS, the read-only EDIT never displays a blank "None" when
+// Windows consumes a globally registered chord before WM_KEYDOWN delivery.
 void ObserveShortcutKey(HWND window, const RAWKEYBOARD& keyboard) noexcept {
-    const UINT key = keyboard.VKey;
-    if (keyboard.Flags & RI_KEY_BREAK) {
-        if (g_settings_last_keydown == key) g_settings_last_keydown = 0;
+    if (GetForegroundWindow() != window ||
+        GetFocus() != GetDlgItem(window, kHotkeyInput)) {
+        g_shortcut_capture.Reset();
         return;
     }
-    if (g_settings_conflict_pending || key == g_settings_last_keydown) return;
-    if (key == 0 || key == 0xFF || key == VK_SHIFT || key == VK_CONTROL ||
-        key == VK_MENU || key == VK_LSHIFT || key == VK_RSHIFT ||
-        key == VK_LCONTROL || key == VK_RCONTROL ||
-        key == VK_LMENU || key == VK_RMENU) return;
-    if (GetForegroundWindow() != window || GetFocus() != GetDlgItem(window, kHotkeyInput))
-        return;
-    g_settings_last_keydown = key;
-    UINT modifiers = 0;
-    if (GetAsyncKeyState(VK_CONTROL) & 0x8000) modifiers |= MOD_CONTROL;
-    if (GetAsyncKeyState(VK_MENU) & 0x8000) modifiers |= MOD_ALT;
-    if (GetAsyncKeyState(VK_SHIFT) & 0x8000) modifiers |= MOD_SHIFT;
-    const HotkeyChord candidate{modifiers, key};
-    if (!ValidHotkey(candidate)) return;
-    if (HotkeyAvailable(candidate)) {
-        // A chord already owned by CopyFix may be intercepted before HOTKEY_CLASS
-        // sees it; keep its visual representation in sync with physical input.
-        SendMessageW(GetDlgItem(window, kHotkeyInput), HKM_SETHOTKEY,
-                     HotkeyControlValue(candidate), 0);
+    const HotkeyChord chord = g_shortcut_capture.Consume(
+        keyboard.VKey, (keyboard.Flags & RI_KEY_BREAK) != 0);
+    if (!chord.key || g_settings_conflict_pending) return;
+    if (ValidHotkey(chord) && AcceptShortcutCandidate(window, chord)) return;
+    if ((chord.modifiers & (MOD_CONTROL | MOD_ALT)) == 0) {
         if (HWND status = GetDlgItem(window, kSettingsFeedback))
-            SetWindowTextW(status, L"");
+            SetWindowTextW(status, L"Для сочетания удерживайте Ctrl или Alt.");
         return;
     }
     g_settings_conflict_pending = PostMessageW(
-        window, kSettingsConflictMessage, 1, 0) != FALSE;
+        window, kSettingsConflictMessage, ValidHotkey(chord) ? 1 : 0, 0) != FALSE;
 }
 
 void LayoutSettings(HWND window) {
@@ -937,11 +983,13 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
                   L"Нажмите сочетание в поле. Ctrl или Alt обязательны; Shift — дополнительно.",
                   g_font_caption);
         MakeLabel(window,420,L"ГОРЯЧАЯ КЛАВИША",g_font_label);
-        HWND hotkey = CreateWindowExW(WS_EX_CLIENTEDGE, HOTKEY_CLASSW, nullptr,
-            WS_CHILD | WS_VISIBLE | WS_TABSTOP, 0, 0, 1, 1, window,
+        HWND hotkey = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr,
+            WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_READONLY,
+            0, 0, 1, 1, window,
             reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kHotkeyInput)), g_instance, nullptr);
         if (!hotkey) return -1;
-        SendMessageW(hotkey, HKM_SETHOTKEY, HotkeyControlValue(g_settings.hotkey), 0);
+        g_settings_candidate = g_settings.hotkey;
+        SetShortcutEditor(window, g_settings_candidate);
         ApplyFont(hotkey,g_font_body);
         MakeLabel(window,421,L"ПРОФИЛЬ ОБРАБОТКИ",g_font_label);
         HWND profile=CreateWindowW(L"COMBOBOX",nullptr,WS_CHILD | WS_VISIBLE | WS_TABSTOP |
@@ -973,22 +1021,11 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
     case kSettingsConflictMessage:
         if (g_settings_conflict_pending) {
             g_settings_conflict_pending = false;
-            ShowShortcutConflict(window, true);
+            ShowShortcutWarning(window, wparam != 0);
         }
         return 0;
-    case WM_TIMER:
-        if (wparam == kSettingsEmptyHotkeyTimer) {
-            KillTimer(window, kSettingsEmptyHotkeyTimer);
-            const HWND input = GetDlgItem(window, kHotkeyInput);
-            if (GetForegroundWindow() == window && GetFocus() == input &&
-                ReadHotkeyControl(input).key == 0 &&
-                !(GetAsyncKeyState(VK_CONTROL) & 0x8000) &&
-                !(GetAsyncKeyState(VK_MENU) & 0x8000) &&
-                !(GetAsyncKeyState(VK_SHIFT) & 0x8000) &&
-                !g_settings_conflict_pending)
-                ShowShortcutConflict(window, false);
-            return 0;
-        }
+    case WM_ACTIVATE:
+        if (LOWORD(wparam) == WA_INACTIVE) g_shortcut_capture.Reset();
         break;
     case WM_CTLCOLORSTATIC: {
         auto dc = reinterpret_cast<HDC>(wparam);
@@ -1000,16 +1037,13 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
     }
     case WM_DRAWITEM: DrawActionButton(reinterpret_cast<const DRAWITEMSTRUCT*>(lparam));return TRUE;
     case WM_COMMAND:
-        if (LOWORD(wparam) == kHotkeyInput && HIWORD(wparam) == EN_CHANGE &&
-            reinterpret_cast<HWND>(lparam) == GetDlgItem(window, kHotkeyInput)) {
-            KillTimer(window, kSettingsEmptyHotkeyTimer);
-            if (GetFocus() == GetDlgItem(window, kHotkeyInput) &&
-                ReadHotkeyControl(reinterpret_cast<HWND>(lparam)).key == 0)
-                SetTimer(window, kSettingsEmptyHotkeyTimer, 350, nullptr);
+        if (LOWORD(wparam) == kHotkeyInput &&
+            (HIWORD(wparam) == EN_SETFOCUS || HIWORD(wparam) == EN_KILLFOCUS)) {
+            g_shortcut_capture.Reset();
             return 0;
         }
         if (LOWORD(wparam) == kSettingsSave) {
-            const HotkeyChord next_hotkey = ReadHotkeyControl(GetDlgItem(window, kHotkeyInput));
+            const HotkeyChord next_hotkey = g_settings_candidate;
             const int next_profile = static_cast<int>(SendMessageW(GetDlgItem(window, kComboProfile), CB_GETCURSEL, 0, 0));
             if (next_profile < 0 || next_profile > 2) return 0;
             if (!ValidHotkey(next_hotkey)) {
@@ -1020,10 +1054,7 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
                 return 0;
             }
             if (!RegisterChosenHotkey(next_hotkey)) {
-                MessageBoxW(window,
-                    L"Windows не позволяет зарегистрировать сочетание: оно уже занято "
-                    L"глобально или зарезервировано системой. Прежняя комбинация сохранена.",
-                    L"CopyFix", MB_OK | MB_ICONWARNING);
+                ShowShortcutWarning(window, true);
                 return 0;
             }
             g_settings.hotkey = next_hotkey;
@@ -1040,14 +1071,13 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
         break;
     case WM_CLOSE: DestroyWindow(window); return 0;
     case WM_DESTROY: {
-        KillTimer(window, kSettingsEmptyHotkeyTimer);
         if (g_settings_raw_input) {
             RAWINPUTDEVICE remove{0x01, 0x06, RIDEV_REMOVE, nullptr};
             RegisterRawInputDevices(&remove, 1, sizeof(remove));
             g_settings_raw_input = false;
         }
         g_settings_conflict_pending = false;
-        g_settings_last_keydown = 0;
+        g_shortcut_capture.Reset();
         g_settings_window = nullptr;
         return 0;
     }
@@ -1068,9 +1098,14 @@ void OpenSettings() {
         : MonitorFromWindow(g_message, MONITOR_DEFAULTTONEAREST);
     CenterWindowOnMonitor(g_settings_window, monitor);
     g_settings_conflict_pending = false;
-    g_settings_last_keydown = 0;
+    g_shortcut_capture.Reset();
     const RAWINPUTDEVICE keyboard{0x01, 0x06, 0, g_settings_window};
     g_settings_raw_input = RegisterRawInputDevices(&keyboard, 1, sizeof(keyboard)) != FALSE;
+    if (!g_settings_raw_input) {
+        EnableWindow(GetDlgItem(g_settings_window, kHotkeyInput), FALSE);
+        SetWindowTextW(GetDlgItem(g_settings_window, kSettingsFeedback),
+                       L"Захват клавиш недоступен. Прежняя комбинация сохранена.");
+    }
     ShowWindow(g_settings_window, SW_SHOWNORMAL);
 }
 
@@ -1190,14 +1225,7 @@ int WINAPI wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE, _In_ PWSTR, _In
         return 0;
     }
     LoadSettings();
-    const INITCOMMONCONTROLSEX controls{sizeof(INITCOMMONCONTROLSEX), ICC_HOTKEY_CLASS};
-    if (!InitCommonControlsEx(&controls)) {
-        MessageBoxW(nullptr, L"Не удалось загрузить системное поле горячей клавиши.",
-                    L"CopyFix", MB_ICONERROR | MB_OK);
-        CloseHandle(g_instance_mutex);
-        return 1;
-    }
-    g_richedit_module = LoadLibraryW(L"Msftedit.dll");
+     g_richedit_module = LoadLibraryW(L"Msftedit.dll");
     if (!g_richedit_module) {
         MessageBoxW(nullptr, L"Не удалось загрузить системный редактор Msftedit.dll.",
                     L"CopyFix", MB_ICONERROR | MB_OK);
