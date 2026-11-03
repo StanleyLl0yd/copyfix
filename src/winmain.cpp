@@ -928,6 +928,9 @@ void ShowShortcutWarning(HWND window, bool occupied) noexcept {
     g_shortcut_capture.Reset();
     g_settings_pending_key = 0;
     ResetShortcutEditor(window);
+    // Return keyboard focus to the capture field for the next attempt.
+    if (IsWindow(window) && GetForegroundWindow() == window)
+        SetFocus(GetDlgItem(window, kHotkeyInput));
 }
 
 bool AcceptShortcutCandidate(HWND window, HotkeyChord candidate) noexcept {
