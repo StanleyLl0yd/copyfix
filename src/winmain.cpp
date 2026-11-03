@@ -546,9 +546,10 @@ LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
                   L"Розовый: удалено  •  Зелёный: добавлено. Подсветка пробелов доступна отдельно.", g_font_caption);
         MakeLabel(window, kPreviewBeforeLabel, L"ИСХОДНЫЙ ТЕКСТ", g_font_label);
         MakeLabel(window, kPreviewAfterLabel, L"РЕЗУЛЬТАТ ОБРАБОТКИ", g_font_label);
-        const std::wstring status = std::to_wstring(g_pending.after.changes) +
-                                    L" изменений  |  Профиль: " + profile;
-        MakeLabel(window, kPreviewNote, status.c_str(), g_font_caption);
+        wchar_t status[128]{};
+        swprintf_s(status, L"%zu изменений  |  Профиль: %ls",
+                   g_pending.after.changes, profile);
+        MakeLabel(window, kPreviewNote, status, g_font_caption);
         const DWORD style = WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_TABSTOP | ES_MULTILINE |
                             ES_AUTOVSCROLL | ES_READONLY | ES_NOHIDESEL;
         HWND before = CreateWindowExW(WS_EX_CLIENTEDGE, MSFTEDIT_CLASS, L"",
