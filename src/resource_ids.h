@@ -1,0 +1,4 @@
+#ifndef COPYFIX_RESOURCE_IDS_H
+#define COPYFIX_RESOURCE_IDS_H
+#define IDI_COPYFIX_APP 101
+#endif

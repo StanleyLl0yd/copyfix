@@ -1,0 +1,2 @@
+#include "resource_ids.h"
+IDI_COPYFIX_APP ICON "copyfix.ico"

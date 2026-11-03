@@ -4,6 +4,7 @@
 #include <shellapi.h>
 #include <richedit.h>
 #include "diff_spans.h"
+#include "resource_ids.h"
 
 #include "text_engine.h"
 
@@ -88,6 +89,11 @@ struct Undo {
 };
 
 HINSTANCE g_instance = nullptr;
+HICON LoadAppIcon(int pixels) noexcept {
+    auto* handle = LoadImageW(g_instance, MAKEINTRESOURCEW(IDI_COPYFIX_APP),
+                              IMAGE_ICON, pixels, pixels, LR_DEFAULTCOLOR | LR_SHARED);
+    return handle ? static_cast<HICON>(handle) : LoadIconW(nullptr, IDI_APPLICATION);
+}
 HWND g_message = nullptr;
 HWND g_preview = nullptr;
 HWND g_settings_window = nullptr;
@@ -783,7 +789,7 @@ LRESULT CALLBACK MessageProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
         g_tray.uID = 1;
         g_tray.uFlags = NIF_ICON | NIF_TIP | NIF_MESSAGE;
         g_tray.uCallbackMessage = kTrayMessage;
-        g_tray.hIcon = LoadIconW(nullptr, IDI_APPLICATION);
+        g_tray.hIcon = LoadAppIcon(GetSystemMetrics(SM_CXSMICON));
         wcscpy_s(g_tray.szTip, L"CopyFix - очистка текста");
         Shell_NotifyIconW(NIM_ADD, &g_tray);
         g_tray.uVersion = NOTIFYICON_VERSION_4;
@@ -864,13 +870,15 @@ int WINAPI wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE, _In_ PWSTR, _In
     g_font_label = MakeFont(10, FW_SEMIBOLD, dpi);
     g_font_caption = MakeFont(10, FW_NORMAL, dpi);
     g_taskbar_created = RegisterWindowMessageW(L"TaskbarCreated");
+    const HICON large_icon = LoadAppIcon(GetSystemMetrics(SM_CXICON));
+    const HICON small_icon = LoadAppIcon(GetSystemMetrics(SM_CXSMICON));
     const WNDCLASSEXW classes[] = {
-        {sizeof(WNDCLASSEXW), 0, MessageProc, 0, 0, instance, nullptr, nullptr,
-            nullptr, nullptr, L"CopyFixMessage", nullptr},
-        {sizeof(WNDCLASSEXW), 0, PreviewProc, 0, 0, instance, nullptr, nullptr,
-            g_canvas_brush, nullptr, L"CopyFixPreview", nullptr},
-        {sizeof(WNDCLASSEXW), 0, SettingsProc, 0, 0, instance, nullptr, nullptr,
-            g_canvas_brush, nullptr, L"CopyFixSettings", nullptr}
+        {sizeof(WNDCLASSEXW), 0, MessageProc, 0, 0, instance, large_icon, nullptr,
+            nullptr, nullptr, L"CopyFixMessage", small_icon},
+        {sizeof(WNDCLASSEXW), 0, PreviewProc, 0, 0, instance, large_icon, nullptr,
+            g_canvas_brush, nullptr, L"CopyFixPreview", small_icon},
+        {sizeof(WNDCLASSEXW), 0, SettingsProc, 0, 0, instance, large_icon, nullptr,
+            g_canvas_brush, nullptr, L"CopyFixSettings", small_icon}
     };
     for (const auto& wc : classes) {
         if (!RegisterClassExW(&wc)) { CloseHandle(g_instance_mutex); return 2; }

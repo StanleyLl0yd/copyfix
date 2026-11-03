@@ -36,6 +36,15 @@ The Windows GUI is `build/Release/CopyFix.exe`. Release uses C++20 and static MS
 
 Built-in defaults require no files. Settings are stored exclusively in the per-user Windows Registry (`HKEY_CURRENT_USER\Software\CopyFix`, DWORD values `Profile` and `Hotkey`). No `copyfix.ini` is read or created. If the registry cannot be written, settings still apply for the current run. No administrator rights are required.
 
+## Approved CopyFix icon
+
+The owner-approved canonical raster sources are checked into Git byte-for-byte:
+
+- `artwork/app-icon.png` — original detailed icon (1254×1254; white document, Aa, vivid green arrow on blue).
+- `artwork/tray-16x16.png` — separately approved pixel-optimized 16×16 tray artwork (white document and green arrow, without tiny Aa).
+
+`resources/copyfix.ico` embeds the approved 16×16 PNG **unchanged** and larger 24/32/48/64/128/256 px raster sizes derived from the main source. The native Win32 resource is embedded directly into `CopyFix.exe`; no icon or extra file is required beside the portable executable. `python tools/check-icon.py` validates canonical source checksums and the ICO; use `python tools/build-icon.py` (Pillow required only for explicit regeneration) after owner-approved artwork changes. The original sources must never be overwritten or silently re-encoded.
+
 ## Windows interface and test ZIP
 
 The native Windows RichEdit preview (built-in `Msftedit.dll`, no bundled dependency) has side-by-side selectable text with pink highlights for deleted content, green highlights for added content and light neutral-tinted marks for whitespace-only changes. Toggle `↵ Показать настоящие переносы строк` to distinguish source hard line breaks from visual wrapping; markers are for viewing only and are not applied to the clipboard. Each pane retains its own approximate scroll position when markers are toggled. Actual clipboard serialization still uses CRLF; paragraph boundaries are preserved. The GitHub Actions test artifact ZIP contains **only `CopyFix.exe`**; PE audit results remain visible in CI logs. No installer or GitHub Release is produced.

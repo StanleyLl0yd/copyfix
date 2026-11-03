@@ -23,6 +23,8 @@ jobs:
           if (-not $tools) { throw 'MSVC toolset unavailable' }
           Write-Host "Visual Studio: $vs"
           Write-Host "MSVC v143: $($tools[0].Name)"
+      - name: Verify approved icon sources and ICO sizes
+        run: python tools/check-icon.py
       - name: Configure C++20
         run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64
       - name: Build static Release x64
