@@ -279,8 +279,18 @@ DWORD EncodeHotkey(HotkeyChord chord) noexcept {
     if (chord == HotkeyChord{MOD_CONTROL | MOD_ALT, L'C'}) return 2;
     return kCustomHotkeyFlag | (chord.modifiers << 8) | chord.key;
 }
+// Extended virtual keys need the native editor's extended-key display flag.
+bool IsExtendedHotkeyKey(UINT key) noexcept {
+    switch (key) {
+    case VK_PRIOR: case VK_NEXT: case VK_END: case VK_HOME:
+    case VK_LEFT: case VK_UP: case VK_RIGHT: case VK_DOWN:
+    case VK_INSERT: case VK_DELETE: case VK_DIVIDE:
+        return true;
+    default: return false;
+    }
+}
 WORD HotkeyControlValue(HotkeyChord chord) noexcept {
-    BYTE flags = 0;
+    BYTE flags = IsExtendedHotkeyKey(chord.key) ? HOTKEYF_EXT : 0;
     if (chord.modifiers & MOD_ALT) flags |= HOTKEYF_ALT;
     if (chord.modifiers & MOD_CONTROL) flags |= HOTKEYF_CONTROL;
     if (chord.modifiers & MOD_SHIFT) flags |= HOTKEYF_SHIFT;
