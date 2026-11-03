@@ -42,6 +42,54 @@ bool PutText(const std::wstring& text, bool add_rich = false) {
     }
     return CloseClipboard() != FALSE;
 }
+
+// An independent Win32 thread holds the clipboard open to exercise retries.
+struct ClipboardHold {
+    HANDLE entered = nullptr;
+    HANDLE release = nullptr;
+    volatile LONG opened = 0;
+};
+DWORD WINAPI HoldClipboard(LPVOID parameter) {
+    auto& hold = *static_cast<ClipboardHold*>(parameter);
+    const BOOL opened = OpenClipboard(nullptr);
+    InterlockedExchange(&hold.opened, opened ? 1 : 0);
+    SetEvent(hold.entered);
+    if (opened) {
+        WaitForSingleObject(hold.release, 10000);
+        CloseClipboard();
+    }
+    return 0;
+}
+bool RefusesContendedClipboard(const ClipSnapshot& expected) {
+    ClipboardHold hold;
+    hold.entered = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    hold.release = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    if (!hold.entered || !hold.release) {
+        if (hold.entered) CloseHandle(hold.entered);
+        if (hold.release) CloseHandle(hold.release);
+        return false;
+    }
+    HANDLE thread = CreateThread(nullptr, 0, HoldClipboard, &hold, 0, nullptr);
+    if (!thread) {
+        CloseHandle(hold.entered);
+        CloseHandle(hold.release);
+        return false;
+    }
+    const bool ready = WaitForSingleObject(hold.entered, 5000) == WAIT_OBJECT_0 &&
+                       InterlockedCompareExchange(&hold.opened, 0, 0) == 1;
+    bool refused = false;
+    if (ready) {
+        ClipSnapshot captured;
+        refused = !Snapshot(captured) &&
+                  !WriteIfUnchanged(expected, L"Нельзя записать при блокировке", nullptr);
+    }
+    SetEvent(hold.release);
+    const bool released = WaitForSingleObject(thread, 10000) == WAIT_OBJECT_0;
+    CloseHandle(thread);
+    CloseHandle(hold.entered);
+    CloseHandle(hold.release);
+    return ready && refused && released;
+}
 }  // namespace
 
 int main() {
@@ -103,8 +151,50 @@ int main() {
     if (!PutText(L"Текст с дополнительным форматом", true)) return fail(19);
     ClipSnapshot with_rich;
     if (!Snapshot(with_rich) || !with_rich.rich_formats) return fail(20);
+    // A second thread may hold the clipboard open. Bounded retries must
+    // fail without clearing or replacing the previously copied data.
+    if (!PutText(L"Защищённый от блокировки буфер")) return fail(21);
+    ClipSnapshot before_contention;
+    if (!Snapshot(before_contention)) return fail(22);
+    if (!RefusesContendedClipboard(before_contention)) return fail(23);
+    ClipSnapshot after_contention;
+    if (!Snapshot(after_contention) ||
+        after_contention.sequence != before_contention.sequence ||
+        after_contention.text != before_contention.text) return fail(24);
+
+    // An uninspectable preview must not overwrite a long source payload.
+    std::wstring beyond_preview(kMaxPreviewChars + 1, L'ж');
+    beyond_preview[0] = L' ';
+    beyond_preview[1] = L' ';
+    if (!PutText(beyond_preview)) return fail(25);
+    ClipSnapshot preview_source;
+    if (!Snapshot(preview_source) || preview_source.text != beyond_preview) return fail(26);
+    g_settings.profile = copyfix::Profile::Deep;
+    FixClipboard(true);
+    ClipSnapshot still_unmodified;
+    if (!Snapshot(still_unmodified) ||
+        still_unmodified.sequence != preview_source.sequence ||
+        still_unmodified.text != beyond_preview ||
+        g_preview != nullptr) return fail(27);
+
+    // Exercise the exact documented million-character clipboard boundary.
+    std::wstring maximum(kMaxChars, L'Я');
+    if (!PutText(maximum)) return fail(28);
+    ClipSnapshot maximum_snapshot;
+    if (!Snapshot(maximum_snapshot) || maximum_snapshot.text != maximum) return fail(29);
+    if (AllocateClipboardString(std::wstring(kMaxChars + 1, L'Я')) != nullptr)
+        return fail(30);
+
+    // Invalid surrogate halves must not reach the text engine.
+    std::wstring invalid = L"Текст ";
+    invalid.push_back(static_cast<wchar_t>(0xD800));
+    if (!PutText(invalid)) return fail(31);
+    ClipSnapshot invalid_snapshot;
+    if (Snapshot(invalid_snapshot)) return fail(32);
+
     DestroyWindow(g_message);
     g_message = nullptr;
-    std::cout << "PASS real clipboard Unicode, stale-write protection, Undo and rich-format detection\n";
+    std::cout << "PASS clipboard contention, size boundaries, UTF-16, "
+                 "stale-write guard, Undo and rich formats\\n";
     return 0;
 }
