@@ -899,7 +899,13 @@ void ObserveShortcutKey(HWND window, const RAWKEYBOARD& keyboard) noexcept {
     if (GetAsyncKeyState(VK_SHIFT) & 0x8000) modifiers |= MOD_SHIFT;
     const HotkeyChord candidate{modifiers, key};
     if (!ValidHotkey(candidate)) return;
-    if (HotkeyAvailable(candidate)) return;
+    if (HotkeyAvailable(candidate)) {
+        // A chord already owned by CopyFix may be intercepted before HOTKEY_CLASS
+        // sees it; keep its visual representation in sync with physical input.
+        SendMessageW(GetDlgItem(window, kHotkeyInput), HKM_SETHOTKEY,
+                     HotkeyControlValue(candidate), 0);
+        return;
+    }
     g_settings_conflict_pending = PostMessageW(
         window, kSettingsConflictMessage, 1, 0) != FALSE;
 }
