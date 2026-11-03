@@ -4,28 +4,28 @@ This is evidence of tests performed, not a Windows 1.0 release declaration.
 
 | Area | Current verified state |
 | --- | --- |
-| Repository | Public `StanleyLl0yd/copyfix`, tested code baseline `1e334e3b467ba585375c6fd04c20272d0443c421` (documentation-only commits may follow) |
+| Repository | Public `StanleyLl0yd/copyfix`; last fully tested exact-main `775a80f197c7bd45bc3c9668b666083e55ca414b` (license/docs-only update pending post-merge verification) |
 | Original local Git history | Original HEAD `53d27ada541b75e061de5bfbdf986fc1c9a25da6` preserved in `archive/CopyFix-bootstrap-history.bundle` |
 | Native Windows program | C++20 / Win32, no third-party UI runtime; MSVC v143 Release x64 static CRT `/MT` PASS |
 | Test corpus | 141 shared JSON golden fixtures plus 25 built-in core cases and additional targeted PDF/Unicode regressions |
 | Determinism and idempotency | 900 property-like checks in core test, Windows CTest PASS |
 | Windows CI | Seven suites: core, preview_diff, perf_integrity, preview_scroll, clipboard_contract (including contention/large text/malformed UTF-16), settings_registry, icon_resources; **7/7 PASS**; strict Clang ASan/UBSan **3/3 PASS** on the same code baseline |
 | PE safety and dependencies | ASLR, NX, CFG and runtime import policy PASS |
-| Current reference EXE | 285,184 bytes; SHA-256 `7FDD4284184C28B877AECDF32EED3FA379DCB8FCB8E89668EE7F48DDD3499F0F` from post-merge run |
+| Current reference EXE | 285,184 bytes; SHA-256 `A69CB4B48C1D794736A85E7A37E0F80E479CEA006788682EC7231711E4D9BEFB` from exact-main run #41609035641 |
 | Artifact format | GitHub Actions ZIP containing exactly one `CopyFix.exe` (no installer, debug reports or DLL payload) |
-| Icon integration | Approved original `artwork/app-icon.png` and 16×16 `artwork/tray-16x16.png` preserved with SHA-256; seven-size ICO embedded through native Win32 resource, binary/visual acceptance tracked separately |
+| Icon integration | Approved original `artwork/app-icon.png` and 16×16 `artwork/tray-16x16.png` preserved with SHA-256; seven-size ICO embedded; light/dark and 16×16 readability owner-reported PASS (2026-11-03) |
 | Local persistence | HKCU\Software\CopyFix Profile/Hotkey only; no INI or clipboard-content log |
-| Interactive Windows evidence | User attested **15/15 functional and UX scenarios PASS on 2026-11-03** ([issue #7](https://github.com/StanleyLl0yd/copyfix/issues/7)); Windows version and clean-runtime environment not specified |
-| Clean Windows 10 and Windows 11 | NOT VERIFIED separately on clean machines without development runtimes |
-| End-to-end hotkey, tray, clipboard, race handling, Undo, reboot | Core hotkey/tray/clipboard/Undo/Explorer-restart scenarios PASS per user's 15-item QA; separate reboot/occupied clipboard/1M desktop edge cases not individually attested |
-| Branch protection | Ruleset `25634329` blocks deletion/force-push; required PR gate is not yet confirmed enabled |
-| License / GitHub Release / Windows 1.0 | NOT CREATED; awaiting Windows runtime/clipboard acceptance |
+| Interactive Windows evidence | Owner attested **15/15 functional/UX PASS** plus remaining desktop stress/visual cases PASS (2026-11-03), including clean and working Windows 10/11; OS builds and specific runtime inventory not supplied ([issue #7](https://github.com/StanleyLl0yd/copyfix/issues/7)) |
+| Clean Windows 10 and Windows 11 | Both clean and working installations user-reported PASS; standalone VC runtime, OS build and elevation inventory not documented |
+| End-to-end hotkey, tray, clipboard, race handling, Undo, reboot | Owner-reported PASS including 100K/1M characters, clipboard contention, reboot/relaunch, non-writable EXE directory, DPI scaling and light/dark icon legibility |
+| Branch protection | Ruleset `25634329`: required PR + two strict GitHub Actions checks, resolved threads, linear history, squash-only, no deletion/force-push, zero bypass; independently verified |
+| License / GitHub Release / Windows 1.0 | MIT owner-approved 2026-11-03, [LICENSE](../LICENSE) added by PR; 1.0 release NOT authorized or created |
 | Android | NOT STARTED; deferred until Windows 1.0 |
 
-Current evidence: [post-merge Windows and sanitizer CI #41607441538](https://github.com/StanleyLl0yd/copyfix/actions/runs/41607441538) and its EXE-only artifact `13216933533`. The clipboard_contract test uses synthetic clipboard data on the Windows CI runner; it does not replace interactive clean-machine QA.
+Current evidence: [exact-main Windows and sanitizer CI #41609035641](https://github.com/StanleyLl0yd/copyfix/actions/runs/41609035641) and its EXE-only artifact `13217817698`. The clipboard_contract test uses synthetic clipboard data on the Windows CI runner; manual Windows 10/11 acceptance is separately owner-attested, not independently recorded.
 
-Clang 18.1.3 strict-warning build and ASan/UBSan tests now pass on this exact code-main SHA (3/3); Windows GUI and clipboard are still only exercised on the Windows Server 2022 CI runner, not on clean desktop Windows 10/11.
+Clang strict-warning and ASan/UBSan tests pass on exact code-main (3/3). Automated Windows CI runs on Windows Server 2022; owner separately reported desktop testing on clean and working Windows 10/11.
 
-**Open acceptance gates**: Test on clean Windows 10/11 x64; verify hotkey conflict, tray restoration after Explorer restart, rich/plain clipboard data preservation decisions, Undo without overwriting newer data, profile persistence/restart, read-only EXE directory, high-DPI scaling, scrolling and performance. No license or release is authorized.
+**Open before publication:** record OS builds and runtime/elevation details if a reproducible compatibility matrix is required; obtain explicit owner authorization for GitHub Release `1.0.0`. All listed Windows desktop scenarios were user-reported PASS, not independently instrumented. MIT selected, release not yet authorized.
 
 Two-pass source/security exit-audit coverage, exact code changes and remaining limitations: [WINDOWS-EXIT-AUDIT.md](WINDOWS-EXIT-AUDIT.md).
