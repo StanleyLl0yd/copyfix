@@ -191,8 +191,10 @@ int main() {
     const int workHeight = info.rcWork.bottom - info.rcWork.top;
     const int expectedX = info.rcWork.left + (workWidth > width ? (workWidth - width) / 2 : 0);
     const int expectedY = info.rcWork.top + (workHeight > height ? (workHeight - height) / 2 : 0);
+    wchar_t feedback[128]{};
+    const HWND status = GetDlgItem(g_settings_window, kSettingsFeedback);
     if (bounds.left != expectedX || bounds.top != expectedY ||
-        GetDlgItem(g_settings_window, 417) ||
+        !status || GetWindowTextW(status, feedback, 128) != 0 ||
         !GetDlgItem(g_settings_window, kHotkeyInput)) return fail(25);
     DestroyWindow(g_settings_window);
     if (g_settings_window || (raw_registered && g_settings_raw_input)) return fail(26);
