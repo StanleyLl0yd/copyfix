@@ -44,7 +44,7 @@ constexpr UINT kPreviewAccept = 300;
 constexpr UINT kPreviewCancel = 301;
 constexpr UINT kSettingsSave = 400;
 constexpr UINT kSettingsCancel = 401;
-constexpr UINT kComboHotkey = 402;
+constexpr UINT kHotkeyInput = 402;
 constexpr UINT kComboProfile = 403;
 constexpr UINT kPreviewTitle = 410;
 constexpr UINT kPreviewSubtitle = 411;
@@ -142,9 +142,14 @@ int g_preview_dpi = 96;
 int g_settings_dpi = 96;
 
 
+struct HotkeyChord {
+    UINT modifiers = MOD_CONTROL | MOD_ALT;
+    UINT key = VK_F9;
+    bool operator==(const HotkeyChord&) const = default;
+};
 struct Settings {
     copyfix::Profile profile = copyfix::Profile::Deep;
-    int hotkey = 0;
+    HotkeyChord hotkey;
 };
 struct ClipSnapshot {
     std::wstring text;
@@ -182,6 +187,7 @@ bool g_show_spaces = false;
 UINT g_hotkey_id = kHotkeyA;
 UINT g_taskbar_created = 0;
 bool g_hotkey_registered = false;
+HotkeyChord g_registered_hotkey;
 
 int Scale(int px, int dpi) noexcept { return MulDiv(px, dpi, 96); }
 HFONT MakeFont(int points, int weight, int dpi) {
@@ -238,15 +244,57 @@ void DrawActionButton(const DRAWITEMSTRUCT* item) {
 
 
 
-const wchar_t* HotkeyName(int i) {
-    switch (i) {
-    case 1: return L"Ctrl + Shift + F9";
-    case 2: return L"Ctrl + Alt + C";
-    default: return L"Ctrl + Alt + F9";
+// Windows global shortcuts use modifiers plus exactly one virtual key.
+constexpr UINT kHotkeyModifierMask = MOD_ALT | MOD_CONTROL | MOD_SHIFT;
+constexpr DWORD kCustomHotkeyFlag = 0x00010000U;
+
+bool ValidHotkey(HotkeyChord chord) noexcept {
+    if ((chord.modifiers & ~kHotkeyModifierMask) != 0 ||
+        (chord.modifiers & (MOD_CONTROL | MOD_ALT)) == 0 ||
+        chord.key < VK_BACK || chord.key > 0xFE) return false;
+    switch (chord.key) {
+    case VK_SHIFT: case VK_CONTROL: case VK_MENU:
+    case VK_LSHIFT: case VK_RSHIFT:
+    case VK_LCONTROL: case VK_RCONTROL:
+    case VK_LMENU: case VK_RMENU:
+    case VK_LWIN: case VK_RWIN:
+    case VK_F12: case VK_SNAPSHOT: case VK_PAUSE:
+    case VK_CAPITAL: case VK_NUMLOCK: case VK_SCROLL:
+        return false;
+    default: return true;
     }
 }
-UINT HotkeyModifiers(int i) { return i == 1 ? MOD_CONTROL | MOD_SHIFT : MOD_CONTROL | MOD_ALT; }
-UINT HotkeyVirtualKey(int i) { return i == 2 ? L'C' : VK_F9; }
+HotkeyChord DecodeHotkey(DWORD value) noexcept {
+    if (value == 0) return {};
+    if (value == 1) return {MOD_CONTROL | MOD_SHIFT, VK_F9};
+    if (value == 2) return {MOD_CONTROL | MOD_ALT, L'C'};
+    if ((value & kCustomHotkeyFlag) == 0 ||
+        (value & ~(kCustomHotkeyFlag | 0x000007FFU)) != 0) return {};
+    const HotkeyChord candidate{(value >> 8) & 7U, value & 0xFFU};
+    return ValidHotkey(candidate) ? candidate : HotkeyChord{};
+}
+DWORD EncodeHotkey(HotkeyChord chord) noexcept {
+    if (chord == HotkeyChord{}) return 0;
+    if (chord == HotkeyChord{MOD_CONTROL | MOD_SHIFT, VK_F9}) return 1;
+    if (chord == HotkeyChord{MOD_CONTROL | MOD_ALT, L'C'}) return 2;
+    return kCustomHotkeyFlag | (chord.modifiers << 8) | chord.key;
+}
+WORD HotkeyControlValue(HotkeyChord chord) noexcept {
+    BYTE flags = 0;
+    if (chord.modifiers & MOD_ALT) flags |= HOTKEYF_ALT;
+    if (chord.modifiers & MOD_CONTROL) flags |= HOTKEYF_CONTROL;
+    if (chord.modifiers & MOD_SHIFT) flags |= HOTKEYF_SHIFT;
+    return MAKEWORD(static_cast<BYTE>(chord.key), flags);
+}
+HotkeyChord ReadHotkeyControl(HWND control) noexcept {
+    const WORD raw = static_cast<WORD>(SendMessageW(control, HKM_GETHOTKEY, 0, 0));
+    const BYTE flags = HIBYTE(raw);
+    UINT mods = 0;
+    if (flags & HOTKEYF_ALT) mods |= MOD_ALT;
+    if (flags & HOTKEYF_CONTROL) mods |= MOD_CONTROL;
+    if (flags & HOTKEYF_SHIFT) mods |= MOD_SHIFT;
+    return {mods, LOBYTE(raw)};
+}
 
 // Per-user settings: no INI, files, elevated privileges, or roaming surprises.
 constexpr const wchar_t* kSettingsKey = L"Software\\CopyFix";
@@ -267,7 +315,7 @@ void LoadSettings() noexcept {
     const DWORD profile = read(L"Profile", static_cast<DWORD>(copyfix::Profile::Deep));
     const DWORD hotkey = read(L"Hotkey", 0);
     if (profile <= 2) g_settings.profile = static_cast<copyfix::Profile>(profile);
-    if (hotkey <= 2) g_settings.hotkey = static_cast<int>(hotkey);
+    g_settings.hotkey = DecodeHotkey(hotkey);
     RegCloseKey(key);
 }
 
@@ -277,7 +325,7 @@ bool SaveSettings() noexcept {
                         REG_OPTION_NON_VOLATILE, KEY_SET_VALUE, nullptr, &key,
                         nullptr) != ERROR_SUCCESS) return false;
     const DWORD profile = static_cast<DWORD>(g_settings.profile);
-    const DWORD hotkey = static_cast<DWORD>(g_settings.hotkey);
+    const DWORD hotkey = EncodeHotkey(g_settings.hotkey);
     const bool ok =
         RegSetValueExW(key, L"Profile", 0, REG_DWORD,
                        reinterpret_cast<const BYTE*>(&profile), sizeof(profile)) == ERROR_SUCCESS &&
@@ -296,12 +344,16 @@ void Notify(const wchar_t* message) {
     Shell_NotifyIconW(NIM_MODIFY, &g_tray);
 }
 
-bool RegisterChosenHotkey(int index) {
+bool RegisterChosenHotkey(HotkeyChord chord) {
+    if (!ValidHotkey(chord)) return false;
+    if (g_hotkey_registered && chord == g_registered_hotkey) return true;
     const UINT other_id = g_hotkey_id == kHotkeyA ? kHotkeyB : kHotkeyA;
-    if (!RegisterHotKey(g_message, other_id, HotkeyModifiers(index) | MOD_NOREPEAT,
-                        HotkeyVirtualKey(index))) return false;
+    // Preserve the old global registration until Windows accepts the new one.
+    if (!RegisterHotKey(g_message, other_id, chord.modifiers | MOD_NOREPEAT, chord.key))
+        return false;
     if (g_hotkey_registered) UnregisterHotKey(g_message, g_hotkey_id);
     g_hotkey_id = other_id;
+    g_registered_hotkey = chord;
     g_hotkey_registered = true;
     return true;
 }
@@ -753,7 +805,7 @@ void LayoutSettings(HWND window) {
     Position(window, kSettingsTitle, 26, 22, w-52, 38, dpi);
     Position(window, kSettingsSubtitle, 26, 64, w-52, 40, dpi);
     Position(window, 420, 26, 124, w-52, 24, dpi);
-    Position(window, kComboHotkey, 26, 154, w-52, 250, dpi);
+    Position(window, kHotkeyInput, 26, 154, w-52, 34, dpi);
     Position(window, 421, 26, 222, w-52, 24, dpi);
     Position(window, kComboProfile, 26, 252, w-52, 250, dpi);
     Position(window, kSettingsFooter, 26, h-104, w-52, 36, dpi);
@@ -766,13 +818,15 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
     case WM_CREATE: {
         g_settings_dpi = static_cast<int>(GetDpiForWindow(window));
         MakeLabel(window,kSettingsTitle,L"Настройки",g_font_title);
-        MakeLabel(window,kSettingsSubtitle,L"CopyFix работает локально. Параметры хранятся только в реестре Windows.",g_font_caption);
+        MakeLabel(window,kSettingsSubtitle,
+                  L"Нажмите сочетание в поле. Ctrl или Alt обязательны; Shift — дополнительно.",
+                  g_font_caption);
         MakeLabel(window,420,L"ГОРЯЧАЯ КЛАВИША",g_font_label);
-        HWND hotkey = CreateWindowW(L"COMBOBOX",nullptr,WS_CHILD | WS_VISIBLE | WS_TABSTOP |
-            CBS_DROPDOWNLIST | WS_VSCROLL,0,0,1,1,window,
-            reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kComboHotkey)),g_instance,nullptr);
-        for(int i=0;i<3;++i) SendMessageW(hotkey,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(HotkeyName(i)));
-        SendMessageW(hotkey,CB_SETCURSEL,static_cast<WPARAM>(g_settings.hotkey),0);
+        HWND hotkey = CreateWindowExW(WS_EX_CLIENTEDGE, HOTKEY_CLASSW, nullptr,
+            WS_CHILD | WS_VISIBLE | WS_TABSTOP, 0, 0, 1, 1, window,
+            reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kHotkeyInput)), g_instance, nullptr);
+        if (!hotkey) return -1;
+        SendMessageW(hotkey, HKM_SETHOTKEY, HotkeyControlValue(g_settings.hotkey), 0);
         ApplyFont(hotkey,g_font_body);
         MakeLabel(window,421,L"ПРОФИЛЬ ОБРАБОТКИ",g_font_label);
         HWND profile=CreateWindowW(L"COMBOBOX",nullptr,WS_CHILD | WS_VISIBLE | WS_TABSTOP |
@@ -801,13 +855,21 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
     case WM_DRAWITEM: DrawActionButton(reinterpret_cast<const DRAWITEMSTRUCT*>(lparam));return TRUE;
     case WM_COMMAND:
         if (LOWORD(wparam) == kSettingsSave) {
-            const int next_hotkey = static_cast<int>(SendMessageW(GetDlgItem(window, kComboHotkey), CB_GETCURSEL, 0, 0));
+            const HotkeyChord next_hotkey = ReadHotkeyControl(GetDlgItem(window, kHotkeyInput));
             const int next_profile = static_cast<int>(SendMessageW(GetDlgItem(window, kComboProfile), CB_GETCURSEL, 0, 0));
-            if (next_hotkey < 0 || next_hotkey > 2 || next_profile < 0 || next_profile > 2) return 0;
-            if ((!g_hotkey_registered || next_hotkey != g_settings.hotkey) &&
-                !RegisterChosenHotkey(next_hotkey)) {
-                MessageBoxW(window, L"Сочетание занято другой программой. Выберите другое.",
-                            L"CopyFix", MB_ICONWARNING);
+            if (next_profile < 0 || next_profile > 2) return 0;
+            if (!ValidHotkey(next_hotkey)) {
+                MessageBoxW(window,
+                    L"Нажмите Ctrl или Alt вместе с другой клавишей (Shift — по желанию). "
+                    L"Одиночные клавиши, Win, F12 и кнопки мыши не поддерживаются.",
+                    L"CopyFix", MB_OK | MB_ICONWARNING);
+                return 0;
+            }
+            if (!RegisterChosenHotkey(next_hotkey)) {
+                MessageBoxW(window,
+                    L"Не удалось зарегистрировать сочетание: оно занято или "
+                    L"зарезервировано Windows. Прежняя комбинация продолжает работать.",
+                    L"CopyFix", MB_OK | MB_ICONWARNING);
                 return 0;
             }
             g_settings.hotkey = next_hotkey;
@@ -894,7 +956,12 @@ LRESULT CALLBACK MessageProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
         return 0;
     }
     case WM_HOTKEY:
-        if (wparam == g_hotkey_id) { FixClipboard(false); return 0; }
+        if (wparam == g_hotkey_id) {
+            // Shortcut capture must not accidentally process the clipboard.
+            if (!g_settings_window || GetForegroundWindow() != g_settings_window)
+                FixClipboard(false);
+            return 0;
+        }
         break;
     case kTrayMessage:
         if (LOWORD(lparam) == WM_CONTEXTMENU || LOWORD(lparam) == NIN_SELECT ||
@@ -947,6 +1014,13 @@ int WINAPI wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE, _In_ PWSTR, _In
         return 0;
     }
     LoadSettings();
+    const INITCOMMONCONTROLSEX controls{sizeof(INITCOMMONCONTROLSEX), ICC_HOTKEY_CLASS};
+    if (!InitCommonControlsEx(&controls)) {
+        MessageBoxW(nullptr, L"Не удалось загрузить системное поле горячей клавиши.",
+                    L"CopyFix", MB_ICONERROR | MB_OK);
+        CloseHandle(g_instance_mutex);
+        return 1;
+    }
     g_richedit_module = LoadLibraryW(L"Msftedit.dll");
     if (!g_richedit_module) {
         MessageBoxW(nullptr, L"Не удалось загрузить системный редактор Msftedit.dll.",
