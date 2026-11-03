@@ -8,6 +8,19 @@
 #include <iostream>
 
 namespace {
+bool g_saw_warning = false;
+LRESULT CALLBACK AutoDismissWarning(int code, WPARAM wparam, LPARAM lparam) {
+    if (code == HCBT_ACTIVATE) {
+        const HWND dialog = reinterpret_cast<HWND>(wparam);
+        wchar_t title[96]{};
+        GetWindowTextW(dialog, title, static_cast<int>(std::size(title)));
+        if (wcscmp(title, L"CopyFix — горячая клавиша") == 0) {
+            g_saw_warning = true;
+            PostMessageW(dialog, WM_COMMAND, IDOK, 0);
+        }
+    }
+    return CallNextHookEx(nullptr, code, wparam, lparam);
+}
 struct Cleanup {
     bool created_key = false;
     HWND blocker = nullptr;
@@ -125,30 +138,8 @@ int main() {
     LoadSettings();
     if (g_settings.hotkey != custom) { RegCloseKey(key); return fail(16); }
 
-    // Event-driven capture must reconstruct a chord even when Windows consumes
-    // regular key messages, without consulting GetAsyncKeyState.
-    ShortcutCapture capture;
-    if (capture.Consume(VK_CONTROL, false).key ||
-        capture.Consume(VK_MENU, false).key ||
-        capture.Consume(VK_F8, false) != HotkeyChord{MOD_CONTROL | MOD_ALT, VK_F8} ||
-        capture.Consume(VK_F8, false).key ||
-        capture.Consume(VK_F8, true).key ||
-        capture.Consume(VK_F8, false) != HotkeyChord{MOD_CONTROL | MOD_ALT, VK_F8})
-        return fail(17);
-    capture.Consume(VK_F8, true);
-    capture.Consume(VK_MENU, true);
-    if (capture.Consume(L'Q', false) != HotkeyChord{MOD_CONTROL, L'Q'})
-        return fail(18);
-    capture.Reset();
-    if (capture.Consume(L'Q', false) != HotkeyChord{0, L'Q'} ||
-        capture.Consume(VK_LWIN, false).key ||
-        capture.Consume(L'N', false).key ||
-        capture.Consume(VK_LWIN, true).key)
-        return fail(19);
-    wchar_t label[128]{};
-    FormatHotkey(custom, label);
-    if (!wcsstr(label, L"Ctrl") || !wcsstr(label, L"Shift") ||
-        !wcsstr(label, L"F8")) return fail(20);
+    // Every supported keyboard option must be selectable without generating
+    // a physical chord; Windows may consume occupied global shortcuts.
     const HotkeyChord examples[] = {
         {MOD_CONTROL, L'K'}, {MOD_ALT, L'9'},
         {MOD_CONTROL | MOD_ALT | MOD_SHIFT, VK_F8},
@@ -157,14 +148,13 @@ int main() {
         {MOD_ALT | MOD_SHIFT, VK_OEM_3}
     };
     for (const auto& example : examples) {
-        if (!ValidHotkey(example) || DecodeHotkey(EncodeHotkey(example)) != example)
-            return fail(20);
-        FormatHotkey(example, label);
-        if (label[0] == L'\0') return fail(20);
+        if (!ValidHotkey(example) ||
+            DecodeHotkey(EncodeHotkey(example)) != example)
+            return fail(17);
     }
     if (DecodeHotkey(1) != HotkeyChord{MOD_CONTROL | MOD_SHIFT, VK_F9} ||
         DecodeHotkey(2) != HotkeyChord{MOD_CONTROL | MOD_ALT, L'C'} ||
-        !IsExtendedHotkeyKey(VK_LEFT) || IsExtendedHotkeyKey(VK_F8))
+        ValidHotkey({MOD_CONTROL, L'V'}))
         return fail(20);
     RegCloseKey(key);
 
@@ -199,43 +189,32 @@ int main() {
     wchar_t feedback[128]{};
     const HWND status = GetDlgItem(g_settings_window, kSettingsFeedback);
     HWND editor = GetDlgItem(g_settings_window, kHotkeyInput);
-    wchar_t visible[128]{}, expected[128]{};
-    FormatHotkey(g_settings.hotkey, expected);
-    if (bounds.left != expectedX || bounds.top != expectedY ||
-        !status || GetWindowTextW(status, feedback, 128) != 0 ||
-        !editor || !GetWindowTextW(editor, visible, 128) ||
-        wcscmp(visible, expected) != 0) return fail(25);
+    if (bounds.left != expectedX || bounds.top != expectedY || !status ||
+        GetWindowTextW(status, feedback, 128) != 0 || !editor)
+        return fail(25);
     wchar_t editorClass[32]{};
     GetClassNameW(editor, editorClass, static_cast<int>(std::size(editorClass)));
-    if (_wcsicmp(editorClass, L"Edit") != 0) return fail(25);
-    if (GetFocus() != editor) return fail(29);
-
-    // A real WM_KEYDOWN travels through the EDIT subclass, then the settings
-    // transaction. This catches the previously untested "keys do nothing" bug.
-    BYTE keysBefore[256]{}, keysDuring[256]{};
-    if (!GetKeyboardState(keysBefore)) return fail(30);
-    std::copy(std::begin(keysBefore), std::end(keysBefore),
-              std::begin(keysDuring));
-    keysDuring[VK_CONTROL] = 0x80;
-    keysDuring[VK_SHIFT] = 0x80;
-    if (!SetKeyboardState(keysDuring)) return fail(31);
-    SendMessageW(editor, WM_KEYDOWN, VK_F8, 0);
-    bool handledCapture = false;
-    MSG captureMessage{};
-    while (PeekMessageW(&captureMessage, g_settings_window,
-                        kSettingsNormalKeyMessage, kSettingsNormalKeyMessage, PM_REMOVE)) {
-        DispatchMessageW(&captureMessage);
-        handledCapture = true;
+    if (_wcsicmp(editorClass, L"ComboBox") != 0) return fail(25);
+    if (!GetDlgItem(g_settings_window, kSettingsCtrl) ||
+        !GetDlgItem(g_settings_window, kSettingsAlt) ||
+        !GetDlgItem(g_settings_window, kSettingsShift) ||
+        ReadHotkeyChoice(g_settings_window) != g_settings.hotkey)
+        return fail(29);
+    const int count = static_cast<int>(SendMessageW(editor, CB_GETCOUNT, 0, 0));
+    if (count < 80) return fail(30);
+    int f8Index = -1;
+    for (int index = 0; index < count; ++index) {
+        if (SendMessageW(editor, CB_GETITEMDATA, index, 0) == VK_F8)
+            f8Index = index;
     }
-    SetKeyboardState(keysBefore);
-    wchar_t changed[128]{};
-    const HotkeyChord expectedChord{MOD_CONTROL | MOD_SHIFT, VK_F8};
-    FormatHotkey(expectedChord, expected);
-    if (!handledCapture || g_settings_candidate != expectedChord ||
-        !GetWindowTextW(editor, changed, 128) || wcscmp(changed, expected) != 0)
+    if (f8Index < 0) return fail(31);
+    SendDlgItemMessageW(g_settings_window, kSettingsShift, BM_SETCHECK, BST_CHECKED, 0);
+    SendDlgItemMessageW(g_settings_window, kSettingsAlt, BM_SETCHECK, BST_UNCHECKED, 0);
+    SendMessageW(editor, CB_SETCURSEL, f8Index, 0);
+    if (ReadHotkeyChoice(g_settings_window) != HotkeyChord{MOD_CONTROL | MOD_SHIFT, VK_F8})
         return fail(32);
-    SendMessageW(editor, WM_KEYUP, VK_F8, 0);
-    ResetShortcutEditor(g_settings_window);
+    ResetHotkeyChoice(g_settings_window);
+    if (ReadHotkeyChoice(g_settings_window) != g_settings.hotkey) return fail(33);
     DestroyWindow(g_settings_window);
     if (g_settings_window || (raw_registered && g_settings_raw_input)) return fail(26);
     // Global hotkeys may be used by the CI desktop; only enforce registration
@@ -251,24 +230,35 @@ int main() {
         cleanup.blocked_combo = RegisterHotKey(
             cleanup.blocker, 750, blocked.modifiers | MOD_NOREPEAT, blocked.key) != FALSE;
         if (cleanup.blocked_combo) {
-            // Verify the editor never loses its displayed value on a conflict.
             OpenSettings();
             if (!g_settings_window) return fail(27);
-            HWND input = GetDlgItem(g_settings_window, kHotkeyInput);
-            wchar_t before[128]{}, after[128]{};
-            if (!input || !GetWindowTextW(input, before, 128)) return fail(28);
-            if (HotkeyAvailable(blocked) || !HotkeyAvailable(original) ||
-                AcceptShortcutCandidate(g_settings_window, blocked) ||
-                RegisterChosenHotkey(blocked) || !g_hotkey_registered ||
+            const HWND combo = GetDlgItem(g_settings_window, kHotkeyInput);
+            int blockedIndex = -1;
+            const int total = static_cast<int>(SendMessageW(combo, CB_GETCOUNT, 0, 0));
+            for (int i = 0; i < total; ++i)
+                if (SendMessageW(combo, CB_GETITEMDATA, i, 0) == blocked.key)
+                    blockedIndex = i;
+            if (blockedIndex < 0) return fail(28);
+            SendDlgItemMessageW(g_settings_window, kSettingsCtrl, BM_SETCHECK, BST_CHECKED, 0);
+            SendDlgItemMessageW(g_settings_window, kSettingsAlt, BM_SETCHECK, BST_UNCHECKED, 0);
+            SendDlgItemMessageW(g_settings_window, kSettingsShift, BM_SETCHECK, BST_CHECKED, 0);
+            SendMessageW(combo, CB_SETCURSEL, blockedIndex, 0);
+            if (ReadHotkeyChoice(g_settings_window) != blocked) return fail(34);
+            g_saw_warning = false;
+            HHOOK hook = SetWindowsHookExW(WH_CBT, AutoDismissWarning, nullptr, GetCurrentThreadId());
+            if (!hook) return fail(35);
+            SendMessageW(g_settings_window, WM_COMMAND, kSettingsSave, 0);
+            UnhookWindowsHookEx(hook);
+            if (!g_saw_warning || !IsWindow(g_settings_window) ||
                 g_hotkey_id != original_id || g_registered_hotkey != original ||
-                !GetWindowTextW(input, after, 128) || wcscmp(before, after) != 0)
-                return fail(13);
+                ReadHotkeyChoice(g_settings_window) != g_settings.hotkey)
+                return fail(36);
             DestroyWindow(g_settings_window);
         }
     }
     UnregisterClassW(L"CopyFixSettings", g_instance);
     DeleteObject(g_canvas_brush);
     g_canvas_brush = nullptr;
-    std::cout << "PASS deterministic Raw Input capture, occupied-shortcut editor preservation, settings centering and hotkey rollback\n";
+    std::cout << "PASS full native hotkey choices, occupied-shortcut warning, saved-setting rollback and settings centering\n";
     return 0;
 }
