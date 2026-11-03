@@ -207,6 +207,20 @@ int main() {
     if (oneline.text != L"Один Два Три" || !oneline.requires_confirmation) ++failed;
     const auto protected_line = copyfix::OneLine(L"1. Item one\n2. Item two");
     if (!protected_line.protected_structure || protected_line.text != L"1. Item one\n2. Item two") ++failed;
+    const std::wstring markdown_break = L"Первая строка с Markdown-пробелами  \nВторая строка";
+    if (!copyfix::IsStructured(markdown_break) ||
+        !Clean(markdown_break, Profile::Deep).protected_structure ||
+        Clean(markdown_break, Profile::Deep).text != markdown_break) {
+        std::cerr << "FAIL Markdown hard line-break preservation\n";
+        ++failed;
+    }
+    std::wstring invalid_structured = L"{";
+    invalid_structured.push_back(static_cast<wchar_t>(0xD800));
+    const auto invalid_one_line = copyfix::OneLine(invalid_structured);
+    if (invalid_one_line.text != invalid_structured || !invalid_one_line.protected_structure) {
+        std::cerr << "FAIL invalid UTF-16 with structured OneLine source\n";
+        ++failed;
+    }
     if (copyfix::IsWellFormedUtf16(std::wstring(1, static_cast<wchar_t>(0xD800)))) ++failed;
     if constexpr (sizeof(wchar_t) == 2) {
         std::wstring smile;
