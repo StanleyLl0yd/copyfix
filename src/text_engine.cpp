@@ -140,7 +140,7 @@ bool LooksLikeProseEnumeration(const std::wstring& line) noexcept {
     if (end != L'.' && end != L'!' && end != L'?') return false;
     const auto comma = line.find(L',');
     if (comma == std::wstring::npos || comma + 1 >= line.size()) return false;
-    const auto first = line.substr(0, comma);
+    const auto first = std::wstring_view{line}.substr(0, comma);
     const auto space = first.find(L' ');
     if (space == std::wstring::npos || space == 0 || space + 1 == first.size()) return false;
     for (auto pos = comma; pos != std::wstring::npos; pos = line.find(L',', pos + 1)) {
@@ -183,7 +183,7 @@ bool IsUpper(wchar_t c) noexcept {
 bool KeepCompoundHyphen(const std::wstring& prior, wchar_t next) noexcept {
     if (prior.empty() || prior.back() != L'-') return false;
     const auto start = prior.find_last_of(L" \t([{");
-    const auto stem = prior.substr(start == std::wstring::npos ? 0 : start + 1,
+    const auto stem = std::wstring_view{prior}.substr(start == std::wstring::npos ? 0 : start + 1,
                                    prior.size() - (start == std::wstring::npos ? 0 : start + 1) - 1);
     // All-uppercase initial word in a proper name: keep the dash.
     if (IsUpper(next) && (stem == L"Санкт" || stem == L"Нью" || stem == L"Усть" ||
