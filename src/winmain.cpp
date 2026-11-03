@@ -315,6 +315,7 @@ bool ReadUnderLock(ClipSnapshot& result) {
     GlobalUnlock(handle);
     if (!success) return false;
     result.sequence = GetClipboardSequenceNumber();
+    if (result.sequence == 0) return false;
     result.rich_formats = false;
     UINT format = 0;
     while ((format = EnumClipboardFormats(format)) != 0) {
@@ -387,10 +388,6 @@ bool WriteIfUnchanged(const ClipSnapshot& expected, const std::wstring& text,
     return written;
 }
 
-std::wstring ToClipboardLineEndings(const std::wstring& source) {
-    return copyfix::ToWindowsLineEndings(source);
-}
-
 // Compare clipboard-normalized CRLF without allocating a second text buffer.
 bool EqualsClipboardLineEndings(std::wstring_view source, std::wstring_view actual) noexcept {
     std::size_t offset = 0;
@@ -413,7 +410,7 @@ void ClearUndo() { g_undo = Undo{}; }
 
 void AcceptPending() {
     try {
-        const auto final_text = ToClipboardLineEndings(g_pending.after.text);
+        const auto final_text = copyfix::ToWindowsLineEndings(g_pending.after.text);
         // Prepare Undo before mutating clipboard; OOM must not leave an
         // already-modified clipboard without a valid Undo snapshot.
         Undo next_undo;
@@ -546,9 +543,17 @@ LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
                   L"Розовый: удалено  •  Зелёный: добавлено. Подсветка пробелов доступна отдельно.", g_font_caption);
         MakeLabel(window, kPreviewBeforeLabel, L"ИСХОДНЫЙ ТЕКСТ", g_font_label);
         MakeLabel(window, kPreviewAfterLabel, L"РЕЗУЛЬТАТ ОБРАБОТКИ", g_font_label);
-        const std::wstring status = std::to_wstring(g_pending.after.changes) +
-                                    L" изменений  |  Профиль: " + profile;
-        MakeLabel(window, kPreviewNote, status.c_str(), g_font_caption);
+        wchar_t status[128]{};
+        std::size_t number = g_pending.after.changes;
+        std::size_t digits = 0;
+        do {
+            status[digits++] = static_cast<wchar_t>(L'0' + number % 10);
+            number /= 10;
+        } while (number);
+        std::reverse(status, status + digits);
+        wcscat_s(status, L" изменений  |  Профиль: ");
+        wcscat_s(status, profile);
+        MakeLabel(window, kPreviewNote, status, g_font_caption);
         const DWORD style = WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_TABSTOP | ES_MULTILINE |
                             ES_AUTOVSCROLL | ES_READONLY | ES_NOHIDESEL;
         HWND before = CreateWindowExW(WS_EX_CLIENTEDGE, MSFTEDIT_CLASS, L"",

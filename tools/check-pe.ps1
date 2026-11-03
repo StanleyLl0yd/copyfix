@@ -39,7 +39,8 @@ $headers -split '[\r\n]+' | Where-Object { $_ -match '(?i)DLL characteristics|dy
 Write-Host 'Relevant PE load configuration:'
 $loadconfig -split '[\r\n]+' | Where-Object { $_ -match '(?i)guard|cf function|load config' } | Select-Object -First 24 | ForEach-Object { Write-Host $_ }
 $bad = @('VCRUNTIME140.dll','VCRUNTIME140_1.dll','MSVCP140.dll','ucrtbase.dll',
-         'hostfxr.dll','hostpolicy.dll','coreclr.dll')
+         'hostfxr.dll','hostpolicy.dll','coreclr.dll',
+         'WINHTTP.dll','WININET.dll','WS2_32.dll','URLMON.dll')
 foreach ($name in $bad) {
     if ($imports -match [regex]::Escape($name)) { throw "Unexpected dynamic runtime: $name" }
 }

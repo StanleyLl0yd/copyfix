@@ -33,6 +33,10 @@ int main() {
     g_preview = preview;
     const auto before = GetDlgItem(preview, kPreviewBeforeEdit);
     const auto after = GetDlgItem(preview, kPreviewAfterEdit);
+    wchar_t status[128]{};
+    if (!GetWindowTextW(GetDlgItem(preview, kPreviewNote), status, 128) ||
+        wcsstr(status, L"изменений") == nullptr || wcsstr(status, L"глубокий") == nullptr)
+        return Fail(34);
     // A missing/unavailable RichEdit is a hard preview failure, never an
     // implicit approval or a destructive clipboard write.
     if (SetPreviewRichText(nullptr, L"текст") ||
