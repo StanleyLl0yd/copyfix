@@ -274,7 +274,8 @@ bool IsStructured(const std::wstring& s) {
     if (lines.size() > 1) {
         // Markdown hard line breaks: two trailing spaces are intentional.
         for (const auto& line : lines) {
-            if (line.size() >= 2 && line.substr(line.size() - 2) == L"  ") return true;
+            if (line.size() >= 2 && line[line.size() - 2] == L' ' &&
+                line.back() == L' ') return true;
         }
         // YAML-style repeated key/value lines; don't mistake a single colon in prose.
         std::size_t yaml_lines = 0;
@@ -364,8 +365,11 @@ std::wstring ToWindowsLineEndings(const std::wstring& source) {
 
 Result OneLine(const std::wstring& source) {
     Result r{source};
-    if (source.empty() || !IsWellFormedUtf16(source) || IsStructured(source)) {
-        r.protected_structure = IsStructured(source);
+    if (source.empty()) return r;
+    const bool well_formed = IsWellFormedUtf16(source);
+    const bool structured = IsStructured(source);
+    if (!well_formed || structured) {
+        r.protected_structure = structured;
         return r;
     }
     r = Clean(source, Profile::Gentle);
