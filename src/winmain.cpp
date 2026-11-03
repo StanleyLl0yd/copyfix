@@ -64,8 +64,27 @@ constexpr wchar_t kAboutDescription[] =
     L"Автоматически сохраняет структурированные фрагменты.\n"
     L"Изменение форматов HTML/RTF требует подтверждения.";
 
-HRESULT CALLBACK AboutCallback(HWND window, UINT notification, WPARAM, LPARAM data, LONG_PTR) noexcept {
-    if (notification == TDN_HYPERLINK_CLICKED && data) {
+void CenterAboutWindow(HWND dialog, HMONITOR monitor) noexcept {
+    MONITORINFO info{sizeof(info)};
+    RECT window{};
+    if (!monitor || !GetMonitorInfoW(monitor, &info) || !GetWindowRect(dialog, &window))
+        return;
+    const int width = window.right - window.left;
+    const int height = window.bottom - window.top;
+    const int workWidth = info.rcWork.right - info.rcWork.left;
+    const int workHeight = info.rcWork.bottom - info.rcWork.top;
+    if (width <= 0 || height <= 0 || workWidth <= 0 || workHeight <= 0)
+        return;
+    const int x = info.rcWork.left + (workWidth > width ? (workWidth - width) / 2 : 0);
+    const int y = info.rcWork.top + (workHeight > height ? (workHeight - height) / 2 : 0);
+    SetWindowPos(dialog, nullptr, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+}
+
+HRESULT CALLBACK AboutCallback(HWND window, UINT notification, WPARAM, LPARAM data,
+                              LONG_PTR callbackData) noexcept {
+    if (notification == TDN_CREATED) {
+        CenterAboutWindow(window, reinterpret_cast<HMONITOR>(callbackData));
+    } else if (notification == TDN_HYPERLINK_CLICKED && data) {
         const auto* url = reinterpret_cast<const wchar_t*>(data);
         if (wcscmp(url, kAboutWebsite) == 0)
             ShellExecuteW(window, L"open", kAboutWebsite, nullptr, nullptr, SW_SHOWNORMAL);
@@ -74,10 +93,15 @@ HRESULT CALLBACK AboutCallback(HWND window, UINT notification, WPARAM, LPARAM da
 }
 
 void ShowAbout(HWND parent) noexcept {
+    POINT cursor{};
+    const HMONITOR monitor = GetCursorPos(&cursor)
+        ? MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST)
+        : MonitorFromWindow(parent, MONITOR_DEFAULTTONEAREST);
     TASKDIALOGCONFIG config{};
     config.cbSize = sizeof(config);
     config.hwndParent = parent;
-    config.dwFlags = TDF_ENABLE_HYPERLINKS | TDF_POSITION_RELATIVE_TO_WINDOW;
+    config.dwFlags = TDF_ENABLE_HYPERLINKS;
+    config.lpCallbackData = reinterpret_cast<LONG_PTR>(monitor);
     config.dwCommonButtons = TDCBF_OK_BUTTON;
     config.pszWindowTitle = L"О CopyFix";
     config.pszMainInstruction = kAboutVersion;

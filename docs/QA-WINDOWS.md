@@ -19,6 +19,7 @@
 - [ ] Download the latest GitHub Actions ZIP and confirm the only file is `CopyFix.exe`.
 - [ ] Verify the two-column preview preserves blank lines, sentences, spaces, Unicode emoji and line endings (RichEdit internal CR paragraphs and CRLF in clipboard).
 - [ ] Resize preview; inspect controls at 100%, 125%, 150% and 200% display scaling. Verify keyboard Tab and Escape.
+- [ ] Open `О программе` from the tray on each monitor: the About window is centered within that monitor's work area, accounting for the actual dialog width and height (including negative monitor coordinates and taskbars). Confirm 100%/125%/150%/200% DPI, version `CopyFix 1.0.0`, hyperlink click and keyboard access.
 - [ ] Verify settings saved in `HKEY_CURRENT_USER\Software\CopyFix` (`Profile`, `Hotkey` DWORD). Restart and confirm persistence.
 - [ ] Confirm no `copyfix.ini` is created or read; test running from a read-only directory.
 - [ ] Check that cancelling preview leaves the clipboard unchanged, and that Undo remains functional.
