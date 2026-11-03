@@ -78,6 +78,8 @@ Win32 clipboard replacement is not transactional. When `EmptyClipboard` succeeds
 - [ ] Occupied global chord (use PowerShell to hold Ctrl+Alt+F8): warn immediately during shortcut entry, restore the old chord rather than leaving «Нет», keep the old registration and registry unchanged.
 - [ ] Repeatedly press an externally occupied chord (e.g., Ctrl+Alt+F8): each fresh key-down sequence produces a warning; the field always shows the previous chord (never «Нет») and the old shortcut remains working.
 - [ ] With the capture field focused, alternate valid Ctrl+Shift+F8, occupied Ctrl+Alt+F8, then valid Ctrl+Alt+N; confirm no stale warning, typematic duplicate dialogs, or missed modifier releases, and Save-time registration race remains guarded.
+- [ ] Immediately after opening Settings, press an ordinary allowed chord: the field must update (not remain static). After dismissing a conflict warning, focus must return to the field and a second/third attempt must work.
+- [ ] Simulate a normal WM_KEYDOWN through the native EDIT subclass in CI and assert it updates the visible field and pending chord; check fallback if Raw Input cannot be registered.
 - [ ] Change focus during capture, close/reopen Settings, and press the active shortcut while Settings is foreground: no clipboard modification and no lingering Raw Input capture.
 - [ ] Cancel tentative changes and reject Ctrl+V (plus common clipboard/editing chords), unmodified, Shift-only, Win/F12/mouse-button combinations.
 - [ ] Press the current active shortcut while Settings is foreground: clipboard unchanged.
