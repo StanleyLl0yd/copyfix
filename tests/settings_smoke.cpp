@@ -208,6 +208,34 @@ int main() {
     wchar_t editorClass[32]{};
     GetClassNameW(editor, editorClass, static_cast<int>(std::size(editorClass)));
     if (_wcsicmp(editorClass, L"Edit") != 0) return fail(25);
+    if (GetFocus() != editor) return fail(29);
+
+    // A real WM_KEYDOWN travels through the EDIT subclass, then the settings
+    // transaction. This catches the previously untested "keys do nothing" bug.
+    BYTE keysBefore[256]{}, keysDuring[256]{};
+    if (!GetKeyboardState(keysBefore)) return fail(30);
+    std::copy(std::begin(keysBefore), std::end(keysBefore),
+              std::begin(keysDuring));
+    keysDuring[VK_CONTROL] = 0x80;
+    keysDuring[VK_SHIFT] = 0x80;
+    if (!SetKeyboardState(keysDuring)) return fail(31);
+    SendMessageW(editor, WM_KEYDOWN, VK_F8, 0);
+    bool handledCapture = false;
+    MSG captureMessage{};
+    while (PeekMessageW(&captureMessage, g_settings_window,
+                        kSettingsNormalKeyMessage, kSettingsNormalKeyMessage, PM_REMOVE)) {
+        DispatchMessageW(&captureMessage);
+        handledCapture = true;
+    }
+    SetKeyboardState(keysBefore);
+    wchar_t changed[128]{};
+    const HotkeyChord expectedChord{MOD_CONTROL | MOD_SHIFT, VK_F8};
+    FormatHotkey(expectedChord, expected);
+    if (!handledCapture || g_settings_candidate != expectedChord ||
+        !GetWindowTextW(editor, changed, 128) || wcscmp(changed, expected) != 0)
+        return fail(32);
+    SendMessageW(editor, WM_KEYUP, VK_F8, 0);
+    ResetShortcutEditor(g_settings_window);
     DestroyWindow(g_settings_window);
     if (g_settings_window || (raw_registered && g_settings_raw_input)) return fail(26);
     // Global hotkeys may be used by the CI desktop; only enforce registration
