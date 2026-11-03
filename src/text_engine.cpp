@@ -262,35 +262,26 @@ bool IsStructured(const std::wstring& s) {
     if (s.find(L'\0') != std::wstring::npos) return true;
     if (s.find(L'\t') != std::wstring::npos) return true;
     const auto lines = SplitLines(s);
+    const bool multiline = lines.size() > 1;
+    std::size_t yaml_lines = 0;
+    std::size_t comma_lines = 0;
     for (const auto& line : lines) {
         if (HasSuspiciousStructure(line)) return true;
-    }
-    // Even a single CSV row may have significant whitespace in its fields.
-    for (const auto& line : lines) {
         std::size_t commas = 0;
         for (const auto c : line) if (c == L',') ++commas;
-        if (commas >= 2 && !LooksLikeProseEnumeration(line)) return true;
-    }
-    if (lines.size() > 1) {
-        // Markdown hard line breaks: two trailing spaces are intentional.
-        for (const auto& line : lines) {
+        // A single CSV row is protected; prose-like enumeration is not.
+        if (commas >= 2) {
+            if (!LooksLikeProseEnumeration(line)) return true;
+            ++comma_lines;
+        }
+        if (multiline) {
             if (line.size() >= 2 && line[line.size() - 2] == L' ' &&
                 line.back() == L' ') return true;
+            if (line.find(L":  ") != std::wstring::npos) ++yaml_lines;
         }
-        // YAML-style repeated key/value lines; don't mistake a single colon in prose.
-        std::size_t yaml_lines = 0;
-        for (const auto& line : lines) if (line.find(L":  ") != std::wstring::npos) ++yaml_lines;
-        if (yaml_lines >= 2) return true;
-        // Common CSV: repeated delimiters on adjacent rows.
-        std::size_t comma_lines = 0;
-        for (const auto& line : lines) {
-            std::size_t commas = 0;
-            for (const auto c : line) if (c == L',') ++commas;
-            if (commas >= 2) ++comma_lines;
-        }
-        if (comma_lines >= 2) return true;
     }
-    return false;
+    // Repeated prose-shaped CSV rows and YAML keys remain protected.
+    return multiline && (comma_lines >= 2 || yaml_lines >= 2);
 }
 
 Result Clean(const std::wstring& source, Profile profile) {
