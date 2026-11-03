@@ -193,6 +193,8 @@ UINT g_hotkey_id = kHotkeyA;
 UINT g_taskbar_created = 0;
 bool g_hotkey_registered = false;
 HotkeyChord g_registered_hotkey;
+// Injectable only for deterministic window tests; production uses MessageBoxW.
+auto g_hotkey_warning_dialog = &MessageBoxW;
 int Scale(int px, int dpi) noexcept { return MulDiv(px, dpi, 96); }
 HFONT MakeFont(int points, int weight, int dpi) {
     return CreateFontW(-MulDiv(points, dpi, 72), 0, 0, 0, weight,
@@ -933,7 +935,8 @@ void ShowShortcutWarning(HWND window, bool occupied) noexcept {
           L"и клавишу из списка.";
     if (HWND status = GetDlgItem(window, kSettingsFeedback))
         SetWindowTextW(status, message);
-    MessageBoxW(window, message, L"CopyFix — горячая клавиша", MB_OK | MB_ICONWARNING);
+    g_hotkey_warning_dialog(window, message, L"CopyFix — горячая клавиша",
+                            MB_OK | MB_ICONWARNING);
 }
 
 void LayoutSettings(HWND window) {
