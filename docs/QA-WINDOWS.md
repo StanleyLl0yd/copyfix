@@ -1,6 +1,6 @@
 # CopyFix Windows QA checklist
 
-**Important**: The owner [reported PASS on 2026-11-03](https://github.com/StanleyLl0yd/copyfix/issues/7) for 15/15 functional/UX cases, clean and working Windows 10/11 systems, and the listed desktop stress/visual cases. These were owner attestations on earlier builds, not independent measurements on the newest About/metadata changes. Exact OS builds and installed runtime inventories were not recorded. The unchecked items below remain a reusable QA checklist, not a claim that each test was independently rerun; this is **not** a 1.0.0 release authorization.
+**Important**: Owner [accepted Windows 1.0.0 on 2026-11-03](https://github.com/StanleyLl0yd/copyfix/issues/7), including 15/15 functional/UX cases, clean and working Windows 10/11, desktop stress/visual cases, and final About/version/link/keyboard/DPI/monitor-centering changes. Published [v1.0.0](https://github.com/StanleyLl0yd/copyfix/releases/tag/v1.0.0) passed exact-main CI 9/9 Windows and 3/3 Clang sanitizer checks. Exact desktop OS builds and runtime inventory were not recorded. Unchecked entries below remain a reusable per-build checklist, not a denial of owner acceptance.
 
 ## Release build (Windows 10 and Windows 11, x64)
 

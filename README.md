@@ -2,7 +2,7 @@
 
 **CopyFix** - лёгкая автономная утилита для очистки скопированного текста в Windows. Работает локально, не отправляет текст в сеть, не записывает историю буфера обмена и не использует перехват клавиатуры.
 
-> Status: **Windows 1.0.0 release-candidate source / UNRELEASED**. Version is generated from CMake for About and Windows EXE VersionInfo; publishing a GitHub Release still requires **separate owner authorization** and final QA. The preceding audited `0.1.0` [exact-main CI #41625261532](https://github.com/StanleyLl0yd/copyfix/actions/runs/41625261532) passed Windows MSVC x64 `/MT` **8/8**, PE/ICO/VersionInfo checks, Clang ASan/UBSan **3/3** and fixture/archive validation. Existing clean/workstation Windows 10/11 acceptance predates the updated About hyperlink and the 1.0.0 candidate; version/link click/keyboard/DPI remain manual acceptance gates ([issue #7](https://github.com/StanleyLl0yd/copyfix/issues/7)). Code signing is deferred; any eventual published EXE must be described as **unsigned**.
+> Status: **Windows 1.0.0 RELEASED / ACCEPTED** — [official GitHub Release v1.0.0](https://github.com/StanleyLl0yd/copyfix/releases/tag/v1.0.0), one unsigned portable `CopyFix.exe` (288,256 bytes; SHA-256 `814A0949CB8F5D75F25A9A97C08AD34E5F5912DBD45655824C0CB72B82CB6D26`). [Protected squash PR #36](https://github.com/StanleyLl0yd/copyfix/pull/36) and [exact-main CI #41630516021](https://github.com/StanleyLl0yd/copyfix/actions/runs/41630516021) verified **9/9 Windows** and **3/3 Clang ASan/UBSan**. Owner accepted clean and working Windows 10/11 and the final About/version/link/centering checks; [Windows acceptance issue #7](https://github.com/StanleyLl0yd/copyfix/issues/7) **ACCEPTED**. Signing deferred; Windows may warn about the unsigned EXE.
 
 ## Use
 
@@ -30,7 +30,7 @@ cmake --build build --config Release --parallel
 ctest --test-dir build -C Release --output-on-failure
 ```
 
-The Windows GUI is `build/Release/CopyFix.exe`. Release uses C++20 and static MSVC runtime `/MT`; PE imports are checked by CI. Clean and working Windows 10/11 operation was owner-reported for the preceding build; exact OS builds/runtime inventories and the new About interaction are not independently documented. `tools/check-pe.ps1` checks imports and basic PE hardening and writes SHA-256 diagnostics.
+The Windows GUI is `build/Release/CopyFix.exe`. Release uses C++20 and static MSVC runtime `/MT`; PE imports are checked by CI. Windows 10/11 clean and working installations and the final About/version/link/monitor-centering changes were accepted by the owner; exact OS builds and installed runtime inventories are not independently documented. `tools/check-pe.ps1` checks imports and basic PE hardening and writes SHA-256 diagnostics.
 
 ## Portable configuration
 
@@ -47,7 +47,7 @@ The owner-approved canonical raster sources are checked into Git byte-for-byte:
 
 ## Windows interface and test ZIP
 
-The native Windows RichEdit preview (built-in `Msftedit.dll`, no bundled dependency) has side-by-side selectable text with pink highlights for deleted content, green highlights for added content and light neutral-tinted marks for whitespace-only changes. Toggle `↵ Показать настоящие переносы строк` to distinguish source hard line breaks from visual wrapping; markers are for viewing only and are not applied to the clipboard. Each pane retains its own approximate scroll position when markers are toggled. Actual clipboard serialization still uses CRLF; paragraph boundaries are preserved. The GitHub Actions test artifact ZIP contains **only `CopyFix.exe`**; PE audit results remain visible in CI logs. No installer or GitHub Release is produced.
+The native Windows RichEdit preview (built-in `Msftedit.dll`, no bundled dependency) has side-by-side selectable text with pink highlights for deleted content, green highlights for added content and light neutral-tinted marks for whitespace-only changes. Toggle `↵ Показать настоящие переносы строк` to distinguish source hard line breaks from visual wrapping; markers are for viewing only and are not applied to the clipboard. Each pane retains its own approximate scroll position when markers are toggled. Actual clipboard serialization still uses CRLF; paragraph boundaries are preserved. The GitHub Actions test artifact ZIP contains **only `CopyFix.exe`**; PE audit results remain visible in CI logs. The official [v1.0.0 GitHub Release](https://github.com/StanleyLl0yd/copyfix/releases/tag/v1.0.0) distributes a single unsigned `CopyFix.exe`; CI test ZIPs remain separate, one-EXE artifacts.
 
 ## Security and limitations
 
@@ -75,4 +75,4 @@ The native Windows RichEdit preview (built-in `Msftedit.dll`, no bundled depende
 - `tools/check-pe.ps1`: dependency, offline-import policy, PE security and hash diagnostics.
 - `tools/check-history-bundle.py`: CI-only historical Git bundle integrity and limited credential-pattern screening.
 
-Android (Kotlin + Compose) is **deferred until Windows 1.0 is accepted**. No backend, shared heavyweight framework, or network permission is planned.
+Windows 1.0 acceptance is complete. Android (Kotlin + Compose) is **not started**; a separate owner decision and scope are required before Android development. No backend, shared heavyweight framework, or network permission is planned.
