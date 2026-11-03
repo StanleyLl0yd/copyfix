@@ -210,10 +210,6 @@ int main() {
     if (_wcsicmp(editorClass, L"Edit") != 0) return fail(25);
     DestroyWindow(g_settings_window);
     if (g_settings_window || (raw_registered && g_settings_raw_input)) return fail(26);
-    DeleteObject(g_canvas_brush);
-    g_canvas_brush = nullptr;
-    UnregisterClassW(L"CopyFixSettings", g_instance);
-
     // Global hotkeys may be used by the CI desktop; only enforce registration
     // and rollback when the initial combination is actually available.
     const HotkeyChord original{MOD_CONTROL | MOD_ALT, VK_F9};
@@ -242,6 +238,9 @@ int main() {
             DestroyWindow(g_settings_window);
         }
     }
+    UnregisterClassW(L"CopyFixSettings", g_instance);
+    DeleteObject(g_canvas_brush);
+    g_canvas_brush = nullptr;
     std::cout << "PASS deterministic Raw Input capture, occupied-shortcut editor preservation, settings centering and hotkey rollback\n";
     return 0;
 }
