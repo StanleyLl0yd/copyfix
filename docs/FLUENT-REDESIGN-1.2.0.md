@@ -68,6 +68,14 @@ Changing the theme within Settings updates existing Settings, Preview and About 
 
 Manual acceptance remains necessary for automatic, forced light and forced dark with the three windows, Windows appearance changes in Auto, live Preview recoloring, controls and dropdowns at 100/150/200% DPI, keyboard focus and high-contrast behavior.
 
+## Dark About rendering correction (owner screenshots, 2026-11-05)
+
+Owner screenshots showed an opaque white 54x54 rectangle behind the About icon and white slivers at rounded action-button corners in forced-dark mode. Root causes were the default `SS_ICON` static-control background and owner-drawn rounded buttons that did not clear pixels outside `RoundRect` after a theme change.
+
+- About uses `SS_OWNERDRAW` and `DrawIconEx`, painting its current card background before drawing the **unchanged embedded canonical icon**. The icon stays centered and DPI-scaled; no artwork or ICO is modified.
+- Owner-drawn action buttons first clear their entire rect with the current theme's parent surface (About) or canvas (Settings/Preview), then paint rounded buttons. This removes stale light corners in dark mode without custom themes or external libraries.
+- A native About smoke test checks both light and dark offscreen icon/button corner pixels; real-Windows acceptance in both themes remains mandatory.
+
 ## Pending manual acceptance
 
 - [ ] Windows 11 light and dark, all **three** windows side-by-side against the approved mockups.
