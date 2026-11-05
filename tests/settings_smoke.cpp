@@ -50,11 +50,14 @@ int main() {
     Cleanup cleanup;
     g_instance = GetModuleHandleW(nullptr);
     g_settings = Settings{};
-    if (g_settings.profile != copyfix::Profile::Deep || g_settings.hotkey != HotkeyChord{})
+    if (g_settings.profile != copyfix::Profile::Deep ||
+        g_settings.hotkey != HotkeyChord{} ||
+        g_settings.language != copyfix::i18n::Language::System)
         return fail(2);
 
     g_settings.profile = copyfix::Profile::Smart;
     g_settings.hotkey = {MOD_CONTROL | MOD_ALT, L'C'};
+    g_settings.language = copyfix::i18n::Language::English;
     cleanup.created_key = true;  // Also clean a partially created key on failure.
     if (!SaveSettings()) return fail(3);
 
@@ -73,11 +76,21 @@ int main() {
         RegQueryValueExW(key, L"Hotkey", nullptr, &type,
                          reinterpret_cast<BYTE*>(&hotkey), &size) == ERROR_SUCCESS &&
         type == REG_DWORD && size == sizeof(DWORD) && hotkey == 2;
-    if (!valid_profile || !valid_hotkey) { RegCloseKey(key); return fail(5); }
+    type=0; size=sizeof(DWORD);
+    DWORD language=0;
+    const bool valid_language=
+        RegQueryValueExW(key,L"Language",nullptr,&type,
+                         reinterpret_cast<BYTE*>(&language),&size)==ERROR_SUCCESS &&
+        type==REG_DWORD && size==sizeof(DWORD) && language==2;
+    if (!valid_profile || !valid_hotkey || !valid_language) {
+        RegCloseKey(key); return fail(5);
+    }
 
     g_settings = Settings{};
     LoadSettings();
-    if (g_settings.profile != copyfix::Profile::Smart || g_settings.hotkey != HotkeyChord{MOD_CONTROL | MOD_ALT, L'C'}) {
+    if (g_settings.profile != copyfix::Profile::Smart ||
+        g_settings.hotkey != HotkeyChord{MOD_CONTROL | MOD_ALT, L'C'} ||
+        g_settings.language != copyfix::i18n::Language::English) {
         RegCloseKey(key); return fail(6);
     }
 
@@ -131,7 +144,22 @@ int main() {
     if (!SaveSettings()) { RegCloseKey(key); return fail(15); }
     g_settings = Settings{};
     LoadSettings();
-    if (g_settings.hotkey != custom) { RegCloseKey(key); return fail(16); }
+    if (g_settings.hotkey != custom ||
+        g_settings.language != copyfix::i18n::Language::English) {
+        RegCloseKey(key); return fail(16);
+    }
+    const DWORD invalidLanguage=99;
+    if (RegSetValueExW(key,L"Language",0,REG_DWORD,
+            reinterpret_cast<const BYTE*>(&invalidLanguage),
+            sizeof(invalidLanguage))!=ERROR_SUCCESS) {
+        RegCloseKey(key); return fail(55);
+    }
+    g_settings.language=copyfix::i18n::Language::System;
+    LoadSettings();
+    if (g_settings.language!=copyfix::i18n::Language::System) {
+        RegCloseKey(key); return fail(56);
+    }
+    g_settings.language=copyfix::i18n::Language::Russian;
 
     // Every supported keyboard option must be selectable without generating
     // a physical chord; Windows may consume occupied global shortcuts.
@@ -295,6 +323,37 @@ int main() {
     }
     const RECT comboRect=relative(kHotkeyInput);
     const RECT shiftRect=relative(kSettingsShift);
+    const HWND languageCombo=GetDlgItem(g_settings_window,kSettingsLanguageInput);
+    if (!languageCombo ||
+        SendMessageW(languageCombo,CB_GETCOUNT,0,0)!=3 ||
+        SendMessageW(languageCombo,CB_GETCURSEL,0,0)!=1)
+        return fail(57);
+    const RECT languageRect=relative(kSettingsLanguageInput);
+    const RECT languageSection=relative(kSettingsLanguageSection);
+    const RECT languageHint=relative(kSettingsLanguageHint);
+    if (languageRect.left<Scale(20,dpi) ||
+        languageSection.top<Scale(297,dpi) ||
+        languageHint.bottom>Scale(399,dpi) ||
+        languageHint.top<=languageSection.bottom ||
+        languageHint.bottom>=feedbackRect.top)
+        return fail(58);
+    SendMessageW(languageCombo,CB_SETCURSEL,2,0);
+    SendMessageW(g_settings_window,WM_COMMAND,
+        MAKEWPARAM(kSettingsLanguageInput,CBN_SELCHANGE),
+        reinterpret_cast<LPARAM>(languageCombo));
+    wchar_t settingsCaption[64]{};
+    GetWindowTextW(GetDlgItem(g_settings_window,kSettingsTitle),
+                   settingsCaption,static_cast<int>(std::size(settingsCaption)));
+    if (g_draft_language!=copyfix::i18n::Language::English ||
+        wcscmp(settingsCaption,L"Settings")!=0 ||
+        g_settings.language!=copyfix::i18n::Language::Russian)
+        return fail(59);
+    SendMessageW(languageCombo,CB_SETCURSEL,1,0);
+    SendMessageW(g_settings_window,WM_COMMAND,
+        MAKEWPARAM(kSettingsLanguageInput,CBN_SELCHANGE),
+        reinterpret_cast<LPARAM>(languageCombo));
+    if (g_draft_language!=copyfix::i18n::Language::Russian)
+        return fail(60);
     if (comboRect.left<=shiftRect.right ||
         comboRect.top>shiftRect.bottom ||
         comboRect.bottom<=comboRect.top) return fail(54);
@@ -334,6 +393,8 @@ int main() {
         g_settings.profile != copyfix::Profile::Deep) return fail(43);
     DestroyWindow(g_settings_window);
     if (g_settings_window) return fail(26);
+    if (g_settings.language!=copyfix::i18n::Language::Russian)
+        return fail(61);
     // Global hotkeys may be used by the CI desktop; only enforce registration
     // and rollback when the initial combination is actually available.
     const HotkeyChord original{MOD_CONTROL | MOD_ALT, VK_F9};
