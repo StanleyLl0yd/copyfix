@@ -766,8 +766,8 @@ void Notify(const wchar_t* message) {
 // claim that the utility is ready for keyboard use.
 void NotifyStartup(bool hotkey_registered) {
     Notify(hotkey_registered
-        ? L"CopyFix запущен и готов к работе."
-        : L"Горячая клавиша недоступна. Откройте настройки CopyFix.");
+        ? Tr(UiText::NotifyStartupOK)
+        : Tr(UiText::NotifyStartupFailed));
 }
 
 // Probe without touching the active shortcut. A successful probe is not a
@@ -934,10 +934,10 @@ void AcceptPending() {
             next_undo.after_sequence = sequence;
             next_undo.available = true;
             g_undo = std::move(next_undo);
-            Notify(L"Исправленный текст находится в буфере обмена.");
-        } else Notify(L"Запись не завершена. Проверьте содержимое буфера обмена.");
+            Notify(Tr(UiText::NotifyApplied));
+        } else Notify(Tr(UiText::NotifyWriteFailed));
     } catch (const std::bad_alloc&) {
-        Notify(L"Недостаточно памяти. Буфер не изменён.");
+        Notify(Tr(UiText::NotifyMemoryFailed));
     }
     ClearPending();
 }
@@ -1086,11 +1086,11 @@ LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
         InitWindowTheme(window);
         const wchar_t* profile = g_settings.profile == copyfix::Profile::Gentle ? L"бережный" :
                                  g_settings.profile == copyfix::Profile::Smart ? L"умный" : L"глубокий";
-        MakeLabel(window, kPreviewTitle, L"Проверьте изменения", g_font_title);
+        MakeLabel(window, kPreviewTitle, Tr(UiText::PreviewTitle), g_font_title);
         MakeLabel(window, kPreviewSubtitle,
-                  L"Розовый: удалено  •  Зелёный: добавлено. Подсветка пробелов доступна отдельно.", g_font_caption);
-        MakeLabel(window, kPreviewBeforeLabel, L"ИСХОДНЫЙ ТЕКСТ", g_font_label);
-        MakeLabel(window, kPreviewAfterLabel, L"РЕЗУЛЬТАТ ОБРАБОТКИ", g_font_label);
+                  Tr(UiText::PreviewSubtitle), g_font_caption);
+        MakeLabel(window, kPreviewBeforeLabel, Tr(UiText::SourceText), g_font_label);
+        MakeLabel(window, kPreviewAfterLabel, Tr(UiText::ResultText), g_font_label);
         wchar_t status[128]{};
         std::size_t number = g_pending.after.changes;
         std::size_t digits = 0;
@@ -1099,7 +1099,7 @@ LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
             number /= 10;
         } while (number);
         std::reverse(status, status + digits);
-        wcscat_s(status, L" изменений  |  Профиль: ");
+        wcscat_s(status, Tr(UiText::PreviewStatusSuffix));
         wcscat_s(status, profile);
         MakeLabel(window, kPreviewNote, status, g_font_caption);
         const DWORD style = WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_TABSTOP | ES_MULTILINE |
@@ -1120,14 +1120,14 @@ LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
                      MAKELPARAM(inset,inset));
         SendMessageW(after, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN,
                      MAKELPARAM(inset,inset));
-        HWND toggle = CreateWindowExW(0, L"BUTTON", L"Показать переносы строк",
+        HWND toggle = CreateWindowExW(0, L"BUTTON", Tr(UiText::ShowBreaks),
                                       WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
                                       0,0,1,1,window,
                                       reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kPreviewShowBreaks)),
                                       g_instance,nullptr);
         ApplyFont(toggle, g_font_caption);
         StyleCheckBox(toggle);
-        HWND spaces = CreateWindowExW(0, L"BUTTON", L"Подсветка пробелов",
+        HWND spaces = CreateWindowExW(0, L"BUTTON", Tr(UiText::ShowSpaces),
                                     WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
                                     0,0,1,1,window,
                                     reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kPreviewShowSpaces)),
@@ -1137,10 +1137,10 @@ LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
         g_show_breaks = false;
         g_show_spaces = false;
         if (!RenderPreviewText(window)) return -1;
-        HWND accept=CreateWindowW(L"BUTTON",L"Применить",
+        HWND accept=CreateWindowW(L"BUTTON",Tr(UiText::Apply),
             WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_OWNERDRAW,0,0,1,1,window,
             reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kPreviewAccept)),g_instance,nullptr);
-        HWND cancel=CreateWindowW(L"BUTTON",L"Отмена",
+        HWND cancel=CreateWindowW(L"BUTTON",Tr(UiText::Cancel),
             WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_OWNERDRAW,0,0,1,1,window,
             reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kPreviewCancel)),g_instance,nullptr);
         if (!accept || !cancel) return -1;
@@ -1209,7 +1209,7 @@ LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
                 g_show_spaces = SendMessageW(from, BM_GETCHECK, 0, 0) == BST_CHECKED;
                 if (!RenderPreviewText(window)) {
                     DestroyWindow(window);
-                    Notify(L"Недостаточно памяти для предпросмотра. Буфер не изменён.");
+                    Notify(Tr(UiText::NotifyPreviewMemoryFailed));
                 }
                 return 0;
             }
@@ -1217,7 +1217,7 @@ LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
                 g_show_breaks = SendMessageW(from, BM_GETCHECK, 0, 0) == BST_CHECKED;
                 if (!RenderPreviewText(window)) {
                     DestroyWindow(window);
-                    Notify(L"Недостаточно памяти для предпросмотра. Буфер не изменён.");
+                    Notify(Tr(UiText::NotifyPreviewMemoryFailed));
                 }
                 return 0;
             }
@@ -1244,12 +1244,12 @@ void OpenPreview() {
     SynchronizeSystemTheme();
     if (g_preview) { SetForegroundWindow(g_preview); return; }
     const auto spawn = PositionedOnCursorMonitor(1000,640,g_message);
-    g_preview = CreateWindowExW(WS_EX_APPWINDOW, L"CopyFixPreview", L"CopyFix - проверка текста",
+    g_preview = CreateWindowExW(WS_EX_APPWINDOW, L"CopyFixPreview", Tr(UiText::PreviewWindow),
         WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, spawn.x, spawn.y,
         spawn.width, spawn.height, nullptr, nullptr, g_instance, nullptr);
     if (!g_preview) {
         ClearPending();
-        Notify(L"Не удалось открыть предпросмотр.");
+        Notify(Tr(UiText::NotifyPreviewOpenFailed));
         return;
     }
     CenterWindowOnMonitor(g_preview, spawn.monitor);
@@ -1260,19 +1260,19 @@ void OpenPreview() {
 void FixClipboard(bool force_preview, bool one_line = false) {
     if (g_preview) { SetForegroundWindow(g_preview); return; }
     ClipSnapshot snapshot;
-    if (!Snapshot(snapshot)) { Notify(L"Нет подходящего текста или буфер недоступен."); return; }
-    if (snapshot.text.empty()) { Notify(L"Буфер содержит пустой текст."); return; }
+    if (!Snapshot(snapshot)) { Notify(Tr(UiText::NotifyNoText)); return; }
+    if (snapshot.text.empty()) { Notify(Tr(UiText::NotifyEmpty)); return; }
     copyfix::Result cleaned;
     try {
         cleaned = one_line ? copyfix::OneLine(snapshot.text)
                            : copyfix::Clean(snapshot.text, g_settings.profile);
     } catch (const std::bad_alloc&) {
-        Notify(L"Недостаточно памяти. Буфер не изменён.");
+        Notify(Tr(UiText::NotifyMemoryFailed));
         return;
     }
-    if (cleaned.protected_structure) { Notify(L"Обнаружен структурированный текст: оставлен без изменений."); return; }
+    if (cleaned.protected_structure) { Notify(Tr(UiText::NotifyProtected)); return; }
     if (cleaned.text == snapshot.text || EqualsClipboardLineEndings(cleaned.text, snapshot.text)) {
-        Notify(L"Изменений не найдено.");
+        Notify(Tr(UiText::NotifyUnchanged));
         return;
     }
     g_pending = Pending{std::move(snapshot), std::move(cleaned)};
@@ -1281,7 +1281,7 @@ void FixClipboard(bool force_preview, bool one_line = false) {
         if (g_pending.before.text.size() > kMaxPreviewChars ||
             g_pending.after.text.size() > kMaxPreviewChars) {
             ClearPending();
-            Notify(L"Текст слишком велик для безопасного предпросмотра. Разделите его на части.");
+            Notify(Tr(UiText::NotifyTooLarge));
             return;
         }
         OpenPreview();
@@ -1291,19 +1291,19 @@ void FixClipboard(bool force_preview, bool one_line = false) {
 }
 
 void UndoLast() {
-    if (!g_undo.available) { Notify(L"Нет исправления для отмены."); return; }
+    if (!g_undo.available) { Notify(Tr(UiText::NotifyUndoMissing)); return; }
     ClipSnapshot current;
     if (!Snapshot(current) || current.sequence != g_undo.after_sequence ||
         current.text != g_undo.after) {
         ClearUndo();
-        Notify(L"Буфер изменился: отмена невозможна.");
+        Notify(Tr(UiText::NotifyUndoStale));
         return;
     }
     const bool restored = WriteIfUnchanged(current, g_undo.before, nullptr);
     if (restored) {
         ClearUndo();
-        Notify(L"Исходный текст восстановлен (только plain text).");
-    } else Notify(L"Не удалось восстановить текст, буфер не изменён или занят.");
+        Notify(Tr(UiText::NotifyUndoOK));
+    } else Notify(Tr(UiText::NotifyUndoFailed));
 }
 
 void ShowShortcutWarning(HWND window, bool occupied) noexcept {
@@ -1316,7 +1316,7 @@ void ShowShortcutWarning(HWND window, bool occupied) noexcept {
           L"и клавишу из списка.";
     if (HWND status = GetDlgItem(window, kSettingsFeedback))
         SetWindowTextW(status, message);
-    g_hotkey_warning_dialog(window, message, L"CopyFix — горячая клавиша",
+    g_hotkey_warning_dialog(window, message, DraftTr(UiText::ShortcutWarningTitle),
                             MB_OK | MB_ICONWARNING);
 }
 
@@ -1404,11 +1404,11 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
         InitWindowTheme(window);
         g_draft_profile = g_settings.profile;
         g_draft_language = g_settings.language;
-        MakeLabel(window,kSettingsTitle,L"Настройки",g_font_title);
+        MakeLabel(window,kSettingsTitle,DraftTr(UiText::SettingsTitle),g_font_title);
         MakeLabel(window,kSettingsSubtitle,
-                  L"Отметьте Ctrl или Alt, при необходимости Shift, затем выберите клавишу.",
+                  DraftTr(UiText::SettingsSubtitle),
                   g_font_caption);
-        MakeLabel(window,420,L"ГОРЯЧАЯ КЛАВИША",g_font_label);
+        MakeLabel(window,420,DraftTr(UiText::HotkeySection),g_font_label);
         const HotkeyKeyItem modifiers[] = {
             {L"Ctrl", kSettingsCtrl}, {L"Alt", kSettingsAlt},
             {L"Shift", kSettingsShift},
@@ -1434,8 +1434,9 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
         SendMessageW(hotkey, CB_SETMINVISIBLE, 6, 0);
         ResetHotkeyChoice(window);
         ApplyFont(hotkey,g_font_body);
-        MakeLabel(window,421,L"ПРОФИЛЬ ОБРАБОТКИ",g_font_label);
-        const wchar_t* profileNames[]{L"Бережный", L"Умный", L"Глубокий"};
+        MakeLabel(window,421,DraftTr(UiText::ProfileSection),g_font_label);
+        const wchar_t* profileNames[]{DraftTr(UiText::ProfileGentle),
+            DraftTr(UiText::ProfileSmart),DraftTr(UiText::ProfileDeep)};
         for (UINT index = 0; index < 3; ++index) {
             const HWND button = CreateWindowW(L"BUTTON", profileNames[index],
                 WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW,
@@ -1462,10 +1463,10 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
         SendMessageW(lang,CB_SETCURSEL,static_cast<WPARAM>(g_draft_language),0);
         MakeLabel(window,kSettingsLanguageHint,DraftTr(UiText::LanguageHint),g_font_caption);
         MakeLabel(window,kSettingsFeedback,L"",g_font_caption);
-        HWND save=CreateWindowW(L"BUTTON",L"Сохранить",
+        HWND save=CreateWindowW(L"BUTTON",DraftTr(UiText::Save),
             WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_OWNERDRAW,0,0,1,1,window,
             reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kSettingsSave)),g_instance,nullptr);
-        HWND cancel=CreateWindowW(L"BUTTON",L"Отмена",
+        HWND cancel=CreateWindowW(L"BUTTON",DraftTr(UiText::Cancel),
             WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_OWNERDRAW,0,0,1,1,window,
             reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kSettingsCancel)),g_instance,nullptr);
         if (!save || !cancel) return -1;
@@ -1551,7 +1552,7 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
             g_settings.hotkey = next_hotkey;
             g_settings.profile = next_profile;
             if (!SaveSettings())
-                MessageBoxW(window,L"Не удалось сохранить параметры в HKCU. Они действуют до выхода из CopyFix.",
+                MessageBoxW(window,DraftTr(UiText::SettingsSaveFailed),
                             L"CopyFix",MB_OK | MB_ICONWARNING);
             DestroyWindow(window);
             return 0;
@@ -1629,8 +1630,8 @@ LRESULT CALLBACK AboutProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam) 
         MakeCenteredLabel(window,kAboutTitle,L"CopyFix",g_font_title);
         MakeCenteredLabel(window,kAboutVersionLabel,kAboutVersionString,g_font_label);
         MakeCenteredLabel(window,kAboutDescriptionLabel,
-            L"Умная обработка скопированного текста",g_font_body);
-        HWND project = CreateWindowExW(0,L"BUTTON",L"О проекте",
+            Tr(UiText::AboutDescription),g_font_body);
+        HWND project = CreateWindowExW(0,L"BUTTON",Tr(UiText::AboutProject),
             WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_OWNERDRAW,
             0,0,1,1,window,
             reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kAboutProject)),
@@ -1646,7 +1647,7 @@ LRESULT CALLBACK AboutProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam) 
         StyleActionButton(project);
         StyleActionButton(github);
         MakeCenteredLabel(window,kAboutLicense,
-            L"© 2026 Stanley Lloyd   ·   Лицензия MIT",g_font_caption);
+            Tr(UiText::AboutLicense),g_font_caption);
         LayoutAbout(window);
         return 0;
     }
@@ -1716,7 +1717,7 @@ void ShowAbout(HWND parent) noexcept {
     }
     const auto spawn = PositionedOnCursorMonitor(420,370,parent);
     g_about_window = CreateWindowExW(WS_EX_APPWINDOW,L"CopyFixAbout",
-        L"CopyFix — о программе",WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_CLIPCHILDREN,
+        Tr(UiText::AboutWindow),WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_CLIPCHILDREN,
         spawn.x,spawn.y,spawn.width,spawn.height,
         nullptr,nullptr,g_instance,nullptr);
     if (!g_about_window) return;
@@ -1733,21 +1734,21 @@ void ShowMenu() {
         if (menu) DestroyMenu(menu);
         return;
     }
-    AppendMenuW(menu, MF_STRING, kMenuFix, L"Исправить текст");
-    AppendMenuW(menu, MF_STRING, kMenuPreview, L"Предпросмотр изменений");
-    AppendMenuW(menu, MF_STRING, kMenuOneLine, L"В одну строку (предпросмотр)");
-    AppendMenuW(menu, MF_STRING | (g_undo.available ? 0 : MF_GRAYED), kMenuUndo, L"Отменить исправление");
+    AppendMenuW(menu, MF_STRING, kMenuFix, Tr(UiText::MenuFix));
+    AppendMenuW(menu, MF_STRING, kMenuPreview, Tr(UiText::MenuPreview));
+    AppendMenuW(menu, MF_STRING, kMenuOneLine, Tr(UiText::MenuOneLine));
+    AppendMenuW(menu, MF_STRING | (g_undo.available ? 0 : MF_GRAYED), kMenuUndo, Tr(UiText::MenuUndo));
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(profiles, MF_STRING, kMenuGentle, L"Бережный");
-    AppendMenuW(profiles, MF_STRING, kMenuSmart, L"Умный");
-    AppendMenuW(profiles, MF_STRING, kMenuDeep, L"Глубокий");
+    AppendMenuW(profiles, MF_STRING, kMenuGentle, Tr(UiText::ProfileGentle));
+    AppendMenuW(profiles, MF_STRING, kMenuSmart, Tr(UiText::ProfileSmart));
+    AppendMenuW(profiles, MF_STRING, kMenuDeep, Tr(UiText::ProfileDeep));
     CheckMenuRadioItem(profiles, kMenuGentle, kMenuDeep,
                        kMenuGentle + static_cast<UINT>(g_settings.profile), MF_BYCOMMAND);
-    AppendMenuW(menu, MF_POPUP, reinterpret_cast<UINT_PTR>(profiles), L"Профиль");
-    AppendMenuW(menu, MF_STRING, kMenuSettings, L"Настройки");
-    AppendMenuW(menu, MF_STRING, kMenuAbout, L"О программе");
+    AppendMenuW(menu, MF_POPUP, reinterpret_cast<UINT_PTR>(profiles), Tr(UiText::MenuProfile));
+    AppendMenuW(menu, MF_STRING, kMenuSettings, Tr(UiText::MenuSettings));
+    AppendMenuW(menu, MF_STRING, kMenuAbout, Tr(UiText::MenuAbout));
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(menu, MF_STRING, kMenuExit, L"Выход");
+    AppendMenuW(menu, MF_STRING, kMenuExit, Tr(UiText::MenuExit));
     POINT p{};
     GetCursorPos(&p);
     SetForegroundWindow(g_message);
@@ -1775,7 +1776,7 @@ LRESULT CALLBACK MessageProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
         g_tray.uFlags = NIF_ICON | NIF_TIP | NIF_MESSAGE;
         g_tray.uCallbackMessage = kTrayMessage;
         g_tray.hIcon = LoadAppIcon(GetSystemMetrics(SM_CXSMICON));
-        wcscpy_s(g_tray.szTip, L"CopyFix - очистка текста");
+        wcscpy_s(g_tray.szTip, Tr(UiText::TrayTooltip));
         Shell_NotifyIconW(NIM_ADD, &g_tray);
         g_tray.uVersion = NOTIFYICON_VERSION_4;
         Shell_NotifyIconW(NIM_SETVERSION, &g_tray);
@@ -1808,7 +1809,7 @@ LRESULT CALLBACK MessageProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
         case kMenuUndo: UndoLast(); break;
         case kMenuGentle: case kMenuSmart: case kMenuDeep:
             g_settings.profile = static_cast<copyfix::Profile>(LOWORD(wparam) - kMenuGentle);
-            if (!SaveSettings()) Notify(L"Не удалось сохранить профиль в реестре HKCU.");
+            if (!SaveSettings()) Notify(Tr(UiText::NotifyProfileSaveFailed));
             break;
         case kMenuSettings: OpenSettings(); break;
         case kMenuAbout: ShowAbout(window); break;
@@ -1842,13 +1843,13 @@ int WINAPI wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE, _In_ PWSTR, _In
                     L"CopyFix уже запущен. Чтобы использовать новую версию, "
                     L"закройте работающий экземпляр через значок в трее "
                     L"и затем запустите этот файл снова.",
-                    L"CopyFix - уже запущен", MB_OK | MB_ICONINFORMATION);
+                    Tr(UiText::InstanceTitle), MB_OK | MB_ICONINFORMATION);
         return 0;
     }
     LoadSettings();
      g_richedit_module = LoadLibraryW(L"Msftedit.dll");
     if (!g_richedit_module) {
-        MessageBoxW(nullptr, L"Не удалось загрузить системный редактор Msftedit.dll.",
+        MessageBoxW(nullptr, Tr(UiText::RichEditMissing),
                     L"CopyFix", MB_ICONERROR | MB_OK);
         CloseHandle(g_instance_mutex);
         return 1;
