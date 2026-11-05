@@ -226,6 +226,23 @@ int main() {
         return fail(32);
     ResetHotkeyChoice(g_settings_window);
     if (ReadHotkeyChoice(g_settings_window) != g_settings.hotkey) return fail(33);
+    // Approved Settings C uses three segmented buttons, never radio buttons.
+    for (UINT id = kProfileGentle; id <= kProfileDeep; ++id)
+        if (!GetDlgItem(g_settings_window,id)) return fail(41);
+    HWND smart = GetDlgItem(g_settings_window,kProfileSmart);
+    SendMessageW(g_settings_window,WM_COMMAND,
+        MAKEWPARAM(kProfileSmart,BN_CLICKED),reinterpret_cast<LPARAM>(smart));
+    wchar_t explanation[160]{};
+    GetWindowTextW(GetDlgItem(g_settings_window,kSettingsExplanation),
+                   explanation,static_cast<int>(std::size(explanation)));
+    if (g_draft_profile != copyfix::Profile::Smart ||
+        g_settings.profile != copyfix::Profile::Deep ||
+        !wcsstr(explanation,L"баланс")) return fail(42);
+    HWND deep = GetDlgItem(g_settings_window,kProfileDeep);
+    SendMessageW(g_settings_window,WM_COMMAND,
+        MAKEWPARAM(kProfileDeep,BN_CLICKED),reinterpret_cast<LPARAM>(deep));
+    if (g_draft_profile != copyfix::Profile::Deep ||
+        g_settings.profile != copyfix::Profile::Deep) return fail(43);
     DestroyWindow(g_settings_window);
     if (g_settings_window) return fail(26);
     // Global hotkeys may be used by the CI desktop; only enforce registration
