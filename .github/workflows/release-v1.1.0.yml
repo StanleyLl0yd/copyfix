@@ -81,7 +81,7 @@ jobs:
         run: |
           set -euo pipefail
           checksum="$(sha256sum dist/CopyFix.exe | cut -d' ' -f1)"
-          cat > "$RUNNER_TEMP/release-notes.md" <<EOF
+          cat > "$RUNNER_TEMP/release-notes.md" <<'EOF'
           ## CopyFix 1.1.0 — Windows
 
           - Custom global keyboard shortcuts: native Ctrl / Alt / Shift options and a full supported key list.
@@ -94,13 +94,17 @@ jobs:
 
           **Distribution:** one unsigned portable `CopyFix.exe` for Windows x64.
 
-          **SHA-256:** `$checksum`
-          
-          **Source commit:** `$CI_SHA`
-          **Exact-main verification:** https://github.com/$GITHUB_REPOSITORY/actions/runs/$RUN_ID
+          **SHA-256:** `__SHA256__`
+
+          **Source commit:** `__SHA__`
+          **Exact-main verification:** https://github.com/StanleyLl0yd/copyfix/actions/runs/__RUN_ID__
 
           All 16 user acceptance checks passed; startup notification accepted separately.
           EOF
+          sed -i \
+            -e "s|__SHA256__|$checksum|g" \
+            -e "s|__SHA__|$CI_SHA|g" \
+            -e "s|__RUN_ID__|$RUN_ID|g" "$RUNNER_TEMP/release-notes.md"
           gh release create v1.1.0 dist/CopyFix.exe \
             --repo "$GITHUB_REPOSITORY" \
             --title "CopyFix 1.1.0" \
