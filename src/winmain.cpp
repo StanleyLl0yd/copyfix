@@ -210,8 +210,111 @@ void Position(HWND parent, UINT id, int x, int y, int w, int h, int dpi) {
         MoveWindow(child, Scale(x,dpi), Scale(y,dpi),
                    std::max(1, Scale(w,dpi)), std::max(1, Scale(h,dpi)), TRUE);
 }
+void DrawNativeCheckBox(HWND window, HDC dc) noexcept {
+    RECT box{}; GetClientRect(window,&box);
+    FillRect(dc,&box,g_surface_brush ? g_surface_brush
+                                    : static_cast<HBRUSH>(GetStockObject(WHITE_BRUSH)));
+    const auto& c = copyfix::ui::colors;
+    const int dpi = static_cast<int>(GetDpiForWindow(window));
+    const int tick = Scale(17,dpi);
+    const int left = Scale(3,dpi);
+    const int y = (box.bottom-tick)/2;
+    const bool checked = SendMessageW(window,BM_GETCHECK,0,0) == BST_CHECKED;
+    const bool enabled = IsWindowEnabled(window) != FALSE;
+    copyfix::ui::Rounded(dc,RECT{left,y,left+tick,y+tick},
+        checked ? c.blue : c.surface,
+        checked ? c.blue : c.border,Scale(5,dpi));
+    if (checked) {
+        HPEN mark = CreatePen(PS_SOLID,std::max(1,Scale(2,dpi)),RGB(255,255,255));
+        if (mark) {
+            const auto old = SelectObject(dc,mark);
+            MoveToEx(dc,left+tick/5,y+tick/2,nullptr);
+            LineTo(dc,left+tick*2/5,y+tick*3/4);
+            LineTo(dc,left+tick*4/5,y+tick/4);
+            SelectObject(dc,old);
+            DeleteObject(mark);
+        }
+    }
+    wchar_t label[100]{};
+    GetWindowTextW(window,label,static_cast<int>(std::size(label)));
+    SetBkMode(dc,TRANSPARENT);
+    SetTextColor(dc,enabled ? c.ink : c.muted);
+    const HGDIOBJ oldFont = SelectObject(dc,
+        g_font_body ? g_font_body : GetStockObject(DEFAULT_GUI_FONT));
+    RECT textBox{left+tick+Scale(8,dpi),0,box.right,box.bottom};
+    DrawTextW(dc,label,-1,&textBox,DT_LEFT|DT_VCENTER|DT_SINGLELINE);
+    SelectObject(dc,oldFont);
+    if (GetFocus() == window) {
+        InflateRect(&textBox,-1,-Scale(4,dpi));
+        DrawFocusRect(dc,&textBox);
+    }
+}
+
+LRESULT CALLBACK CheckBoxSubclass(HWND window,UINT msg,WPARAM wparam,
+                                  LPARAM lparam,UINT_PTR id,DWORD_PTR) {
+    switch (msg) {
+    case WM_ERASEBKGND: return 1;
+    case WM_PAINT: {
+        PAINTSTRUCT ps{};
+        HDC dc = BeginPaint(window,&ps);
+        DrawNativeCheckBox(window,dc);
+        EndPaint(window,&ps);
+        return 0;
+    }
+    case WM_PRINTCLIENT:
+        DrawNativeCheckBox(window,reinterpret_cast<HDC>(wparam));
+        return 0;
+    case WM_SETFOCUS:
+    case WM_KILLFOCUS:
+    case WM_ENABLE: {
+        const LRESULT result = DefSubclassProc(window,msg,wparam,lparam);
+        InvalidateRect(window,nullptr,TRUE);
+        return result;
+    }
+    case WM_NCDESTROY:
+        RemoveWindowSubclass(window,CheckBoxSubclass,id);
+        break;
+    }
+    return DefSubclassProc(window,msg,wparam,lparam);
+}
+
+bool StyleCheckBox(HWND window) noexcept {
+    return window && SetWindowSubclass(window,CheckBoxSubclass,1,0) != FALSE;
+}
+
+void DrawNativeCombo(const DRAWITEMSTRUCT* item) noexcept {
+    if (!item || item->CtlType != ODT_COMBOBOX) return;
+    const auto& c = copyfix::ui::colors;
+    const bool selected = (item->itemState & ODS_SELECTED) != 0;
+    const COLORREF fill = selected ? c.selected : c.surface;
+    HBRUSH brush = CreateSolidBrush(fill);
+    if (!brush) return;
+    FillRect(item->hDC,&item->rcItem,brush);
+    DeleteObject(brush);
+    if (item->itemID != static_cast<UINT>(-1)) {
+        wchar_t value[80]{};
+        SendMessageW(item->hwndItem,CB_GETLBTEXT,item->itemID,
+                     reinterpret_cast<LPARAM>(value));
+        SetBkMode(item->hDC,TRANSPARENT);
+        SetTextColor(item->hDC,c.ink);
+        const auto old = SelectObject(item->hDC,
+            g_font_body ? g_font_body : GetStockObject(DEFAULT_GUI_FONT));
+        RECT text = item->rcItem;
+        text.left += Scale(11,static_cast<int>(GetDpiForWindow(item->hwndItem)));
+        DrawTextW(item->hDC,value,-1,&text,
+                  DT_LEFT|DT_SINGLELINE|DT_VCENTER);
+        SelectObject(item->hDC,old);
+        if (item->itemState & ODS_FOCUS) DrawFocusRect(item->hDC,&item->rcItem);
+    }
+}
+
 void DrawActionButton(const DRAWITEMSTRUCT* item) {
-    if (!item || item->CtlType != ODT_BUTTON) return;
+    if (!item) return;
+    if (item->CtlType == ODT_COMBOBOX) {
+        DrawNativeCombo(item);
+        return;
+    }
+    if (item->CtlType != ODT_BUTTON) return;
     const auto& c = copyfix::ui::colors;
     const bool primary = item->CtlID == kPreviewAccept || item->CtlID == kSettingsSave;
     const bool segment = item->CtlID >= kProfileGentle && item->CtlID <= kProfileDeep;
@@ -801,12 +904,14 @@ LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
                                       reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kPreviewShowBreaks)),
                                       g_instance,nullptr);
         ApplyFont(toggle, g_font_caption);
+        StyleCheckBox(toggle);
         HWND spaces = CreateWindowExW(0, L"BUTTON", L"Подсветка пробелов",
                                     WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
                                     0,0,1,1,window,
                                     reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kPreviewShowSpaces)),
                                     g_instance,nullptr);
         ApplyFont(spaces, g_font_caption);
+        StyleCheckBox(spaces);
         g_show_breaks = false;
         g_show_spaces = false;
         if (!RenderPreviewText(window)) return -1;
@@ -1068,9 +1173,11 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
                 g_instance, nullptr);
             if (!control) return -1;
             ApplyFont(control, g_font_body);
+            StyleCheckBox(control);
         }
         HWND hotkey = CreateWindowW(L"COMBOBOX", nullptr,
-            WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST | WS_VSCROLL,
+            WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST |
+            CBS_OWNERDRAWFIXED | WS_VSCROLL,
             0, 0, 1, 1, window,
             reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kHotkeyInput)),
             g_instance, nullptr);
@@ -1124,6 +1231,14 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
         SetTextColor(dc, copyfix::ui::colors.ink);
         SetBkColor(dc, copyfix::ui::colors.surface);
         return reinterpret_cast<LRESULT>(g_surface_brush);
+    }
+    case WM_MEASUREITEM: {
+        auto* measure = reinterpret_cast<MEASUREITEMSTRUCT*>(lparam);
+        if (measure && measure->CtlID == kHotkeyInput) {
+            measure->itemHeight = static_cast<UINT>(Scale(34,g_settings_dpi));
+            return TRUE;
+        }
+        break;
     }
     case WM_DRAWITEM: DrawActionButton(reinterpret_cast<const DRAWITEMSTRUCT*>(lparam));return TRUE;
     case WM_SETTINGCHANGE:
