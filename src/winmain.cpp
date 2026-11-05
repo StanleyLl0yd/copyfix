@@ -50,7 +50,7 @@ constexpr UINT kPreviewCancel = 301;
 constexpr UINT kSettingsSave = 400;
 constexpr UINT kSettingsCancel = 401;
 constexpr UINT kHotkeyInput = 402;
-constexpr UINT kComboProfile = 403;
+constexpr UINT kSettingsExplanation = 422;
 constexpr UINT kPreviewTitle = 410;
 constexpr UINT kPreviewSubtitle = 411;
 constexpr UINT kPreviewBeforeLabel = 412;
@@ -986,29 +986,71 @@ void ShowShortcutWarning(HWND window, bool occupied) noexcept {
                             MB_OK | MB_ICONWARNING);
 }
 
+const wchar_t* ProfileHelpText(copyfix::Profile profile) noexcept {
+    switch (profile) {
+    case copyfix::Profile::Gentle:
+        return L"Бережная очистка: сохраняет абзацы и сложное форматирование.";
+    case copyfix::Profile::Smart:
+        return L"Оптимальный баланс: исправляет типичные переносы и пробелы.";
+    case copyfix::Profile::Deep:
+        return L"Глубокая очистка: больше исправлений с предпросмотром.";
+    }
+    return L"";
+}
+
+void DrawSettingsSurface(HWND window, HDC dc) noexcept {
+    RECT client{};
+    GetClientRect(window, &client);
+    FillRect(dc, &client, g_canvas_brush ? g_canvas_brush
+                                        : static_cast<HBRUSH>(GetStockObject(WHITE_BRUSH)));
+    const int dpi = g_settings_dpi;
+    const int w = client.right;
+    const auto& c = copyfix::ui::colors;
+    copyfix::ui::Badge(dc, Scale(27,dpi), Scale(26,dpi), Scale(40,dpi));
+    copyfix::ui::Rounded(dc,
+        RECT{Scale(22,dpi), Scale(112,dpi), w-Scale(22,dpi), Scale(213,dpi)},
+        c.surface, c.border, Scale(16,dpi));
+    copyfix::ui::Rounded(dc,
+        RECT{Scale(22,dpi), Scale(225,dpi), w-Scale(22,dpi), Scale(337,dpi)},
+        c.surface, c.border, Scale(16,dpi));
+    const RECT separator{Scale(22,dpi), client.bottom-Scale(80,dpi),
+                         w-Scale(22,dpi), client.bottom-Scale(79,dpi)};
+    HBRUSH stroke = CreateSolidBrush(c.border);
+    if (stroke) {
+        FillRect(dc, &separator, stroke);
+        DeleteObject(stroke);
+    }
+}
+
 void LayoutSettings(HWND window) {
     RECT bounds{}; GetClientRect(window, &bounds);
     const int dpi = g_settings_dpi;
     const int w = MulDiv(bounds.right, 96, dpi);
     const int h = MulDiv(bounds.bottom, 96, dpi);
-    Position(window, kSettingsTitle, 26, 22, w-52, 38, dpi);
-    Position(window, kSettingsSubtitle, 26, 64, w-52, 40, dpi);
-    Position(window, 420, 26, 124, w-52, 24, dpi);
-    Position(window, kSettingsCtrl, 26, 154, 120, 30, dpi);
-    Position(window, kSettingsAlt, 164, 154, 110, 30, dpi);
-    Position(window, kSettingsShift, 302, 154, 145, 30, dpi);
-    Position(window, kHotkeyInput, 26, 192, w-52, 240, dpi);
-    Position(window, 421, 26, 249, w-52, 24, dpi);
-    Position(window, kComboProfile, 26, 279, w-52, 240, dpi);
-    Position(window, kSettingsFeedback, 26, h-113, w-52, 46, dpi);
-    Position(window, kSettingsCancel, w-286, h-64, 122, 42, dpi);
-    Position(window, kSettingsSave, w-156, h-64, 130, 42, dpi);
+    Position(window, kSettingsTitle, 82, 22, w-110, 39, dpi);
+    Position(window, kSettingsSubtitle, 82, 64, w-106, 42, dpi);
+    Position(window, 420, 38, 121, w-72, 24, dpi);
+    Position(window, kSettingsCtrl, 38, 157, 86, 29, dpi);
+    Position(window, kSettingsAlt, 138, 157, 81, 29, dpi);
+    Position(window, kSettingsShift, 224, 157, 85, 29, dpi);
+    Position(window, kHotkeyInput, w-172, 153, 132, 220, dpi);
+    Position(window, 421, 38, 233, w-72, 24, dpi);
+    const int segmentWidth = std::max(95, (w - 80)/3);
+    Position(window, kProfileGentle, 38, 265, segmentWidth, 37, dpi);
+    Position(window, kProfileSmart, 38+segmentWidth, 265, segmentWidth, 37, dpi);
+    Position(window, kProfileDeep, 38+2*segmentWidth, 265, segmentWidth, 37, dpi);
+    Position(window, kSettingsExplanation, 38, 308, w-76, 27, dpi);
+    Position(window, kSettingsFeedback, 27, h-119, w-54, 43, dpi);
+    Position(window, kSettingsCancel, w-280, h-65, 120, 42, dpi);
+    Position(window, kSettingsSave, w-153, h-65, 130, 42, dpi);
 }
 
 LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam) {
     switch (msg) {
     case WM_CREATE: {
         g_settings_dpi = static_cast<int>(GetDpiForWindow(window));
+        InitWindowTheme(window);
+        g_draft_profile = g_settings.profile;
         MakeLabel(window,kSettingsTitle,L"Настройки",g_font_title);
         MakeLabel(window,kSettingsSubtitle,
                   L"Отметьте Ctrl или Alt, при необходимости Shift, затем выберите клавишу.",
@@ -1037,13 +1079,17 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
         ResetHotkeyChoice(window);
         ApplyFont(hotkey,g_font_body);
         MakeLabel(window,421,L"ПРОФИЛЬ ОБРАБОТКИ",g_font_label);
-        HWND profile=CreateWindowW(L"COMBOBOX",nullptr,WS_CHILD | WS_VISIBLE | WS_TABSTOP |
-            CBS_DROPDOWNLIST | WS_VSCROLL,0,0,1,1,window,
-            reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kComboProfile)),g_instance,nullptr);
-        for(const auto* name:{L"Бережный",L"Умный",L"Глубокий"})
-            SendMessageW(profile,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(name));
-        SendMessageW(profile,CB_SETCURSEL,static_cast<WPARAM>(g_settings.profile),0);
-        ApplyFont(profile,g_font_body);
+        const wchar_t* profileNames[]{L"Бережный", L"Умный", L"Глубокий"};
+        for (UINT index = 0; index < 3; ++index) {
+            const HWND button = CreateWindowW(L"BUTTON", profileNames[index],
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW,
+                0,0,1,1,window,
+                reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kProfileGentle+index)),
+                g_instance,nullptr);
+            if (!button) return -1;
+            ApplyFont(button,g_font_body);
+        }
+        MakeLabel(window,kSettingsExplanation,ProfileHelpText(g_draft_profile),g_font_caption);
         MakeLabel(window,kSettingsFeedback,L"",g_font_caption);
         CreateWindowW(L"BUTTON",L"Сохранить",WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW,
             0,0,1,1,window,reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kSettingsSave)),g_instance,nullptr);
@@ -1053,20 +1099,61 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
         return 0;
     }
     case WM_SIZE: LayoutSettings(window); return 0;
+    case WM_ERASEBKGND:
+        return 1;
+    case WM_PAINT: {
+        PAINTSTRUCT ps{};
+        const auto dc = BeginPaint(window, &ps);
+        DrawSettingsSurface(window, dc);
+        EndPaint(window, &ps);
+        return 0;
+    }
     case WM_CTLCOLORSTATIC: {
         auto dc = reinterpret_cast<HDC>(wparam);
         SetBkMode(dc,TRANSPARENT);
         const UINT id = static_cast<UINT>(GetDlgCtrlID(reinterpret_cast<HWND>(lparam)));
-        SetTextColor(dc,id==kSettingsFeedback ? RGB(172,38,38) :
-            (id==kSettingsTitle||id==420||id==421 ? kInk : kMuted));
-        return reinterpret_cast<LRESULT>(g_canvas_brush);
+        const bool insideCard = id == 420 || id == 421 || id == kSettingsExplanation;
+        SetTextColor(dc,id==kSettingsFeedback ? copyfix::ui::colors.warning :
+            (id==kSettingsTitle || id==420 || id==421
+              ? copyfix::ui::colors.ink : copyfix::ui::colors.muted));
+        return reinterpret_cast<LRESULT>(insideCard ? g_surface_brush : g_canvas_brush);
+    }
+    case WM_CTLCOLORBTN:
+    case WM_CTLCOLORLISTBOX: {
+        const auto dc = reinterpret_cast<HDC>(wparam);
+        SetTextColor(dc, copyfix::ui::colors.ink);
+        SetBkColor(dc, copyfix::ui::colors.surface);
+        return reinterpret_cast<LRESULT>(g_surface_brush);
     }
     case WM_DRAWITEM: DrawActionButton(reinterpret_cast<const DRAWITEMSTRUCT*>(lparam));return TRUE;
+    case WM_SETTINGCHANGE:
+    case WM_THEMECHANGED:
+        SynchronizeSystemTheme();
+        UpdateWindowTheme(window);
+        return 0;
+    case WM_DPICHANGED: {
+        g_settings_dpi = static_cast<int>(GetDpiForWindow(window));
+        const auto* proposed = reinterpret_cast<const RECT*>(lparam);
+        SetWindowPos(window,nullptr,proposed->left,proposed->top,
+                     proposed->right-proposed->left,proposed->bottom-proposed->top,
+                     SWP_NOZORDER | SWP_NOACTIVATE);
+        LayoutSettings(window);
+        return 0;
+    }
     case WM_COMMAND:
+        if (LOWORD(wparam) >= kProfileGentle && LOWORD(wparam) <= kProfileDeep &&
+            HIWORD(wparam) == BN_CLICKED &&
+            reinterpret_cast<HWND>(lparam) == GetDlgItem(window, LOWORD(wparam))) {
+            g_draft_profile = static_cast<copyfix::Profile>(LOWORD(wparam) - kProfileGentle);
+            if (HWND info = GetDlgItem(window,kSettingsExplanation))
+                SetWindowTextW(info,ProfileHelpText(g_draft_profile));
+            for (UINT id = kProfileGentle; id <= kProfileDeep; ++id)
+                InvalidateRect(GetDlgItem(window,id),nullptr,TRUE);
+            return 0;
+        }
         if (LOWORD(wparam) == kSettingsSave) {
             const HotkeyChord next_hotkey = ReadHotkeyChoice(window);
-            const int next_profile = static_cast<int>(SendMessageW(GetDlgItem(window, kComboProfile), CB_GETCURSEL, 0, 0));
-            if (next_profile < 0 || next_profile > 2) return 0;
+            const auto next_profile = g_draft_profile;
             if (!ValidHotkey(next_hotkey)) {
                 ShowShortcutWarning(window, false);
                 return 0;
@@ -1076,7 +1163,7 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
                 return 0;
             }
             g_settings.hotkey = next_hotkey;
-            g_settings.profile = static_cast<copyfix::Profile>(next_profile);
+            g_settings.profile = next_profile;
             if (!SaveSettings())
                 MessageBoxW(window,L"Не удалось сохранить параметры в HKCU. Они действуют до выхода из CopyFix.",
                             L"CopyFix",MB_OK | MB_ICONWARNING);
@@ -1097,7 +1184,7 @@ void OpenSettings() {
     if (g_settings_window) { SetForegroundWindow(g_settings_window); return; }
     g_settings_window = CreateWindowExW(WS_EX_APPWINDOW,L"CopyFixSettings",L"CopyFix - настройки",
         WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
-        CW_USEDEFAULT,CW_USEDEFAULT,Scale(510,96),Scale(492,96),
+        CW_USEDEFAULT,CW_USEDEFAULT,Scale(510,96),Scale(475,96),
         nullptr,nullptr,g_instance,nullptr);
     if (!g_settings_window) return;
     POINT cursor{};
