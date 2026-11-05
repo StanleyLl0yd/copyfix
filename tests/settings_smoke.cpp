@@ -158,6 +158,25 @@ int main() {
                                 nullptr, nullptr, g_instance, nullptr);
     if (!g_message) return fail(11);
 
+    // Startup must use the same Shell_NotifyIcon notification format as
+    // regular CopyFix messages, without reporting success on hotkey failure.
+    g_tray = {};
+    g_tray.cbSize = sizeof(g_tray);
+    g_tray.hWnd = g_message;
+    g_tray.uID = 1;
+    NotifyStartup(true);
+    const bool startup_ok =
+        (g_tray.uFlags == NIF_INFO) &&
+        ((g_tray.dwInfoFlags & (NIIF_INFO | NIIF_NOSOUND)) ==
+         (NIIF_INFO | NIIF_NOSOUND)) &&
+        wcscmp(g_tray.szInfoTitle, L"CopyFix") == 0 &&
+        wcscmp(g_tray.szInfo, L"CopyFix запущен и готов к работе.") == 0;
+    NotifyStartup(false);
+    const bool failure_ok =
+        wcscmp(g_tray.szInfo, L"Горячая клавиша недоступна. Откройте настройки CopyFix.") == 0;
+    g_tray = {};
+    if (!startup_ok || !failure_ok) return fail(37);
+
     // Exercise the real Settings entry point, its native field, and monitor placement.
     g_canvas_brush = CreateSolidBrush(kCanvas);
     const WNDCLASSEXW settings_class{sizeof(WNDCLASSEXW), 0, SettingsProc, 0, 0, g_instance,
