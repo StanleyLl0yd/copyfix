@@ -1396,7 +1396,7 @@ void LayoutSettings(HWND window) {
     const int dpi = g_settings_dpi;
     const int w = MulDiv(bounds.right, 96, dpi);
     const int h = MulDiv(bounds.bottom, 96, dpi);
-    // The two cards are deliberately compact; the footer anchors to the client
+    // The three cards are deliberately compact; the footer anchors to the client
     // edge, not to the outer Win32 frame. No label crosses a card or divider.
     Position(window, kSettingsTitle, 65, 17, w-85, 31, dpi);
     Position(window, kSettingsSubtitle, 65, 50, w-86, 32, dpi);
@@ -1404,7 +1404,7 @@ void LayoutSettings(HWND window) {
     Position(window, kSettingsCtrl, 36, 124, 81, 28, dpi);
     Position(window, kSettingsAlt, 126, 124, 74, 28, dpi);
     Position(window, kSettingsShift, 208, 124, 95, 28, dpi);
-    // COMBOBOX height includes its popup. Keep eight visible rows, not a
+    // COMBOBOX height includes its popup. Keep six visible rows, not a
     // screen-height popup; CBS_HASSTRINGS is mandatory with owner-draw text.
     Position(window, kHotkeyInput, w-178, 119, 142, 181, dpi);
     if (HWND combo = GetDlgItem(window,kHotkeyInput))
