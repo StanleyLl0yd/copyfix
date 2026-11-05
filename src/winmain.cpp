@@ -8,6 +8,7 @@
 #include "diff_spans.h"
 #include "resource_ids.h"
 #include "ui_theme.h"
+#include "ui_locale.h"
 #include <shellscalingapi.h>
 
 #include "text_engine.h"
@@ -52,6 +53,9 @@ constexpr UINT kSettingsSave = 400;
 constexpr UINT kSettingsCancel = 401;
 constexpr UINT kHotkeyInput = 402;
 constexpr UINT kSettingsExplanation = 422;
+constexpr UINT kSettingsLanguageInput = 423;
+constexpr UINT kSettingsLanguageSection = 424;
+constexpr UINT kSettingsLanguageHint = 425;
 constexpr UINT kPreviewTitle = 410;
 constexpr UINT kPreviewSubtitle = 411;
 constexpr UINT kPreviewBeforeLabel = 412;
@@ -92,6 +96,7 @@ void CenterWindowOnMonitor(HWND dialog, HMONITOR monitor) noexcept {
 }
 
 void ShowAbout(HWND parent) noexcept;
+void RefreshLocalizedWindows() noexcept;
 
 constexpr COLORREF kCanvas = RGB(247, 249, 252);
 constexpr COLORREF kSurface = RGB(255, 255, 255);
@@ -124,6 +129,7 @@ struct HotkeyChord {
 struct Settings {
     copyfix::Profile profile = copyfix::Profile::Deep;
     HotkeyChord hotkey;
+    copyfix::i18n::Language language = copyfix::i18n::Language::System;
 };
 struct ClipSnapshot {
     std::wstring text;
@@ -152,8 +158,12 @@ HWND g_preview = nullptr;
 HWND g_settings_window = nullptr;
 HWND g_about_window = nullptr;
 copyfix::Profile g_draft_profile = copyfix::Profile::Deep;
+copyfix::i18n::Language g_draft_language = copyfix::i18n::Language::System;
 NOTIFYICONDATAW g_tray{};
 Settings g_settings;
+using UiText = copyfix::i18n::Text;
+const wchar_t* Tr(UiText id) noexcept { return copyfix::i18n::Get(id,g_settings.language); }
+const wchar_t* DraftTr(UiText id) noexcept { return copyfix::i18n::Get(id,g_draft_language); }
 Pending g_pending;
 Undo g_undo;
 HANDLE g_instance_mutex = nullptr;
@@ -716,8 +726,11 @@ void LoadSettings() noexcept {
     };
     const DWORD profile = read(L"Profile", static_cast<DWORD>(copyfix::Profile::Deep));
     const DWORD hotkey = read(L"Hotkey", 0);
+    const DWORD language = read(L"Language", 0);
     if (profile <= 2) g_settings.profile = static_cast<copyfix::Profile>(profile);
     g_settings.hotkey = DecodeHotkey(hotkey);
+    if (copyfix::i18n::IsValid(language))
+        g_settings.language=static_cast<copyfix::i18n::Language>(language);
     RegCloseKey(key);
 }
 
@@ -728,11 +741,14 @@ bool SaveSettings() noexcept {
                         nullptr) != ERROR_SUCCESS) return false;
     const DWORD profile = static_cast<DWORD>(g_settings.profile);
     const DWORD hotkey = EncodeHotkey(g_settings.hotkey);
+    const DWORD language = static_cast<DWORD>(g_settings.language);
     const bool ok =
         RegSetValueExW(key, L"Profile", 0, REG_DWORD,
                        reinterpret_cast<const BYTE*>(&profile), sizeof(profile)) == ERROR_SUCCESS &&
         RegSetValueExW(key, L"Hotkey", 0, REG_DWORD,
-                       reinterpret_cast<const BYTE*>(&hotkey), sizeof(hotkey)) == ERROR_SUCCESS;
+                       reinterpret_cast<const BYTE*>(&hotkey), sizeof(hotkey)) == ERROR_SUCCESS &&
+        RegSetValueExW(key, L"Language", 0, REG_DWORD,
+                       reinterpret_cast<const BYTE*>(&language), sizeof(language)) == ERROR_SUCCESS;
     RegCloseKey(key);
     return ok;
 }
@@ -1331,6 +1347,9 @@ void DrawSettingsSurface(HWND window, HDC dc) noexcept {
     copyfix::ui::Rounded(dc,
         RECT{Scale(20,dpi), Scale(181,dpi), w-Scale(20,dpi), Scale(285,dpi)},
         c.surface, c.border, Scale(copyfix::ui::CardCorner,dpi));
+    copyfix::ui::Rounded(dc,
+        RECT{Scale(20,dpi), Scale(297,dpi), w-Scale(20,dpi), Scale(370,dpi)},
+        c.surface, c.border, Scale(copyfix::ui::CardCorner,dpi));
     const int widthDip=MulDiv(w,96,dpi);
     const int segmentWidth=(widthDip-76)/3;
     copyfix::ui::Rounded(dc,
@@ -1361,16 +1380,19 @@ void LayoutSettings(HWND window) {
     Position(window, kSettingsShift, 208, 124, 95, 28, dpi);
     // COMBOBOX height includes its popup. Keep eight visible rows, not a
     // screen-height popup; CBS_HASSTRINGS is mandatory with owner-draw text.
-    Position(window, kHotkeyInput, w-178, 119, 142, 239, dpi);
+    Position(window, kHotkeyInput, w-178, 119, 142, 181, dpi);
     if (HWND combo = GetDlgItem(window,kHotkeyInput))
-        SendMessageW(combo,CB_SETMINVISIBLE,8,0);
+        SendMessageW(combo,CB_SETMINVISIBLE,6,0);
     Position(window, 421, 36, 188, w-72, 19, dpi);
     const int segmentWidth = (w-76)/3;
     Position(window, kProfileGentle, 38, 216, segmentWidth, 33, dpi);
     Position(window, kProfileSmart, 38+segmentWidth, 216, segmentWidth, 33, dpi);
     Position(window, kProfileDeep, 38+2*segmentWidth, 216, segmentWidth, 33, dpi);
     Position(window, kSettingsExplanation, 36, 259, w-72, 21, dpi);
-    Position(window, kSettingsFeedback, 26, 288, w-52, 35, dpi);
+    Position(window, kSettingsLanguageSection, 36, 306, w-72, 19, dpi);
+    Position(window, kSettingsLanguageInput, 36, 332, w-72, 108, dpi);
+    Position(window, kSettingsLanguageHint, 36, 377, w-72, 22, dpi);
+    Position(window, kSettingsFeedback, 26, 406, w-52, 32, dpi);
     Position(window, kSettingsCancel, w-250, h-48, 104, 34, dpi);
     Position(window, kSettingsSave, w-136, h-48, 116, 34, dpi);
 }
@@ -1381,6 +1403,7 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
         g_settings_dpi = static_cast<int>(GetDpiForWindow(window));
         InitWindowTheme(window);
         g_draft_profile = g_settings.profile;
+        g_draft_language = g_settings.language;
         MakeLabel(window,kSettingsTitle,L"Настройки",g_font_title);
         MakeLabel(window,kSettingsSubtitle,
                   L"Отметьте Ctrl или Alt, при необходимости Shift, затем выберите клавишу.",
@@ -1408,7 +1431,7 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
             g_instance, nullptr);
         if (!hotkey) return -1;
         PopulateHotkeyKeys(hotkey, g_settings.hotkey.key);
-        SendMessageW(hotkey, CB_SETMINVISIBLE, 8, 0);
+        SendMessageW(hotkey, CB_SETMINVISIBLE, 6, 0);
         ResetHotkeyChoice(window);
         ApplyFont(hotkey,g_font_body);
         MakeLabel(window,421,L"ПРОФИЛЬ ОБРАБОТКИ",g_font_label);
@@ -1424,6 +1447,20 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
             StyleActionButton(button);
         }
         MakeLabel(window,kSettingsExplanation,ProfileHelpText(g_draft_profile),g_font_caption);
+        MakeLabel(window,kSettingsLanguageSection,DraftTr(UiText::LanguageSection),g_font_label);
+        HWND lang=CreateWindowW(L"COMBOBOX",nullptr,
+            WS_CHILD|WS_VISIBLE|WS_TABSTOP|CBS_DROPDOWNLIST|
+            CBS_OWNERDRAWFIXED|CBS_HASSTRINGS|CBS_NOINTEGRALHEIGHT|WS_VSCROLL,
+            0,0,1,1,window,
+            reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kSettingsLanguageInput)),
+            g_instance,nullptr);
+        if (!lang) return -1;
+        ApplyFont(lang,g_font_body);
+        for (UiText text : {UiText::LanguageSystem,UiText::LanguageRussian,
+                            UiText::LanguageEnglish})
+            SendMessageW(lang,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(DraftTr(text)));
+        SendMessageW(lang,CB_SETCURSEL,static_cast<WPARAM>(g_draft_language),0);
+        MakeLabel(window,kSettingsLanguageHint,DraftTr(UiText::LanguageHint),g_font_caption);
         MakeLabel(window,kSettingsFeedback,L"",g_font_caption);
         HWND save=CreateWindowW(L"BUTTON",L"Сохранить",
             WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_OWNERDRAW,0,0,1,1,window,
@@ -1451,9 +1488,10 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
         auto dc = reinterpret_cast<HDC>(wparam);
         SetBkMode(dc,TRANSPARENT);
         const UINT id = static_cast<UINT>(GetDlgCtrlID(reinterpret_cast<HWND>(lparam)));
-        const bool insideCard = id == 420 || id == 421 || id == kSettingsExplanation;
+        const bool insideCard = id == 420 || id == 421 || id == kSettingsExplanation ||
+            id == kSettingsLanguageSection || id == kSettingsLanguageHint;
         SetTextColor(dc,id==kSettingsFeedback ? copyfix::ui::colors.warning :
-            (id==kSettingsTitle || id==420 || id==421
+            (id==kSettingsTitle || id==420 || id==421 || id==kSettingsLanguageSection
               ? copyfix::ui::colors.ink : copyfix::ui::colors.muted));
         return reinterpret_cast<LRESULT>(insideCard ? g_surface_brush : g_canvas_brush);
     }
@@ -1466,7 +1504,7 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
     }
     case WM_MEASUREITEM: {
         auto* measure = reinterpret_cast<MEASUREITEMSTRUCT*>(lparam);
-        if (measure && measure->CtlID == kHotkeyInput) {
+        if (measure && (measure->CtlID == kHotkeyInput || measure->CtlID == kSettingsLanguageInput)) {
             measure->itemHeight = static_cast<UINT>(Scale(25,g_settings_dpi));
             return TRUE;
         }
@@ -1531,8 +1569,8 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
 void OpenSettings() {
     SynchronizeSystemTheme();
     if (g_settings_window) { SetForegroundWindow(g_settings_window); return; }
-    const auto spawn = PositionedOnCursorMonitor(500,424,g_message);
-    g_settings_window = CreateWindowExW(WS_EX_APPWINDOW,L"CopyFixSettings",L"CopyFix - настройки",
+    const auto spawn = PositionedOnCursorMonitor(500,528,g_message);
+    g_settings_window = CreateWindowExW(WS_EX_APPWINDOW,L"CopyFixSettings",Tr(UiText::SettingsWindow),
         WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_CLIPCHILDREN,
         spawn.x,spawn.y,spawn.width,spawn.height,
         nullptr,nullptr,g_instance,nullptr);
