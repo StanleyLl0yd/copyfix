@@ -677,22 +677,48 @@ void LayoutPreview(HWND window) {
     const int dpi = g_preview_dpi;
     const int w = MulDiv(client.right, 96, dpi);
     const int h = MulDiv(client.bottom, 96, dpi);
-    const int margin = 26, gap = 20;
+    const int margin = 25, gap = 18;
     const int column = std::max(150, (w - 2 * margin - gap) / 2);
-    const int edit_y = 146;
-    const int edit_height = std::max(100, h - edit_y - 112);
-    Position(window, kPreviewTitle, margin, 22, w - 2*margin, 39, dpi);
-    Position(window, kPreviewSubtitle, margin, 64, w - 2*margin, 22, dpi);
-    Position(window, kPreviewBeforeLabel, margin, 112, column, 28, dpi);
-    Position(window, kPreviewAfterLabel, margin + column + gap, 112, column, 28, dpi);
-    Position(window, kPreviewBeforeEdit, margin, edit_y, column, edit_height, dpi);
-    Position(window, kPreviewAfterEdit, margin + column + gap, edit_y, column, edit_height, dpi);
-    Position(window, kPreviewNote, margin, h - 98, std::max(160,w-300), 23, dpi);
-    Position(window, kPreviewShowBreaks, margin, h - 70, 220, 25, dpi);
-    Position(window, kPreviewShowSpaces, margin + 232, h - 70, 175, 25, dpi);
-    Position(window, kPreviewCancel, w - 282, h - 84, 112, 44, dpi);
-    Position(window, kPreviewAccept, w - 162, h - 84, 136, 44, dpi);
+    const int edit_y = 149;
+    const int edit_height = std::max(100, h - edit_y - 124);
+    Position(window, kPreviewTitle, 86, 22, w-112, 39, dpi);
+    Position(window, kPreviewSubtitle, 86, 63, w-112, 25, dpi);
+    Position(window, kPreviewBeforeLabel, margin + 14, 113, column-28, 27, dpi);
+    Position(window, kPreviewAfterLabel, margin+column+gap+14, 113, column-28, 27, dpi);
+    Position(window, kPreviewBeforeEdit, margin+12, edit_y, column-24, edit_height, dpi);
+    Position(window, kPreviewAfterEdit, margin+column+gap+12, edit_y, column-24, edit_height, dpi);
+    Position(window, kPreviewNote, margin+5, h-108, std::max(150,w-300), 24, dpi);
+    Position(window, kPreviewShowBreaks, margin+5, h-72, 220, 25, dpi);
+    Position(window, kPreviewShowSpaces, margin+235, h-72, 190, 25, dpi);
+    Position(window, kPreviewCancel, w-288, h-83, 113, 44, dpi);
+    Position(window, kPreviewAccept, w-160, h-83, 134, 44, dpi);
     InvalidateRect(window, nullptr, TRUE);
+}
+
+void DrawPreviewSurface(HWND window, HDC dc) noexcept {
+    RECT client{}; GetClientRect(window, &client);
+    FillRect(dc, &client, g_canvas_brush ? g_canvas_brush
+                                        : static_cast<HBRUSH>(GetStockObject(WHITE_BRUSH)));
+    const int dpi = g_preview_dpi;
+    const int margin = Scale(25,dpi), gap = Scale(18,dpi);
+    const int width = client.right;
+    const int column = std::max(Scale(150,dpi), (width-2*margin-gap)/2);
+    const auto& colors = copyfix::ui::colors;
+    copyfix::ui::Badge(dc, Scale(28,dpi), Scale(26,dpi), Scale(39,dpi));
+    const int top = Scale(107,dpi);
+    const int bottom = client.bottom-Scale(122,dpi);
+    copyfix::ui::Rounded(dc,RECT{margin, top, margin+column, bottom},
+                          colors.surface, colors.border, Scale(15,dpi));
+    copyfix::ui::Rounded(dc,
+        RECT{margin+column+gap, top, margin+column*2+gap, bottom},
+        colors.surface, colors.border, Scale(15,dpi));
+    HBRUSH stroke = CreateSolidBrush(colors.border);
+    if (stroke) {
+        RECT line{margin,client.bottom-Scale(116,dpi),
+                  client.right-margin,client.bottom-Scale(115,dpi)};
+        FillRect(dc,&line,stroke);
+        DeleteObject(stroke);
+    }
 }
 
 // RichEdit represents each hard paragraph break as a single CR, unlike
@@ -714,7 +740,14 @@ bool SetPreviewRichText(HWND control, const std::wstring& text) {
     if (!control) return false;
     SendMessageW(control, EM_EXLIMITTEXT, 0, static_cast<LPARAM>(kMaxPreviewChars*3));
     if (!SetWindowTextW(control, text.c_str())) return false;
-    SendMessageW(control, EM_SETBKGNDCOLOR, 0, static_cast<LPARAM>(kSurface));
+    SendMessageW(control, EM_SETBKGNDCOLOR, 0,
+                 static_cast<LPARAM>(copyfix::ui::colors.paper));
+    CHARFORMAT2W format{};
+    format.cbSize = sizeof(format);
+    format.dwMask = CFM_COLOR;
+    format.crTextColor = copyfix::ui::colors.ink;
+    SendMessageW(control, EM_SETCHARFORMAT, SCF_ALL,
+                 reinterpret_cast<LPARAM>(&format));
     return true;
 }
 
@@ -758,11 +791,11 @@ bool RenderPreviewText(HWND window) {
         return false;
     // Subtle formatting marks must be painted before stronger content marks.
     if (g_show_spaces) {
-        MarkChanges(before, diff.minorRemoved, RGB(255, 246, 243));
-        MarkChanges(after, diff.minorAdded, RGB(242, 250, 246));
+        MarkChanges(before, diff.minorRemoved, copyfix::ui::colors.minorRemoved);
+        MarkChanges(after, diff.minorAdded, copyfix::ui::colors.minorAdded);
     }
-    MarkChanges(before, diff.removed, RGB(255, 225, 225));
-    MarkChanges(after, diff.added, RGB(218, 247, 231));
+    MarkChanges(before, diff.removed, copyfix::ui::colors.removed);
+    MarkChanges(after, diff.added, copyfix::ui::colors.added);
     if (have_before_scroll) SendMessageW(before, EM_SETSCROLLPOS, 0,
                                           reinterpret_cast<LPARAM>(&before_scroll));
     if (have_after_scroll) SendMessageW(after, EM_SETSCROLLPOS, 0,
@@ -777,6 +810,7 @@ LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
     switch (msg) {
     case WM_CREATE: {
         g_preview_dpi = static_cast<int>(GetDpiForWindow(window));
+        InitWindowTheme(window);
         const wchar_t* profile = g_settings.profile == copyfix::Profile::Gentle ? L"бережный" :
                                  g_settings.profile == copyfix::Profile::Smart ? L"умный" : L"глубокий";
         MakeLabel(window, kPreviewTitle, L"Проверьте изменения", g_font_title);
@@ -797,11 +831,11 @@ LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
         MakeLabel(window, kPreviewNote, status, g_font_caption);
         const DWORD style = WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_TABSTOP | ES_MULTILINE |
                             ES_AUTOVSCROLL | ES_READONLY | ES_NOHIDESEL;
-        HWND before = CreateWindowExW(WS_EX_CLIENTEDGE, MSFTEDIT_CLASS, L"",
+        HWND before = CreateWindowExW(0, MSFTEDIT_CLASS, L"",
                                      style, 0, 0, 1, 1, window,
                                      reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kPreviewBeforeEdit)),
                                      g_instance, nullptr);
-        HWND after = CreateWindowExW(WS_EX_CLIENTEDGE, MSFTEDIT_CLASS, L"",
+        HWND after = CreateWindowExW(0, MSFTEDIT_CLASS, L"",
                                     style, 0, 0, 1, 1, window,
                                     reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kPreviewAfterEdit)),
                                     g_instance, nullptr);
@@ -834,27 +868,40 @@ LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
     }
     case WM_SIZE: LayoutPreview(window); return 0;
     case WM_DPICHANGED: {
+        g_preview_dpi = HIWORD(wparam);
         auto* suggested = reinterpret_cast<const RECT*>(lparam);
         SetWindowPos(window, nullptr, suggested->left, suggested->top,
                      suggested->right - suggested->left, suggested->bottom - suggested->top,
                      SWP_NOZORDER | SWP_NOACTIVATE);
         return 0;
     }
+    case WM_ERASEBKGND: return 1;
     case WM_CTLCOLORSTATIC: {
         auto dc = reinterpret_cast<HDC>(wparam);
         const UINT id = static_cast<UINT>(GetDlgCtrlID(reinterpret_cast<HWND>(lparam)));
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, id == kPreviewTitle || id == kPreviewBeforeLabel ||
-                         id == kPreviewAfterLabel ? kInk : kMuted);
+                         id == kPreviewAfterLabel ? copyfix::ui::colors.ink
+                                                 : copyfix::ui::colors.muted);
+        const bool onCard = id == kPreviewBeforeLabel || id == kPreviewAfterLabel;
+        return reinterpret_cast<LRESULT>(onCard ? g_surface_brush : g_canvas_brush);
+    }
+    case WM_CTLCOLORBTN: {
+        auto dc = reinterpret_cast<HDC>(wparam);
+        SetTextColor(dc, copyfix::ui::colors.ink);
+        SetBkColor(dc, copyfix::ui::colors.canvas);
         return reinterpret_cast<LRESULT>(g_canvas_brush);
     }
+    case WM_SETTINGCHANGE:
+    case WM_THEMECHANGED:
+        SynchronizeSystemTheme();
+        UpdateWindowTheme(window);
+        return 0;
     case WM_DRAWITEM: DrawActionButton(reinterpret_cast<const DRAWITEMSTRUCT*>(lparam)); return TRUE;
     case WM_PAINT: {
-        PAINTSTRUCT ps{}; const auto dc = BeginPaint(window, &ps);
-        RECT bounds{}; GetClientRect(window, &bounds);
-        RECT line{Scale(26,g_preview_dpi), Scale(98,g_preview_dpi),
-                  bounds.right - Scale(26,g_preview_dpi), Scale(99,g_preview_dpi)};
-        HBRUSH border = CreateSolidBrush(kBorder); FillRect(dc, &line, border); DeleteObject(border);
+        PAINTSTRUCT ps{};
+        const auto dc = BeginPaint(window, &ps);
+        DrawPreviewSurface(window, dc);
         EndPaint(window, &ps);
         return 0;
     }
@@ -920,6 +967,7 @@ void OpenPreview() {
         ? MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST)
         : MonitorFromWindow(g_message, MONITOR_DEFAULTTONEAREST);
     CenterWindowOnMonitor(g_preview, monitor);
+    InitWindowTheme(g_preview);
     ShowWindow(g_preview, SW_SHOWNORMAL);
 }
 
