@@ -365,8 +365,17 @@ int main() {
         cancelRect.bottom > client.bottom ||
         saveRect.bottom > client.bottom ||
         cancelRect.top <= feedbackRect.bottom ||
-        saveRect.left <= cancelRect.right)
+        saveRect.left <= cancelRect.right) {
+        std::cerr << "GEOMETRY " << dpi
+                  << " client=" << client.right << "," << client.bottom
+                  << " profile=" << profileRect.top << "," << profileRect.bottom
+                  << " explanation=" << explanationRect.top << "," << explanationRect.bottom
+                  << " feedback=" << feedbackRect.top << "," << feedbackRect.bottom
+                  << " cancel=" << cancelRect.top << "," << cancelRect.bottom
+                  << " save=" << saveRect.left << "," << saveRect.bottom
+                  << " cancelRight=" << cancelRect.right << "\n";
         return fail(51);
+    }
     SendDlgItemMessageW(g_settings_window, kSettingsShift, BM_SETCHECK, BST_CHECKED, 0);
     SendDlgItemMessageW(g_settings_window, kSettingsAlt, BM_SETCHECK, BST_UNCHECKED, 0);
     SendMessageW(editor, CB_SETCURSEL, f8Index, 0);
