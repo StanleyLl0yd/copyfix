@@ -273,14 +273,14 @@ int main() {
     };
     RECT client{};
     GetClientRect(g_settings_window,&client);
-    const RECT explanation = relative(kSettingsExplanation);
-    const RECT profile = relative(kProfileDeep);
+    const RECT explanationRect = relative(kSettingsExplanation);
+    const RECT profileRect = relative(kProfileDeep);
     const RECT feedbackRect = relative(kSettingsFeedback);
     const RECT cancelRect = relative(kSettingsCancel);
     const RECT saveRect = relative(kSettingsSave);
-    if (profile.top < Scale(181,dpi) || profile.bottom > Scale(285,dpi) ||
-        explanation.top < profile.bottom ||
-        explanation.bottom > Scale(285,dpi) ||
+    if (profileRect.top < Scale(181,dpi) || profileRect.bottom > Scale(285,dpi) ||
+        explanationRect.top < profileRect.bottom ||
+        explanationRect.bottom > Scale(285,dpi) ||
         feedbackRect.top < Scale(285,dpi) ||
         feedbackRect.bottom > client.bottom-Scale(61,dpi) ||
         cancelRect.bottom > client.bottom ||
