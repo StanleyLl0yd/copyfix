@@ -1414,7 +1414,7 @@ void LayoutSettings(HWND window) {
     Position(window, kSettingsLanguageSection, 36, 306, w-72, 19, dpi);
     Position(window, kSettingsLanguageInput, 36, 332, w-72, 108, dpi);
     Position(window, kSettingsLanguageHint, 36, 374, w-72, 22, dpi);
-    Position(window, kSettingsFeedback, 26, 406, w-52, 32, dpi);
+    Position(window, kSettingsFeedback, 26, 402, w-52, 27, dpi);
     Position(window, kSettingsCancel, w-250, h-48, 104, 34, dpi);
     Position(window, kSettingsSave, w-136, h-48, 116, 34, dpi);
 }
