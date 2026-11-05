@@ -17,7 +17,7 @@
 - On Windows 11 DWM draws the standard system caption and rounded outer corners. On Windows 10 unsupported DWM styling attributes fail harmlessly; render the client area as opaque surfaces.
 - Use **native Win32 BUTTON/COMBOBOX** controls, with scoped drawing/subclassing where necessary. Preserve focus, keyboard input and checkbox semantics; do not install keyboard hooks.
 - Keep the existing **Msftedit.dll RichEdit** controls, Unicode/UTF-16 handling, scroll preservation, diff ranges, clipboard safety and confirm/undo contracts.
-- All user preferences remain the existing `HKCU\Software\CopyFix` REG_DWORD values `Profile` and `Hotkey`.
+- Preferences remain in `HKCU\Software\CopyFix`. Existing REG_DWORD `Profile` and `Hotkey` retain compatibility; 1.2.0 adds optional `Language` (0 automatic Windows UI language, 1 Russian, 2 English). Missing or invalid values default to automatic. Cancel never commits a draft language.
 - Window sizes and initial locations are scaled to the **effective DPI of the monitor under the cursor**. Every window is centered using measured dimensions.
 - No third-party UI runtime, additional shipped files, network calls, telemetry or external assets. The approved artwork remains `artwork/app-icon.png` and `artwork/tray-16x16.png` with embedded `resources/copyfix.ico`.
 
@@ -42,6 +42,12 @@
 - Existing engine, clipboard, warning/rollback behavior, profiles, Registry storage and portable packaging are unchanged.
 
 **Still required before merge/release:** exact-head Windows and Clang CI, visual repeat on the owner's Windows 11 for all three windows and both themes (especially 100%/150%/200% DPI, the full keyboard list, labels and resize behavior). Automated tests cannot independently certify visual fidelity. Do not merge or publish without explicit owner acceptance.
+
+## Native language selection (further owner feedback, 2026-11-05)
+
+The initial draft did not follow the Windows UI language: all user-facing strings were hardcoded in Russian. Settings now has a third native card with `System default (Windows)`, `Русский`, and `English`. The RU/EN translation catalog covers all three windows, tray menu, notifications and shortcut validation. Automatic mode uses the current Windows UI language (Russian if the primary UI language is Russian, otherwise English); it can be overridden independently of the OS. Settings previews the chosen language without committing it until Save. Saving updates already-open Preview/About windows and the tray tooltip.
+
+The Settings window is taller to accommodate the language card. The shortcut popup shows at most six visible entries to reduce overlap with footer actions. No extra shipped DLLs/assets/runtime. Owner visual acceptance is still required for both languages and both themes, keyboard navigation, DPI, high contrast and native ComboBox popup rendering.
 
 ## Pending manual acceptance
 
