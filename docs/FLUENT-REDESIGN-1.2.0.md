@@ -29,6 +29,20 @@
 - PE hardening (ASLR/NX/CFG), native DLL imports, MSVC `/MT`, single portable EXE on GitHub Actions.
 - Protected PR exact-head checks and user acceptance **before** merging or publishing another GitHub Release.
 
+
+## Owner visual findings and corrective pass (2026-11-05)
+
+**Observed environment:** Windows 11 Pro 25H2, OS build 26200.9168. The initial draft failed visual acceptance. This pass remains **Draft** and is not a release approval.
+
+- Hotkey dropdown displayed corrupted symbols because `CBS_OWNERDRAWFIXED` lacked `CBS_HASSTRINGS`; fixed string retention and validated every visible list label with `CB_GETLBTEXT`. The dropdown uses compact rows with a bounded list height.
+- Settings card layout clipped profile explanatory text and collided with the footer; rebalanced card dimensions, gaps and buttons. Added explicit Win32 child-rectangle assertions.
+- Reduced oversized fonts to Segoe UI 10 pt body / 17 pt headings / 9 pt labels and captions, with per-monitor DPI font generation retained.
+- Compressed Settings, Preview and About, preserving approved Settings C / Preview A / About C, card boundaries, two RichEdit panes, and the canonical icon. Added preview resizing and About non-overlap regressions.
+- Replaced aliased GDI-line check glyph with a Windows Segoe UI Symbol checkmark drawn by the system font rasterizer. No external UI dependency or artwork change.
+- Existing engine, clipboard, warning/rollback behavior, profiles, Registry storage and portable packaging are unchanged.
+
+**Still required before merge/release:** exact-head Windows and Clang CI, visual repeat on the owner's Windows 11 for all three windows and both themes (especially 100%/150%/200% DPI, the full keyboard list, labels and resize behavior). Automated tests cannot independently certify visual fidelity. Do not merge or publish without explicit owner acceptance.
+
 ## Pending manual acceptance
 
 - [ ] Windows 11 light and dark, all **three** windows side-by-side against the approved mockups.
