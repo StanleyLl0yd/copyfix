@@ -72,7 +72,20 @@ int main() {
     CHARFORMAT2W fmt{};
     fmt.cbSize = sizeof(fmt);
     SendMessageW(after, EM_GETCHARFORMAT, SCF_SELECTION, reinterpret_cast<LPARAM>(&fmt));
-    if (!(fmt.dwMask & CFM_BACKCOLOR) || fmt.crBackColor != RGB(218, 247, 231)) return Fail(15);
+    if (!(fmt.dwMask & CFM_BACKCOLOR) ||
+        fmt.crBackColor != copyfix::ui::Light.added) return Fail(15);
+
+    // The same content/diff structure must remain readable with dark colors.
+    copyfix::ui::SetDark(true);
+    if (!RenderPreviewText(preview)) return Fail(38);
+    SendMessageW(after, EM_EXSETSEL, 0, reinterpret_cast<LPARAM>(&highlight));
+    fmt = {};
+    fmt.cbSize = sizeof(fmt);
+    SendMessageW(after, EM_GETCHARFORMAT, SCF_SELECTION, reinterpret_cast<LPARAM>(&fmt));
+    if (!(fmt.dwMask & CFM_BACKCOLOR) ||
+        fmt.crBackColor != copyfix::ui::Dark.added) return Fail(39);
+    copyfix::ui::SetDark(false);
+    if (!RenderPreviewText(preview)) return Fail(40);
     const auto toggle = GetDlgItem(preview, kPreviewShowBreaks);
     if (!toggle) return Fail(19);
     SendMessageW(toggle, BM_SETCHECK, BST_CHECKED, 0);
