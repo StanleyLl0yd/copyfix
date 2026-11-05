@@ -81,6 +81,16 @@ int main() {
                toggles.top > note.bottom &&
                apply.top > note.bottom && apply.bottom <= client.bottom;
     };
+    for (UINT id : {kPreviewAccept,kPreviewCancel}) {
+        DWORD_PTR data=0;
+        if (!GetWindowSubclass(GetDlgItem(preview,id),
+                               ActionButtonSubclass,2,&data)) return Fail(44);
+    }
+    wchar_t toggleLabel[80]{};
+    GetWindowTextW(GetDlgItem(preview,kPreviewShowBreaks),
+                   toggleLabel,static_cast<int>(std::size(toggleLabel)));
+    if (wcscmp(toggleLabel,L"Показать переносы строк")!=0)
+        return Fail(45);
     if (!checkLayout()) return Fail(41);
     RECT previousSize{};
     GetWindowRect(preview,&previousSize);
