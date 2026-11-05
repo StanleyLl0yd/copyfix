@@ -1,0 +1,111 @@
+#pragma once
+
+#include <windows.h>
+#include <dwmapi.h>
+
+namespace copyfix::ui {
+
+struct Palette {
+    COLORREF canvas, surface, raised, paper, ink, muted, blue, border;
+    COLORREF removed, added, minorRemoved, minorAdded, selected, warning;
+};
+
+inline constexpr Palette Light {
+    RGB(244,248,253), RGB(255,255,255), RGB(233,242,255),
+    RGB(255,255,255), RGB(28,42,64), RGB(95,111,136),
+    RGB(24,104,239), RGB(216,228,243), RGB(255,220,225),
+    RGB(216,245,228), RGB(255,246,243), RGB(242,250,246),
+    RGB(222,237,255), RGB(166,40,49)
+};
+
+inline constexpr Palette Dark {
+    RGB(23,33,49), RGB(33,46,65), RGB(44,62,85),
+    RGB(27,37,53), RGB(240,247,255), RGB(175,193,217),
+    RGB(35,138,251), RGB(65,83,109), RGB(98,53,69),
+    RGB(39,91,74), RGB(60,44,56), RGB(34,66,58),
+    RGB(34,81,139), RGB(255,156,156)
+};
+
+inline Palette colors = Light;
+inline bool dark = false;
+inline HBRUSH lightCanvas = nullptr;
+inline HBRUSH darkCanvas = nullptr;
+inline HBRUSH lightSurface = nullptr;
+inline HBRUSH darkSurface = nullptr;
+
+inline bool ReadSystemDark() noexcept {
+    DWORD value = 1;
+    DWORD size = sizeof(value);
+    const LONG result = RegGetValueW(HKEY_CURRENT_USER,
+        L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+        L"AppsUseLightTheme", RRF_RT_REG_DWORD, nullptr, &value, &size);
+    return result == ERROR_SUCCESS && value == 0;
+}
+
+inline void SetDark(bool value) noexcept {
+    dark = value;
+    colors = value ? Dark : Light;
+}
+
+inline void EnsureBrushes() noexcept {
+    if (!lightCanvas) lightCanvas = CreateSolidBrush(Light.canvas);
+    if (!darkCanvas) darkCanvas = CreateSolidBrush(Dark.canvas);
+    if (!lightSurface) lightSurface = CreateSolidBrush(Light.surface);
+    if (!darkSurface) darkSurface = CreateSolidBrush(Dark.surface);
+}
+
+inline HBRUSH CanvasBrush() noexcept {
+    EnsureBrushes();
+    return dark ? darkCanvas : lightCanvas;
+}
+inline HBRUSH SurfaceBrush() noexcept {
+    EnsureBrushes();
+    return dark ? darkSurface : lightSurface;
+}
+inline void FreeBrushes() noexcept {
+    for (HBRUSH brush : {lightCanvas, darkCanvas, lightSurface, darkSurface})
+        if (brush) DeleteObject(brush);
+    lightCanvas = darkCanvas = lightSurface = darkSurface = nullptr;
+}
+
+inline void ThemeWindow(HWND window) noexcept {
+    if (!window) return;
+    const BOOL enable = dark ? TRUE : FALSE;
+    DwmSetWindowAttribute(window, DWMWA_USE_IMMERSIVE_DARK_MODE,
+                          &enable, sizeof(enable));
+    const DWM_WINDOW_CORNER_PREFERENCE corners = DWMWCP_ROUND;
+    DwmSetWindowAttribute(window, DWMWA_WINDOW_CORNER_PREFERENCE,
+                          &corners, sizeof(corners));
+}
+
+inline void Rounded(HDC dc, RECT r, COLORREF fill, COLORREF outline,
+                    int radius) noexcept {
+    HBRUSH brush = CreateSolidBrush(fill);
+    HPEN pen = CreatePen(PS_SOLID, 1, outline);
+    if (!brush || !pen) {
+        if (brush) DeleteObject(brush);
+        if (pen) DeleteObject(pen);
+        return;
+    }
+    auto oldBrush = SelectObject(dc, brush);
+    auto oldPen = SelectObject(dc, pen);
+    RoundRect(dc, r.left, r.top, r.right, r.bottom, radius, radius);
+    SelectObject(dc, oldPen);
+    SelectObject(dc, oldBrush);
+    DeleteObject(pen);
+    DeleteObject(brush);
+}
+
+inline void Badge(HDC dc, int x, int y, int diameter) noexcept {
+    Rounded(dc, RECT{x,y,x+diameter,y+diameter},
+            colors.raised, colors.raised, diameter);
+    HPEN pen = CreatePen(PS_SOLID, 2, colors.blue);
+    if (!pen) return;
+    auto previous = SelectObject(dc, pen);
+    MoveToEx(dc, x+diameter/4, y+diameter/2, nullptr);
+    LineTo(dc, x+diameter*11/25, y+diameter*17/25);
+    LineTo(dc, x+diameter*20/25, y+diameter*7/25);
+    SelectObject(dc, previous);
+    DeleteObject(pen);
+}
+} // namespace copyfix::ui
