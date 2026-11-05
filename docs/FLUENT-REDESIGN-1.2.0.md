@@ -1,6 +1,6 @@
 # CopyFix Windows 1.2.0 — Approved Fluent UI redesign
 
-**Status:** Draft implementation, owner visual acceptance pending. The released Windows 1.1.0 is immutable.
+**Status:** **Windows 1.2.0 RELEASED / ACCEPTED (2026-11-05).** [Official GitHub Release](https://github.com/StanleyLl0yd/copyfix/releases/tag/v1.2.0), tag commit `e968b2610586085eff16112c8b0c04300b383841`, exact-main Windows 10/10 and Clang 3/3 PASS. Earlier releases remain unchanged.
 
 ## Design contract (approved 2026-11-05)
 
@@ -41,7 +41,7 @@
 - Replaced aliased GDI-line check glyph with a Windows Segoe UI Symbol checkmark drawn by the system font rasterizer. No external UI dependency or artwork change.
 - Existing engine, clipboard, warning/rollback behavior, profiles, Registry storage and portable packaging are unchanged.
 
-**Still required before merge/release:** exact-head Windows and Clang CI, visual repeat on the owner's Windows 11 for all three windows and both themes (especially 100%/150%/200% DPI, the full keyboard list, labels and resize behavior). Automated tests cannot independently certify visual fidelity. Do not merge or publish without explicit owner acceptance.
+**Release closure:** protected PR #40 squash-merged after exact-head checks; owner approved Windows 11 screenshots and final dark About correction. Exact-main CI and release workflow passed. Windows 10 and mixed-DPI manual retesting were not separately documented.
 
 ## Native language selection (further owner feedback, 2026-11-05)
 
@@ -51,14 +51,14 @@ The Settings window is taller to accommodate the language card. The shortcut pop
 
 ## Final native UI polish (2026-11-05)
 
-Following the owner's light-theme screenshots, the current layout is considered acceptable in principle, **not yet released or fully accepted**. This final small pass avoids any architecture change:
+Following the owner's light-theme screenshots, the layout was accepted provisionally and subsequently released after final dark-theme correction. This small polish pass made no architecture changes:
 
 - Preview: raise the status text contrast by blending the theme's muted and ink colors, and tighten the vertical gap to the footer toggles while keeping the action buttons aligned.
 - About: increase the canonical icon's displayed size from 48 to 54 DIPs; load the corresponding native icon size at the window DPI and refresh it when moving between monitors.
 - Settings: retain the bounded six-row native ComboBox popup. Windows scrolls the popup to the currently selected F9, so F1–F8 are above the visible region, **not missing**. The popup normally overlays lower controls; forcing it to open upward would require fragile native list-window repositioning, so it is intentionally not overridden.
 - Added precise Win32 smoke assertions for all supported F1–F24 function-key labels except Windows-reserved F12, popup bounds, footer geometry/status contrast and About icon geometry.
 
-No text transformation, clipboard, Undo, registration, persistence, language selection or canonical icon source was modified by that earlier polish pass. Manual **dark-theme** and mixed-DPI screenshots are still required before considering merge/release.
+No text transformation, clipboard, Undo, registration, persistence, language selection or canonical icon source was modified by that earlier polish pass. Dark-theme screenshots were reviewed and accepted before release; mixed-DPI manual verification remains optional post-release validation.
 
 ## Manual theme selection (owner request, 2026-11-05)
 
@@ -66,7 +66,7 @@ Settings C now has a fourth native card, **Appearance / ТЕМА ОФОРМЛЕ�
 
 Changing the theme within Settings updates existing Settings, Preview and About windows immediately, including the native RichEdit backgrounds and diff highlighting. **Cancel or closing Settings restores the committed theme; Save stores the choice** under `HKCU\\Software\\CopyFix`. Missing, incorrectly typed and out-of-range preference values fall back to Windows automatic mode. Windows high-contrast mode takes precedence over both manual choices. Existing Profile/Hotkey/Language values and portable packaging are preserved.
 
-Manual acceptance remains necessary for automatic, forced light and forced dark with the three windows, Windows appearance changes in Auto, live Preview recoloring, controls and dropdowns at 100/150/200% DPI, keyboard focus and high-contrast behavior.
+Owner accepted the final UI including dark Settings, Preview and About screenshots; additional 100/150/200% DPI and high-contrast manual coverage remains desirable after release.
 
 ## Dark About rendering correction (owner screenshots, 2026-11-05)
 
@@ -74,18 +74,18 @@ Owner screenshots showed an opaque white 54x54 rectangle behind the About icon a
 
 - About uses `SS_OWNERDRAW` and `DrawIconEx`, painting its current card background before drawing the **unchanged embedded canonical icon**. The icon stays centered and DPI-scaled; no artwork or ICO is modified.
 - Owner-drawn action buttons first clear their entire rect with the current theme's parent surface (About) or canvas (Settings/Preview), then paint rounded buttons. This removes stale light corners in dark mode without custom themes or external libraries.
-- A native About smoke test checks both light and dark offscreen icon/button corner pixels; real-Windows acceptance in both themes remains mandatory.
+- A native About smoke test checks both light and dark offscreen icon/button corner pixels; the owner subsequently accepted the actual dark About screenshots.
 
-## Pending manual acceptance
+## Acceptance record and optional post-release revalidation
 
-- [ ] Windows 11 light and dark, all **three** windows side-by-side against the approved mockups.
+- [x] Windows 11 light and dark, all **three** windows reviewed against approved mockups by the owner.
 - [ ] Windows 10 opaque light/dark fallback; standard title bar and corners do not break.
 - [ ] Change the Windows app theme with Settings/Preview/About open; client colors, text, diff and title bar update without restarting.
 - [ ] 100%, 150%, 200% DPI, including opening on a monitor with a different effective DPI and resizing/dragging between monitors.
 - [ ] Check dark dropdown visibility, standard checkboxes, segmented profile selection, tab order, focus cues, keyboard shortcuts and screen-reader labels.
 - [ ] Repeat previously accepted occupied-hotkey warning, default Ctrl+Alt+F9, save/cancel, settings persistence and profile behavior.
 - [ ] Long PDF text, Unicode, rich-format warning, highlighted differences, whitespace/break markers, both independent scroll positions, Apply/Cancel and Undo.
-- [ ] About uses the canonical app icon, correct runtime version and valid official project/GitHub links.
-- [ ] No new startup windows, no loss of tray functionality or one-EXE packaging.
+- [x] Owner accepted About's canonical icon, runtime v1.2.0 label, and dark-theme button/icon rendering; the project/GitHub links were previously included in native smoke checks.
+- [x] GitHub Release contains one portable EXE, verified by the publish workflow and release asset metadata; full manual tray/startup regression was not separately repeated.
 
-The application is **not** released at 1.2.0 until the owner reviews the new build and explicitly approves release.
+The owner explicitly authorized publication and [v1.2.0 was released](https://github.com/StanleyLl0yd/copyfix/releases/tag/v1.2.0) from protected exact-main CI [#42041741692](https://github.com/StanleyLl0yd/copyfix/actions/runs/42041741692). One unsigned `CopyFix.exe`, 348,160 bytes, SHA-256 `21a16cc89fbcd285732ad2e19ddfe722ee471279901f5e701f2df011fcec20e8`.
