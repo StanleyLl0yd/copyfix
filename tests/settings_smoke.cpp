@@ -219,6 +219,75 @@ int main() {
             f8Index = index;
     }
     if (f8Index < 0) return fail(31);
+    // Regression from owner-draw combo without CBS_HASSTRINGS: the visible
+    // labels were garbage Unicode even though CB_GETITEMDATA keys worked.
+    if (!(GetWindowLongPtrW(editor,GWL_STYLE) & CBS_HASSTRINGS))
+        return fail(44);
+    const auto named = [&](int index, const wchar_t* expected) {
+        wchar_t label[64]{};
+        const LRESULT size = SendMessageW(editor,CB_GETLBTEXTLEN,index,0);
+        if (size < 1 || size >= static_cast<LRESULT>(std::size(label)))
+            return false;
+        if (SendMessageW(editor,CB_GETLBTEXT,index,
+                         reinterpret_cast<LPARAM>(label)) != size)
+            return false;
+        return wcscmp(label,expected) == 0;
+    };
+    if (!named(0,L"A") || !named(25,L"Z") ||
+        !named(26,L"0") || !named(35,L"9") ||
+        !named(36,L"F1") || !named(f8Index,L"F8"))
+        return fail(45);
+    bool sawSpecial = false;
+    for (int index=0; index<count; ++index) {
+        wchar_t label[64]{};
+        const LRESULT length = SendMessageW(editor,CB_GETLBTEXTLEN,index,0);
+        if (length < 1 || length >= static_cast<LRESULT>(std::size(label)) ||
+            SendMessageW(editor,CB_GETLBTEXT,index,
+                reinterpret_cast<LPARAM>(label)) != length)
+            return fail(46);
+        for (int letter=0; letter<length; ++letter)
+            if (label[letter] < L' ' || label[letter] == 0xFFFD)
+                return fail(47);
+        if (wcscmp(label,L"Numpad +") == 0) sawSpecial = true;
+    }
+    if (!sawSpecial) return fail(48);
+    // Closed combobox must remain short, with a bounded dropdown and legible
+    // items; 34-pixel items made the earlier popup excessive.
+    const int dpi = static_cast<int>(GetDpiForWindow(editor));
+    if (SendMessageW(editor,CB_GETITEMHEIGHT,0,0) > Scale(28,dpi))
+        return fail(49);
+    RECT dropdown{};
+    if (!SendMessageW(editor,CB_GETDROPPEDCONTROLRECT,0,
+                      reinterpret_cast<LPARAM>(&dropdown)) ||
+        dropdown.bottom-dropdown.top > Scale(280,dpi))
+        return fail(50);
+    // Layout contract: help fits within its profile card and the footer is
+    // fully visible. This detects the clipped/overlapping Settings screenshot.
+    const auto relative = [&](UINT id) {
+        RECT rect{};
+        HWND control = GetDlgItem(g_settings_window,id);
+        if (control && GetWindowRect(control,&rect))
+            MapWindowPoints(nullptr,g_settings_window,
+                            reinterpret_cast<POINT*>(&rect),2);
+        return rect;
+    };
+    RECT client{};
+    GetClientRect(g_settings_window,&client);
+    const RECT explanation = relative(kSettingsExplanation);
+    const RECT profile = relative(kProfileDeep);
+    const RECT feedbackRect = relative(kSettingsFeedback);
+    const RECT cancelRect = relative(kSettingsCancel);
+    const RECT saveRect = relative(kSettingsSave);
+    if (profile.top < Scale(181,dpi) || profile.bottom > Scale(285,dpi) ||
+        explanation.top < profile.bottom ||
+        explanation.bottom > Scale(285,dpi) ||
+        feedbackRect.top < Scale(285,dpi) ||
+        feedbackRect.bottom > client.bottom-Scale(61,dpi) ||
+        cancelRect.bottom > client.bottom ||
+        saveRect.bottom > client.bottom ||
+        cancelRect.top <= feedbackRect.bottom ||
+        saveRect.left <= cancelRect.right)
+        return fail(51);
     SendDlgItemMessageW(g_settings_window, kSettingsShift, BM_SETCHECK, BST_CHECKED, 0);
     SendDlgItemMessageW(g_settings_window, kSettingsAlt, BM_SETCHECK, BST_UNCHECKED, 0);
     SendMessageW(editor, CB_SETCURSEL, f8Index, 0);
