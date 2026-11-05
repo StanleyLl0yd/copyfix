@@ -426,66 +426,124 @@ bool StyleCheckBox(HWND window) noexcept {
 
 void DrawNativeCombo(const DRAWITEMSTRUCT* item) noexcept {
     if (!item || item->CtlType != ODT_COMBOBOX) return;
-    const auto& c = copyfix::ui::colors;
-    const bool selected = (item->itemState & ODS_SELECTED) != 0;
-    const COLORREF fill = selected ? c.selected : c.surface;
-    HBRUSH brush = CreateSolidBrush(fill);
+    const auto& c=copyfix::ui::colors;
+    const bool field=(item->itemState & ODS_COMBOBOXEDIT)!=0;
+    const bool selected=!field && (item->itemState & ODS_SELECTED)!=0;
+    HBRUSH brush=CreateSolidBrush(selected ? c.selected : c.surface);
     if (!brush) return;
     FillRect(item->hDC,&item->rcItem,brush);
     DeleteObject(brush);
-    if (item->itemID != static_cast<UINT>(-1)) {
-        wchar_t value[80]{};
-        SendMessageW(item->hwndItem,CB_GETLBTEXT,item->itemID,
-                     reinterpret_cast<LPARAM>(value));
-        SetBkMode(item->hDC,TRANSPARENT);
-        SetTextColor(item->hDC,c.ink);
-        const auto old = SelectObject(item->hDC,
-            g_font_body ? FontForDpi(g_font_body,
-                static_cast<int>(GetDpiForWindow(item->hwndItem)))
-                        : GetStockObject(DEFAULT_GUI_FONT));
-        RECT text = item->rcItem;
-        text.left += Scale(11,static_cast<int>(GetDpiForWindow(item->hwndItem)));
-        DrawTextW(item->hDC,value,-1,&text,
-                  DT_LEFT|DT_SINGLELINE|DT_VCENTER);
-        SelectObject(item->hDC,old);
-        if (item->itemState & ODS_FOCUS) DrawFocusRect(item->hDC,&item->rcItem);
+    if (item->itemID==static_cast<UINT>(-1)) return;
+    wchar_t value[80]{};
+    if (SendMessageW(item->hwndItem,CB_GETLBTEXT,item->itemID,
+        reinterpret_cast<LPARAM>(value))==CB_ERR) return;
+    const int dpi=static_cast<int>(GetDpiForWindow(item->hwndItem));
+    const int oldMode=SetBkMode(item->hDC,TRANSPARENT);
+    const COLORREF oldColor=SetTextColor(item->hDC,
+        copyfix::ui::highContrast && selected
+            ? GetSysColor(COLOR_HIGHLIGHTTEXT) : c.ink);
+    const HGDIOBJ oldFont=SelectObject(item->hDC,g_font_body
+        ? FontForDpi(g_font_body,dpi) : GetStockObject(DEFAULT_GUI_FONT));
+    RECT text=item->rcItem;
+    text.left+=Scale(12,dpi); text.right-=Scale(7,dpi);
+    DrawTextW(item->hDC,value,-1,&text,
+        DT_LEFT|DT_SINGLELINE|DT_VCENTER|DT_END_ELLIPSIS|DT_NOPREFIX);
+    SelectObject(item->hDC,oldFont);
+    SetTextColor(item->hDC,oldColor); SetBkMode(item->hDC,oldMode);
+    if (selected && !copyfix::ui::highContrast) {
+        RECT marker{item->rcItem.left+Scale(3,dpi),
+                    item->rcItem.top+Scale(5,dpi),
+                    item->rcItem.left+Scale(5,dpi),
+                    item->rcItem.bottom-Scale(5,dpi)};
+        HBRUSH accent=CreateSolidBrush(c.blue);
+        if (accent) { FillRect(item->hDC,&marker,accent); DeleteObject(accent); }
     }
+    if ((item->itemState & ODS_FOCUS) && !field && !selected)
+        DrawFocusRect(item->hDC,&item->rcItem);
 }
 
 void DrawActionButton(const DRAWITEMSTRUCT* item) {
     if (!item) return;
-    if (item->CtlType == ODT_COMBOBOX) {
+    if (item->CtlType==ODT_COMBOBOX) {
         DrawNativeCombo(item);
         return;
     }
-    if (item->CtlType != ODT_BUTTON) return;
-    const auto& c = copyfix::ui::colors;
-    const bool primary = item->CtlID == kPreviewAccept || item->CtlID == kSettingsSave;
-    const bool segment = item->CtlID >= kProfileGentle && item->CtlID <= kProfileDeep;
-    const bool selected = segment &&
-        item->CtlID == kProfileGentle + static_cast<UINT>(g_draft_profile);
-    const bool pressed = (item->itemState & ODS_SELECTED) != 0;
-    const COLORREF fill = (primary || selected) ? (pressed ? RGB(16,78,190) : c.blue)
-                                              : (pressed ? c.raised : c.surface);
-    const COLORREF border = (primary || selected) ? c.blue : c.border;
-    const int dpi = static_cast<int>(GetDpiForWindow(item->hwndItem));
-    copyfix::ui::Rounded(item->hDC, item->rcItem, fill, border, Scale(9,dpi));
-    wchar_t text[100]{};
-    GetWindowTextW(item->hwndItem, text, static_cast<int>(std::size(text)));
-    SetBkMode(item->hDC, TRANSPARENT);
-    SetTextColor(item->hDC, (primary || selected) ? RGB(255,255,255) : c.ink);
-    const auto old = SelectObject(item->hDC,
-        g_font_label ? FontForDpi(g_font_label,dpi) : GetStockObject(DEFAULT_GUI_FONT));
-    RECT label = item->rcItem;
-    DrawTextW(item->hDC, text, -1, &label, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-    SelectObject(item->hDC, old);
+    if (item->CtlType!=ODT_BUTTON) return;
+    const auto& c=copyfix::ui::colors;
+    const bool primary=item->CtlID==kPreviewAccept || item->CtlID==kSettingsSave;
+    const bool segment=item->CtlID>=kProfileGentle && item->CtlID<=kProfileDeep;
+    const bool selected=segment &&
+        item->CtlID==kProfileGentle+static_cast<UINT>(g_draft_profile);
+    const bool pressed=(item->itemState & ODS_SELECTED)!=0;
+    const bool disabled=(item->itemState & ODS_DISABLED)!=0 ||
+                        IsWindowEnabled(item->hwndItem)==FALSE;
+    const bool hovered=GetPropW(item->hwndItem,kHoverProperty)!=nullptr;
+    const int dpi=static_cast<int>(GetDpiForWindow(item->hwndItem));
+    COLORREF fill=c.surface,border=c.border;
+    if (segment) {
+        HBRUSH base=CreateSolidBrush(c.raised);
+        if (base) { FillRect(item->hDC,&item->rcItem,base); DeleteObject(base); }
+        if (selected) {
+            fill=pressed ? copyfix::ui::Mix(c.blue,c.ink,18)
+                 : hovered ? copyfix::ui::Mix(c.blue,c.surface,10) : c.blue;
+            RECT pill=item->rcItem;
+            InflateRect(&pill,-Scale(1,dpi),-Scale(1,dpi));
+            copyfix::ui::Rounded(item->hDC,pill,fill,fill,
+                                 Scale(copyfix::ui::SegmentCorner,dpi));
+        } else if (hovered && !disabled) {
+            fill=copyfix::ui::Mix(c.raised,c.blue,12);
+            RECT pill=item->rcItem;
+            InflateRect(&pill,-Scale(2,dpi),-Scale(2,dpi));
+            copyfix::ui::Rounded(item->hDC,pill,fill,fill,
+                                 Scale(copyfix::ui::SegmentCorner,dpi));
+        }
+    } else {
+        if (primary) {
+            fill=pressed ? copyfix::ui::Mix(c.blue,c.ink,18)
+                 : hovered ? copyfix::ui::Mix(c.blue,c.surface,9) : c.blue;
+            border=fill;
+        } else {
+            fill=disabled ? copyfix::ui::Mix(c.surface,c.canvas,40)
+                 : pressed ? copyfix::ui::Mix(c.raised,c.blue,12)
+                 : hovered ? c.raised : c.surface;
+            border=hovered ? copyfix::ui::Mix(c.border,c.blue,22) : c.border;
+        }
+        copyfix::ui::Rounded(item->hDC,item->rcItem,fill,border,
+                             Scale(copyfix::ui::ControlCorner,dpi));
+    }
+    wchar_t labelText[100]{};
+    GetWindowTextW(item->hwndItem,labelText,static_cast<int>(std::size(labelText)));
+    const int oldMode=SetBkMode(item->hDC,TRANSPARENT);
+    const COLORREF ink=disabled ? c.muted :
+        primary || selected ? (copyfix::ui::highContrast
+            ? GetSysColor(COLOR_HIGHLIGHTTEXT) : RGB(255,255,255)) : c.ink;
+    const COLORREF oldColor=SetTextColor(item->hDC,ink);
+    const HFONT font=(item->CtlID==kAboutProject || item->CtlID==kAboutGitHub)
+        ? g_font_body : g_font_label;
+    const HGDIOBJ oldFont=SelectObject(item->hDC,font
+        ? FontForDpi(font,dpi) : GetStockObject(DEFAULT_GUI_FONT));
+    RECT text=item->rcItem;
+    InflateRect(&text,-Scale(8,dpi),0);
+    DrawTextW(item->hDC,labelText,-1,&text,
+        DT_CENTER|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS|DT_NOPREFIX);
+    SelectObject(item->hDC,oldFont);
+    SetTextColor(item->hDC,oldColor); SetBkMode(item->hDC,oldMode);
     if (item->itemState & ODS_FOCUS) {
-        RECT focus = item->rcItem;
-        InflateRect(&focus, -Scale(4,dpi), -Scale(4,dpi));
-        DrawFocusRect(item->hDC, &focus);
+        const COLORREF focus=(primary || selected) &&
+            !copyfix::ui::highContrast ? RGB(255,255,255) : c.blue;
+        HPEN pen=CreatePen(PS_SOLID,std::max(1,Scale(1,dpi)),focus);
+        if (pen) {
+            const HGDIOBJ oldPen=SelectObject(item->hDC,pen);
+            const HGDIOBJ oldBrush=SelectObject(item->hDC,GetStockObject(HOLLOW_BRUSH));
+            RECT ring=item->rcItem; InflateRect(&ring,-Scale(3,dpi),-Scale(3,dpi));
+            RoundRect(item->hDC,ring.left,ring.top,ring.right,ring.bottom,
+                Scale(copyfix::ui::ControlCorner,dpi),
+                Scale(copyfix::ui::ControlCorner,dpi));
+            SelectObject(item->hDC,oldBrush); SelectObject(item->hDC,oldPen);
+            DeleteObject(pen);
+        }
     }
 }
-
 
 // Windows global shortcuts use modifiers plus exactly one virtual key.
 constexpr UINT kHotkeyModifierMask = MOD_ALT | MOD_CONTROL | MOD_SHIFT;
