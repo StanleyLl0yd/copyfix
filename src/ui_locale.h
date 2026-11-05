@@ -74,6 +74,11 @@ enum class Text : std::size_t {
     InstanceTitle,
     InstanceRunning,
     RichEditMissing,
+    ThemeSection,
+    ThemeHint,
+    ThemeSystem,
+    ThemeLight,
+    ThemeDark,
     Count
 };
 
@@ -145,6 +150,11 @@ inline constexpr std::array<const wchar_t*,static_cast<std::size_t>(Text::Count)
     L"CopyFix - уже запущен",
     L"CopyFix уже запущен. Чтобы использовать новую версию, закройте работающий экземпляр через значок в трее и затем запустите этот файл снова.",
     L"Не удалось загрузить системный редактор Msftedit.dll.",
+    L"ТЕМА ОФОРМЛЕНИЯ",
+    L"Оформление окон CopyFix.",
+    L"Автоматически (Windows)",
+    L"Светлая",
+    L"Тёмная",
 };
 inline constexpr std::array<const wchar_t*,static_cast<std::size_t>(Text::Count)> kEnglish = {
     L"CopyFix - Settings",
@@ -214,6 +224,11 @@ inline constexpr std::array<const wchar_t*,static_cast<std::size_t>(Text::Count)
     L"CopyFix - Already running",
     L"CopyFix is already running. To use a new version, exit the running instance from the notification area, then launch this file again.",
     L"Could not load the system RichEdit component Msftedit.dll.",
+    L"APPEARANCE",
+    L"CopyFix window appearance.",
+    L"System default (Windows)",
+    L"Light",
+    L"Dark",
 };
 
 inline constexpr bool IsValid(DWORD value) noexcept { return value<=2; }
