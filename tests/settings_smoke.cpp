@@ -182,6 +182,7 @@ int main() {
         RegCloseKey(key); return fail(66);
     }
     g_settings.theme=copyfix::ui::Preference::Light;
+    g_settings.language=copyfix::i18n::Language::Russian;
 
     if (wcscmp(copyfix::i18n::Get(UiText::SettingsTitle,
               copyfix::i18n::Language::English),L"Settings")!=0 ||
