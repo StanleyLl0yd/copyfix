@@ -1,17 +1,19 @@
 # CopyFix — Current project status (2026-11-05)
 
-## Windows 1.1.0 — RELEASED / ACCEPTED
+## Windows 1.2.0 — RELEASED / ACCEPTED
 
-- Protected main `28e8bf2040370f90bcf87cbbc768468826de7e7a`, [PR #38](https://github.com/StanleyLl0yd/copyfix/pull/38) MERGED.
-- [GitHub Release v1.1.0](https://github.com/StanleyLl0yd/copyfix/releases/tag/v1.1.0) published, one unsigned portable Windows x64 EXE, 324096 bytes, SHA-256 `9b0ca168c74b00502a3dfabda8b9bb21d965bee9ee68b93273d805ff5f08520d`.
-- User acceptance **16/16 PASS**, plus Windows startup notification accepted. Exact-main [CI #42000538398](https://github.com/StanleyLl0yd/copyfix/actions/runs/42000538398): Windows 9/9 PASS, Clang 3/3 PASS.
+- [Release v1.2.0](https://github.com/StanleyLl0yd/copyfix/releases/tag/v1.2.0) published **2026-11-05**; portable unsigned Windows x64 `CopyFix.exe`, **348,160 bytes**, SHA-256 `21a16cc89fbcd285732ad2e19ddfe722ee471279901f5e701f2df011fcec20e8`.
+- [PR #40](https://github.com/StanleyLl0yd/copyfix/pull/40) **MERGED** via protected squash at `e968b2610586085eff16112c8b0c04300b383841`; tag `v1.2.0` points to that exact commit. Reviewed tree equals release tree.
+- [Exact-main CI #42041741692](https://github.com/StanleyLl0yd/copyfix/actions/runs/42041741692): Windows **10/10 PASS**, Clang **3/3 PASS**, PE/import/VersionInfo/icons PASS; [release workflow #42042243966](https://github.com/StanleyLl0yd/copyfix/actions/runs/42042243966) SUCCESS with one EXE.
+- Settings C / Preview A / About C, light and dark, manual language (System/Russian/English) and theme (System/Light/Dark), native Win32/GDI/DWM/shcore + RichEdit, no third-party UI libraries; clipboard, Undo and hotkey behavior preserved.
+- Owner accepted visual screenshots on Windows 11 25H2 including the final dark About icon/button fix. Independent Windows 10 and mixed-DPI manual revalidation was not performed for this release; CI smoke checks are not a substitute.
+- One-shot publisher is retired after successful publication. Android remains not started.
+- [Design/verification record](FLUENT-REDESIGN-1.2.0.md).
 
-## Windows 1.2.0 — VISUAL REDESIGN IN PROGRESS
+## Historical release — Windows 1.1.0
 
-- [PR #40](https://github.com/StanleyLl0yd/copyfix/pull/40), **Draft**. Not merged, not released.
-- Approved visual directions: Settings **C**, Preview **A**, About **C**, all in light/dark Windows themes, without radio buttons in Settings.
-- Native Win32/GDI/DWM/shcore, one portable EXE, existing RichEdit/text engine and canonical icon unchanged. The unreleased 1.2.0 draft adds persisted Language (automatic/Russian/English) and Theme (automatic/light/dark) selectors, complete RU/EN UI strings, immediate theme preview, Cancel rollback and compatibility with existing HKCU values. Owner visual acceptance is outstanding.
-- Design and acceptance: [FLUENT-REDESIGN-1.2.0.md](FLUENT-REDESIGN-1.2.0.md). Owner has not yet accepted the new implementation; do not create Release.
+- [Release v1.1.0](https://github.com/StanleyLl0yd/copyfix/releases/tag/v1.1.0) remains unchanged at protected `28e8bf2040370f90bcf87cbbc768468826de7e7a` ([PR #38](https://github.com/StanleyLl0yd/copyfix/pull/38)).
+- Portable unsigned EXE 324,096 bytes, SHA-256 `9b0ca168c74b00502a3dfabda8b9bb21d965bee9ee68b93273d805ff5f08520d`. Owner acceptance 16/16 plus Windows startup notification; [exact-main CI #42000538398](https://github.com/StanleyLl0yd/copyfix/actions/runs/42000538398): Windows 9/9, Clang 3/3 PASS.
 
 ## Android
 
