@@ -733,8 +733,9 @@ void LoadSettings() noexcept {
     const DWORD language = read(L"Language", 0);
     if (profile <= 2) g_settings.profile = static_cast<copyfix::Profile>(profile);
     g_settings.hotkey = DecodeHotkey(hotkey);
-    if (copyfix::i18n::IsValid(language))
-        g_settings.language=static_cast<copyfix::i18n::Language>(language);
+    g_settings.language=copyfix::i18n::IsValid(language)
+        ? static_cast<copyfix::i18n::Language>(language)
+        : copyfix::i18n::Language::System;
     RegCloseKey(key);
 }
 
