@@ -1,10 +1,14 @@
-<img src="artwork/app-icon.png" alt="CopyFix icon" width="88" align="right">
+<p align="center">
+  <img src="artwork/app-icon.png" alt="CopyFix icon" width="80">
+</p>
 
-# CopyFix
+<h1 align="center">CopyFix</h1>
 
-**English** · [Русский](README.ru.md)
+<p align="center">
+  <strong>A little help for text that didn't survive copy and paste.</strong>
+</p>
 
-**A little help for text that didn't survive copy and paste.**
+<p align="center"><strong>English</strong> · <a href="README.ru.md">Русский</a></p>
 
 Copy a paragraph from a PDF, paste it into an email, and suddenly every line ends in the middle of a sentence. Sometimes words are split by hyphens. Sometimes the spacing has a life of its own. Fixing it by hand is easy enough, but doing it over and over gets old.
 
