@@ -1867,7 +1867,6 @@ LRESULT CALLBACK AboutProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam) 
         UpdateWindowTheme(window);
         return 0;
     case WM_DPICHANGED: {
-        const int dpi=HIWORD(wparam);
         const auto* rect = reinterpret_cast<const RECT*>(lparam);
         SetWindowPos(window,nullptr,rect->left,rect->top,
                      rect->right-rect->left,rect->bottom-rect->top,
