@@ -41,6 +41,16 @@ int main() {
     Rounded(dc,RECT{8,8,56,56},Light.surface,Light.border,14);
     if (GetPixel(dc,32,32) != Light.surface ||
         GetPixel(dc,0,0) != Light.canvas) return fail(8);
+    SetHighContrast(true);
+    if (!highContrast || colors.canvas!=GetSysColor(COLOR_BTNFACE) ||
+        colors.ink!=GetSysColor(COLOR_WINDOWTEXT) ||
+        colors.surface!=GetSysColor(COLOR_WINDOW) ||
+        CanvasBrush()!=GetSysColorBrush(COLOR_BTNFACE) ||
+        SurfaceBrush()!=GetSysColorBrush(COLOR_WINDOW)) return fail(9);
+    SetHighContrast(false);
+    if (highContrast || colors.canvas!=Light.canvas) return fail(10);
+    if (Mix(RGB(0,0,0),RGB(100,100,100),50)!=RGB(50,50,50))
+        return fail(11);
     SelectObject(dc,old);
     DeleteObject(bitmap);
     DeleteDC(dc);
