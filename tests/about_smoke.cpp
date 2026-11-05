@@ -1,4 +1,4 @@
-// Native Windows positioning smoke for the real About callback, without opening a browser.
+// Native Win32 smoke for the approved About C window, centered without a browser.
 #define wWinMain CopyFixUnusedWinMainForAboutSmoke
 #include "../src/winmain.cpp"
 #undef wWinMain
@@ -7,38 +7,51 @@
 
 int main() {
     const auto fail = [](int code) {
-        std::cerr << "ABOUT_POSITION_FAILURE_" << code << "\n";
+        std::cerr << "ABOUT_UI_FAILURE_" << code << "\n";
         return code;
     };
+    g_instance = GetModuleHandleW(nullptr);
+    g_canvas_brush = CreateSolidBrush(kCanvas);
+    g_surface_brush = CreateSolidBrush(kSurface);
+    const WNDCLASSEXW wc{
+        sizeof(WNDCLASSEXW), 0, AboutProc, 0, 0, g_instance,
+        nullptr, nullptr, g_canvas_brush, nullptr, L"CopyFixAbout", nullptr
+    };
+    if (!g_canvas_brush || !g_surface_brush || !RegisterClassExW(&wc))
+        return fail(1);
     POINT cursor{};
-    if (!GetCursorPos(&cursor)) return fail(1);
+    if (!GetCursorPos(&cursor)) return fail(2);
     const HMONITOR monitor = MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST);
     MONITORINFO info{sizeof(info)};
-    if (!monitor || !GetMonitorInfoW(monitor, &info)) return fail(2);
+    if (!monitor || !GetMonitorInfoW(monitor, &info)) return fail(3);
 
-    HWND window = CreateWindowExW(0, L"STATIC", L"CopyFix About positioning test",
-                                WS_OVERLAPPEDWINDOW, 10, 20, 480, 300,
-                                nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
-    if (!window) return fail(3);
-    RECT before{}, after{};
-    const bool measured = GetWindowRect(window, &before);
-    const HRESULT callback = measured
-        ? AboutCallback(window, TDN_CREATED, 0, 0, reinterpret_cast<LONG_PTR>(monitor))
-        : E_FAIL;
-    const bool positioned = GetWindowRect(window, &after);
-    DestroyWindow(window);
-    if (!measured || FAILED(callback) || !positioned) return fail(4);
-
-    const int width = before.right - before.left;
-    const int height = before.bottom - before.top;
+    ShowAbout(nullptr);
+    const HWND window = g_about_window;
+    RECT bounds{};
+    if (!window || !GetWindowRect(window, &bounds)) return fail(4);
+    const int width = bounds.right - bounds.left;
+    const int height = bounds.bottom - bounds.top;
     const int workWidth = info.rcWork.right - info.rcWork.left;
     const int workHeight = info.rcWork.bottom - info.rcWork.top;
     const int expectedX = info.rcWork.left + (workWidth > width ? (workWidth - width) / 2 : 0);
     const int expectedY = info.rcWork.top + (workHeight > height ? (workHeight - height) / 2 : 0);
-    if (after.left != expectedX || after.top != expectedY ||
-        after.right - after.left != width || after.bottom - after.top != height)
-        return fail(5);
+    if (bounds.left != expectedX || bounds.top != expectedY ||
+        width <= 0 || height <= 0) return fail(5);
 
-    std::cout << "PASS About callback centers the measured window on its chosen monitor\n";
+    wchar_t version[100]{};
+    GetWindowTextW(GetDlgItem(window,kAboutVersionLabel),
+                   version, static_cast<int>(std::size(version)));
+    if (wcscmp(version,kAboutVersionString) != 0 ||
+        !GetDlgItem(window,kAboutIcon) ||
+        !GetDlgItem(window,kAboutProject) ||
+        !GetDlgItem(window,kAboutGitHub) ||
+        !GetDlgItem(window,kAboutLicense)) return fail(6);
+
+    SendMessageW(window,WM_CLOSE,0,0);
+    if (g_about_window || IsWindow(window)) return fail(7);
+    UnregisterClassW(L"CopyFixAbout",g_instance);
+    DeleteObject(g_canvas_brush);
+    DeleteObject(g_surface_brush);
+    std::cout << "PASS About C native window centering, dynamic version, icon, links and closure\n";
     return 0;
 }
