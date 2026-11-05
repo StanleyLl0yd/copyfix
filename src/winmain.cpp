@@ -7,6 +7,7 @@
 #include "copyfix_version.h"
 #include "diff_spans.h"
 #include "resource_ids.h"
+#include "ui_theme.h"
 
 #include "text_engine.h"
 
@@ -58,6 +59,16 @@ constexpr UINT kPreviewNote = 414;
 constexpr UINT kSettingsTitle = 415;
 constexpr UINT kSettingsSubtitle = 416;
 constexpr UINT kSettingsFeedback = 417;
+constexpr UINT kProfileGentle = 430;
+constexpr UINT kProfileSmart = 431;
+constexpr UINT kProfileDeep = 432;
+constexpr UINT kAboutIcon = 440;
+constexpr UINT kAboutTitle = 441;
+constexpr UINT kAboutVersion = 442;
+constexpr UINT kAboutDescriptionLabel = 443;
+constexpr UINT kAboutProject = 444;
+constexpr UINT kAboutGitHub = 445;
+constexpr UINT kAboutLicense = 446;
 
 constexpr wchar_t kAboutVersion[] = L"CopyFix " COPYFIX_VERSION_WSTR;
 constexpr wchar_t kAboutWebsite[] = L"https://stanleyll0yd.github.io/apps/copyfix/";
@@ -181,6 +192,8 @@ HICON LoadAppIcon(int pixels) noexcept {
 HWND g_message = nullptr;
 HWND g_preview = nullptr;
 HWND g_settings_window = nullptr;
+HWND g_about_window = nullptr;
+copyfix::Profile g_draft_profile = copyfix::Profile::Deep;
 NOTIFYICONDATAW g_tray{};
 Settings g_settings;
 Pending g_pending;
@@ -196,6 +209,34 @@ HotkeyChord g_registered_hotkey;
 // Injectable only for deterministic window tests; production uses MessageBoxW.
 auto g_hotkey_warning_dialog = &MessageBoxW;
 int Scale(int px, int dpi) noexcept { return MulDiv(px, dpi, 96); }
+
+bool RenderPreviewText(HWND window);
+
+void UpdateWindowTheme(HWND window) noexcept {
+    if (!window) return;
+    copyfix::ui::ThemeWindow(window);
+    InvalidateRect(window, nullptr, TRUE);
+    for (HWND child = GetWindow(window, GW_CHILD); child;
+         child = GetWindow(child, GW_HWNDNEXT))
+        InvalidateRect(child, nullptr, TRUE);
+}
+
+void SynchronizeSystemTheme() noexcept {
+    const bool shouldDark = copyfix::ui::ReadSystemDark();
+    if (shouldDark == copyfix::ui::dark) return;
+    copyfix::ui::SetDark(shouldDark);
+    g_canvas_brush = copyfix::ui::CanvasBrush();
+    g_surface_brush = copyfix::ui::SurfaceBrush();
+    UpdateWindowTheme(g_settings_window);
+    UpdateWindowTheme(g_preview);
+    UpdateWindowTheme(g_about_window);
+    if (g_preview) RenderPreviewText(g_preview);
+}
+
+void InitWindowTheme(HWND window) noexcept {
+    copyfix::ui::ThemeWindow(window);
+}
+
 HFONT MakeFont(int points, int weight, int dpi) {
     return CreateFontW(-MulDiv(points, dpi, 72), 0, 0, 0, weight,
                        FALSE, FALSE, FALSE, DEFAULT_CHARSET,
@@ -220,34 +261,32 @@ void Position(HWND parent, UINT id, int x, int y, int w, int h, int dpi) {
 }
 void DrawActionButton(const DRAWITEMSTRUCT* item) {
     if (!item || item->CtlType != ODT_BUTTON) return;
+    const auto& c = copyfix::ui::colors;
     const bool primary = item->CtlID == kPreviewAccept || item->CtlID == kSettingsSave;
+    const bool segment = item->CtlID >= kProfileGentle && item->CtlID <= kProfileDeep;
+    const bool selected = segment &&
+        item->CtlID == kProfileGentle + static_cast<UINT>(g_draft_profile);
     const bool pressed = (item->itemState & ODS_SELECTED) != 0;
-    const auto fill = CreateSolidBrush(primary ? (pressed ? RGB(29, 78, 216) : kBlue)
-                                             : (pressed ? RGB(233, 238, 246) : kSurface));
-    const auto pen = CreatePen(PS_SOLID, 1, primary ? kBlue : kBorder);
-    HGDIOBJ oldbrush = SelectObject(item->hDC, fill);
-    HGDIOBJ oldpen = SelectObject(item->hDC, pen);
-    RECT box = item->rcItem;
-    RoundRect(item->hDC, box.left, box.top, box.right, box.bottom,
-              Scale(12, g_preview_dpi), Scale(12, g_preview_dpi));
-    SelectObject(item->hDC, oldbrush);
-    SelectObject(item->hDC, oldpen);
-    DeleteObject(fill);
-    DeleteObject(pen);
+    const COLORREF fill = (primary || selected) ? (pressed ? RGB(16,78,190) : c.blue)
+                                              : (pressed ? c.raised : c.surface);
+    const COLORREF border = (primary || selected) ? c.blue : c.border;
+    const int dpi = static_cast<int>(GetDpiForWindow(item->hwndItem));
+    copyfix::ui::Rounded(item->hDC, item->rcItem, fill, border, Scale(13,dpi));
     wchar_t text[100]{};
     GetWindowTextW(item->hwndItem, text, static_cast<int>(std::size(text)));
     SetBkMode(item->hDC, TRANSPARENT);
-    SetTextColor(item->hDC, primary ? RGB(255,255,255) : kInk);
-    const auto priorfont = SelectObject(item->hDC, g_font_label ? g_font_label : GetStockObject(DEFAULT_GUI_FONT));
-    DrawTextW(item->hDC, text, -1, &box, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-    SelectObject(item->hDC, priorfont);
+    SetTextColor(item->hDC, (primary || selected) ? RGB(255,255,255) : c.ink);
+    const auto old = SelectObject(item->hDC,
+        g_font_label ? g_font_label : GetStockObject(DEFAULT_GUI_FONT));
+    RECT label = item->rcItem;
+    DrawTextW(item->hDC, text, -1, &label, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    SelectObject(item->hDC, old);
     if (item->itemState & ODS_FOCUS) {
-        RECT focus = box;
-        InflateRect(&focus, -Scale(4,g_preview_dpi), -Scale(4,g_preview_dpi));
+        RECT focus = item->rcItem;
+        InflateRect(&focus, -Scale(4,dpi), -Scale(4,dpi));
         DrawFocusRect(item->hDC, &focus);
     }
 }
-
 
 
 // Windows global shortcuts use modifiers plus exactly one virtual key.
@@ -1192,8 +1231,9 @@ int WINAPI wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE, _In_ PWSTR, _In
         CloseHandle(g_instance_mutex);
         return 1;
     }
-    g_canvas_brush = CreateSolidBrush(kCanvas);
-    g_surface_brush = CreateSolidBrush(kSurface);
+    copyfix::ui::SetDark(copyfix::ui::ReadSystemDark());
+    g_canvas_brush = copyfix::ui::CanvasBrush();
+    g_surface_brush = copyfix::ui::SurfaceBrush();
     const int dpi = static_cast<int>(GetDpiForSystem());
     g_font_body = MakeFont(11, FW_NORMAL, dpi);
     g_font_title = MakeFont(22, FW_SEMIBOLD, dpi);
@@ -1228,8 +1268,8 @@ int WINAPI wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE, _In_ PWSTR, _In
     if (g_font_title) DeleteObject(g_font_title);
     if (g_font_label) DeleteObject(g_font_label);
     if (g_font_caption) DeleteObject(g_font_caption);
-    if (g_canvas_brush) DeleteObject(g_canvas_brush);
-    if (g_surface_brush) DeleteObject(g_surface_brush);
+    copyfix::ui::FreeBrushes();
+    g_canvas_brush = g_surface_brush = nullptr;
     if (g_richedit_module) FreeLibrary(g_richedit_module);
     CloseHandle(g_instance_mutex);
     return static_cast<int>(message.wParam);
