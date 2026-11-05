@@ -904,6 +904,7 @@ LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
 }
 
 void OpenPreview() {
+    SynchronizeSystemTheme();
     if (g_preview) { SetForegroundWindow(g_preview); return; }
     g_preview = CreateWindowExW(WS_EX_APPWINDOW, L"CopyFixPreview", L"CopyFix - проверка текста",
         WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, CW_USEDEFAULT, CW_USEDEFAULT,
@@ -1180,6 +1181,7 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
 }
 
 void OpenSettings() {
+    SynchronizeSystemTheme();
     if (g_settings_window) { SetForegroundWindow(g_settings_window); return; }
     g_settings_window = CreateWindowExW(WS_EX_APPWINDOW,L"CopyFixSettings",L"CopyFix - настройки",
         WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
@@ -1313,6 +1315,7 @@ LRESULT CALLBACK AboutProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam) 
 }
 
 void ShowAbout(HWND parent) noexcept {
+    SynchronizeSystemTheme();
     if (g_about_window) {
         SetForegroundWindow(g_about_window);
         return;
@@ -1388,6 +1391,10 @@ LRESULT CALLBACK MessageProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
         NotifyStartup(hotkey_ok);
         return 0;
     }
+    case WM_SETTINGCHANGE:
+    case WM_THEMECHANGED:
+        SynchronizeSystemTheme();
+        return 0;
     case WM_HOTKEY:
         if (wparam == g_hotkey_id) {
             // Shortcut capture must not accidentally process the clipboard.
