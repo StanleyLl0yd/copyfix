@@ -64,20 +64,15 @@ constexpr UINT kProfileSmart = 431;
 constexpr UINT kProfileDeep = 432;
 constexpr UINT kAboutIcon = 440;
 constexpr UINT kAboutTitle = 441;
-constexpr UINT kAboutVersion = 442;
+constexpr UINT kAboutVersionLabel = 442;
 constexpr UINT kAboutDescriptionLabel = 443;
 constexpr UINT kAboutProject = 444;
 constexpr UINT kAboutGitHub = 445;
 constexpr UINT kAboutLicense = 446;
 
-constexpr wchar_t kAboutVersion[] = L"CopyFix " COPYFIX_VERSION_WSTR;
+constexpr wchar_t kAboutVersionString[] = L"v" COPYFIX_VERSION_WSTR;
 constexpr wchar_t kAboutWebsite[] = L"https://stanleyll0yd.github.io/apps/copyfix/";
-constexpr wchar_t kAboutWebsiteLink[] =
-    L"<a href=\"https://stanleyll0yd.github.io/apps/copyfix/\">https://stanleyll0yd.github.io/apps/copyfix/</a>";
-constexpr wchar_t kAboutDescription[] =
-    L"Нативная офлайн-утилита для очистки текста.\n"
-    L"Автоматически сохраняет структурированные фрагменты.\n"
-    L"Изменение форматов HTML/RTF требует подтверждения.";
+constexpr wchar_t kAboutGitHubUrl[] = L"https://github.com/StanleyLl0yd/copyfix";
 
 void CenterWindowOnMonitor(HWND dialog, HMONITOR monitor) noexcept {
     MONITORINFO info{sizeof(info)};
@@ -95,51 +90,7 @@ void CenterWindowOnMonitor(HWND dialog, HMONITOR monitor) noexcept {
     SetWindowPos(dialog, nullptr, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
-HRESULT CALLBACK AboutCallback(HWND window, UINT notification, WPARAM, LPARAM data,
-                              LONG_PTR callbackData) noexcept {
-    if (notification == TDN_CREATED) {
-        CenterWindowOnMonitor(window, reinterpret_cast<HMONITOR>(callbackData));
-    } else if (notification == TDN_HYPERLINK_CLICKED && data) {
-        const auto* url = reinterpret_cast<const wchar_t*>(data);
-        if (wcscmp(url, kAboutWebsite) == 0)
-            ShellExecuteW(window, L"open", kAboutWebsite, nullptr, nullptr, SW_SHOWNORMAL);
-    }
-    return S_OK;
-}
-
-void ShowAbout(HWND parent) noexcept {
-    POINT cursor{};
-    const HMONITOR monitor = GetCursorPos(&cursor)
-        ? MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST)
-        : MonitorFromWindow(parent, MONITOR_DEFAULTTONEAREST);
-    TASKDIALOGCONFIG config{};
-    config.cbSize = sizeof(config);
-    config.hwndParent = parent;
-    config.dwFlags = TDF_ENABLE_HYPERLINKS;
-    config.lpCallbackData = reinterpret_cast<LONG_PTR>(monitor);
-    config.dwCommonButtons = TDCBF_OK_BUTTON;
-    config.pszWindowTitle = L"О CopyFix";
-    config.pszMainInstruction = kAboutVersion;
-    config.pszMainIcon = TD_INFORMATION_ICON;
-    config.pszContent = kAboutDescription;
-    config.pszFooter = kAboutWebsiteLink;
-    config.pfCallback = AboutCallback;
-    using TaskDialogFunction = HRESULT (WINAPI*)(const TASKDIALOGCONFIG*, int*, int*, BOOL*);
-    if (HMODULE controls = LoadLibraryExW(L"comctl32.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32)) {
-        auto* show_dialog = reinterpret_cast<TaskDialogFunction>(
-            GetProcAddress(controls, "TaskDialogIndirect"));
-        const bool shown = show_dialog && SUCCEEDED(show_dialog(&config, nullptr, nullptr, nullptr));
-        FreeLibrary(controls);
-        if (shown) return;
-    }
-    constexpr wchar_t fallback[] =
-        L"CopyFix " COPYFIX_VERSION_WSTR L"\n"
-        L"Нативная офлайн-утилита для очистки текста.\n"
-        L"Автоматически сохраняет структурированные фрагменты.\n"
-        L"Изменение форматов HTML/RTF требует подтверждения.\n"
-        L"https://stanleyll0yd.github.io/apps/copyfix/";
-    MessageBoxW(parent, fallback, L"О CopyFix", MB_OK | MB_ICONINFORMATION);
-}
+void ShowAbout(HWND parent) noexcept;
 
 constexpr COLORREF kCanvas = RGB(247, 249, 252);
 constexpr COLORREF kSurface = RGB(255, 255, 255);
@@ -1243,6 +1194,143 @@ void OpenSettings() {
     ShowWindow(g_settings_window, SW_SHOWNORMAL);
 }
 
+HWND MakeCenteredLabel(HWND parent, UINT id, const wchar_t* text,
+                       HFONT font) {
+    HWND child = CreateWindowExW(0, L"STATIC", text,
+        WS_CHILD | WS_VISIBLE | SS_CENTER,
+        0,0,1,1,parent,
+        reinterpret_cast<HMENU>(static_cast<UINT_PTR>(id)),
+        g_instance,nullptr);
+    ApplyFont(child,font);
+    return child;
+}
+
+void LayoutAbout(HWND window) {
+    RECT bounds{}; GetClientRect(window, &bounds);
+    const int dpi = static_cast<int>(GetDpiForWindow(window));
+    const int w = MulDiv(bounds.right,96,dpi);
+    Position(window,kAboutIcon,(w-72)/2,31,72,72,dpi);
+    Position(window,kAboutTitle,30,113,w-60,45,dpi);
+    Position(window,kAboutVersionLabel,30,161,w-60,26,dpi);
+    Position(window,kAboutDescriptionLabel,28,197,w-56,42,dpi);
+    Position(window,kAboutProject,33,256,w-66,43,dpi);
+    Position(window,kAboutGitHub,33,308,w-66,43,dpi);
+    Position(window,kAboutLicense,24,367,w-48,44,dpi);
+}
+
+void DrawAboutSurface(HWND window, HDC dc) noexcept {
+    RECT client{}; GetClientRect(window,&client);
+    FillRect(dc,&client,g_canvas_brush ? g_canvas_brush
+                                      : static_cast<HBRUSH>(GetStockObject(WHITE_BRUSH)));
+    const auto& p = copyfix::ui::colors;
+    const int dpi = static_cast<int>(GetDpiForWindow(window));
+    copyfix::ui::Rounded(dc,
+        RECT{Scale(20,dpi),Scale(18,dpi),
+             client.right-Scale(20,dpi),client.bottom-Scale(18,dpi)},
+        p.surface,p.border,Scale(20,dpi));
+}
+
+LRESULT CALLBACK AboutProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam) {
+    switch (msg) {
+    case WM_CREATE: {
+        InitWindowTheme(window);
+        HWND icon = CreateWindowExW(0,L"STATIC",nullptr,
+            WS_CHILD | WS_VISIBLE | SS_ICON | SS_REALSIZEIMAGE,
+            0,0,1,1,window,
+            reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kAboutIcon)),
+            g_instance,nullptr);
+        if (!icon) return -1;
+        SendMessageW(icon,STM_SETICON,reinterpret_cast<WPARAM>(LoadAppIcon(64)),0);
+        MakeCenteredLabel(window,kAboutTitle,L"CopyFix",g_font_title);
+        MakeCenteredLabel(window,kAboutVersionLabel,kAboutVersionString,g_font_label);
+        MakeCenteredLabel(window,kAboutDescriptionLabel,
+            L"Умная обработка скопированного текста",g_font_body);
+        HWND project = CreateWindowExW(0,L"BUTTON",L"ⓘ   О проекте",
+            WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_OWNERDRAW,
+            0,0,1,1,window,
+            reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kAboutProject)),
+            g_instance,nullptr);
+        HWND github = CreateWindowExW(0,L"BUTTON",L"GitHub   ↗",
+            WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_OWNERDRAW,
+            0,0,1,1,window,
+            reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kAboutGitHub)),
+            g_instance,nullptr);
+        if (!project || !github) return -1;
+        ApplyFont(project,g_font_body);
+        ApplyFont(github,g_font_body);
+        MakeCenteredLabel(window,kAboutLicense,
+            L"© 2026 Stanley Lloyd   ·   Лицензия MIT",g_font_caption);
+        LayoutAbout(window);
+        return 0;
+    }
+    case WM_ERASEBKGND: return 1;
+    case WM_PAINT: {
+        PAINTSTRUCT ps{};
+        const auto dc = BeginPaint(window,&ps);
+        DrawAboutSurface(window,dc);
+        EndPaint(window,&ps);
+        return 0;
+    }
+    case WM_CTLCOLORSTATIC: {
+        auto dc = reinterpret_cast<HDC>(wparam);
+        SetBkMode(dc,TRANSPARENT);
+        const UINT id = static_cast<UINT>(GetDlgCtrlID(reinterpret_cast<HWND>(lparam)));
+        SetTextColor(dc,id == kAboutTitle ? copyfix::ui::colors.ink
+            : (id == kAboutVersionLabel ? copyfix::ui::colors.blue
+                                        : copyfix::ui::colors.muted));
+        return reinterpret_cast<LRESULT>(g_surface_brush);
+    }
+    case WM_DRAWITEM:
+        DrawActionButton(reinterpret_cast<const DRAWITEMSTRUCT*>(lparam));
+        return TRUE;
+    case WM_COMMAND:
+        if (HIWORD(wparam) == BN_CLICKED &&
+            LOWORD(wparam) == kAboutProject &&
+            reinterpret_cast<HWND>(lparam) == GetDlgItem(window,kAboutProject)) {
+            ShellExecuteW(window,L"open",kAboutWebsite,nullptr,nullptr,SW_SHOWNORMAL);
+            return 0;
+        }
+        if (HIWORD(wparam) == BN_CLICKED &&
+            LOWORD(wparam) == kAboutGitHub &&
+            reinterpret_cast<HWND>(lparam) == GetDlgItem(window,kAboutGitHub)) {
+            ShellExecuteW(window,L"open",kAboutGitHubUrl,nullptr,nullptr,SW_SHOWNORMAL);
+            return 0;
+        }
+        if (LOWORD(wparam) == IDCANCEL && HIWORD(wparam) == 0 && !lparam) {
+            DestroyWindow(window);
+            return 0;
+        }
+        break;
+    case WM_SETTINGCHANGE:
+    case WM_THEMECHANGED:
+        SynchronizeSystemTheme();
+        UpdateWindowTheme(window);
+        return 0;
+    case WM_CLOSE: DestroyWindow(window); return 0;
+    case WM_DESTROY: g_about_window = nullptr; return 0;
+    }
+    return DefWindowProcW(window,msg,wparam,lparam);
+}
+
+void ShowAbout(HWND parent) noexcept {
+    if (g_about_window) {
+        SetForegroundWindow(g_about_window);
+        return;
+    }
+    g_about_window = CreateWindowExW(WS_EX_APPWINDOW,L"CopyFixAbout",
+        L"CopyFix — о программе",WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
+        CW_USEDEFAULT,CW_USEDEFAULT,Scale(420,96),Scale(460,96),
+        nullptr,nullptr,g_instance,nullptr);
+    if (!g_about_window) return;
+    POINT cursor{};
+    const HMONITOR monitor = GetCursorPos(&cursor)
+        ? MonitorFromPoint(cursor,MONITOR_DEFAULTTONEAREST)
+        : MonitorFromWindow(parent,MONITOR_DEFAULTTONEAREST);
+    CenterWindowOnMonitor(g_about_window,monitor);
+    InitWindowTheme(g_about_window);
+    ShowWindow(g_about_window,SW_SHOWNORMAL);
+}
+
 void ShowMenu() {
     HMENU menu = CreatePopupMenu();
     HMENU profiles = CreatePopupMenu();
@@ -1333,6 +1421,7 @@ LRESULT CALLBACK MessageProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
     case WM_DESTROY:
         if (g_preview) DestroyWindow(g_preview);
         if (g_settings_window) DestroyWindow(g_settings_window);
+        if (g_about_window) DestroyWindow(g_about_window);
         if (g_hotkey_registered) UnregisterHotKey(window, g_hotkey_id);
         Shell_NotifyIconW(NIM_DELETE, &g_tray);
         ClearPending(); ClearUndo();
@@ -1383,7 +1472,9 @@ int WINAPI wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE, _In_ PWSTR, _In
         {sizeof(WNDCLASSEXW), 0, PreviewProc, 0, 0, instance, large_icon, nullptr,
             g_canvas_brush, nullptr, L"CopyFixPreview", small_icon},
         {sizeof(WNDCLASSEXW), 0, SettingsProc, 0, 0, instance, large_icon, nullptr,
-            g_canvas_brush, nullptr, L"CopyFixSettings", small_icon}
+            g_canvas_brush, nullptr, L"CopyFixSettings", small_icon},
+        {sizeof(WNDCLASSEXW), 0, AboutProc, 0, 0, instance, large_icon, nullptr,
+            g_canvas_brush, nullptr, L"CopyFixAbout", small_icon}
     };
     for (const auto& wc : classes) {
         if (!RegisterClassExW(&wc)) { CloseHandle(g_instance_mutex); return 2; }
@@ -1396,6 +1487,7 @@ int WINAPI wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE, _In_ PWSTR, _In
     while (GetMessageW(&message, nullptr, 0, 0) > 0) {
         if (g_preview && IsDialogMessageW(g_preview, &message)) continue;
         if (g_settings_window && IsDialogMessageW(g_settings_window, &message)) continue;
+        if (g_about_window && IsDialogMessageW(g_about_window, &message)) continue;
         TranslateMessage(&message);
         DispatchMessageW(&message);
     }
