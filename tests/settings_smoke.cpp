@@ -278,6 +278,26 @@ int main() {
     const RECT feedbackRect = relative(kSettingsFeedback);
     const RECT cancelRect = relative(kSettingsCancel);
     const RECT saveRect = relative(kSettingsSave);
+    const RECT gentleRect=relative(kProfileGentle);
+    const RECT smartRect=relative(kProfileSmart);
+    if (gentleRect.right!=smartRect.left ||
+        smartRect.right!=profileRect.left ||
+        gentleRect.top!=smartRect.top ||
+        smartRect.top!=profileRect.top ||
+        gentleRect.bottom!=smartRect.bottom ||
+        smartRect.bottom!=profileRect.bottom) return fail(52);
+    for (UINT id : {kProfileGentle,kProfileSmart,kProfileDeep,
+                    kSettingsSave,kSettingsCancel}) {
+        DWORD_PTR data=0;
+        if (!GetWindowSubclass(GetDlgItem(g_settings_window,id),
+                               ActionButtonSubclass,2,&data))
+            return fail(53);
+    }
+    const RECT comboRect=relative(kHotkeyInput);
+    const RECT shiftRect=relative(kSettingsShift);
+    if (comboRect.left<=shiftRect.right ||
+        comboRect.top>shiftRect.bottom ||
+        comboRect.bottom<=comboRect.top) return fail(54);
     if (profileRect.top < Scale(181,dpi) || profileRect.bottom > Scale(285,dpi) ||
         explanationRect.top < profileRect.bottom ||
         explanationRect.bottom > Scale(285,dpi) ||
