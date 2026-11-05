@@ -7,6 +7,9 @@
 #include "copyfix_version.h"
 #include "diff_spans.h"
 #include "resource_ids.h"
+#include "ui_theme.h"
+#include "ui_locale.h"
+#include <shellscalingapi.h>
 
 #include "text_engine.h"
 
@@ -49,7 +52,13 @@ constexpr UINT kPreviewCancel = 301;
 constexpr UINT kSettingsSave = 400;
 constexpr UINT kSettingsCancel = 401;
 constexpr UINT kHotkeyInput = 402;
-constexpr UINT kComboProfile = 403;
+constexpr UINT kSettingsExplanation = 422;
+constexpr UINT kSettingsLanguageInput = 423;
+constexpr UINT kSettingsLanguageSection = 424;
+constexpr UINT kSettingsLanguageHint = 425;
+constexpr UINT kSettingsThemeInput = 426;
+constexpr UINT kSettingsThemeSection = 427;
+constexpr UINT kSettingsThemeHint = 428;
 constexpr UINT kPreviewTitle = 410;
 constexpr UINT kPreviewSubtitle = 411;
 constexpr UINT kPreviewBeforeLabel = 412;
@@ -58,15 +67,20 @@ constexpr UINT kPreviewNote = 414;
 constexpr UINT kSettingsTitle = 415;
 constexpr UINT kSettingsSubtitle = 416;
 constexpr UINT kSettingsFeedback = 417;
+constexpr UINT kProfileGentle = 430;
+constexpr UINT kProfileSmart = 431;
+constexpr UINT kProfileDeep = 432;
+constexpr UINT kAboutIcon = 440;
+constexpr UINT kAboutTitle = 441;
+constexpr UINT kAboutVersionLabel = 442;
+constexpr UINT kAboutDescriptionLabel = 443;
+constexpr UINT kAboutProject = 444;
+constexpr UINT kAboutGitHub = 445;
+constexpr UINT kAboutLicense = 446;
 
-constexpr wchar_t kAboutVersion[] = L"CopyFix " COPYFIX_VERSION_WSTR;
+constexpr wchar_t kAboutVersionString[] = L"v" COPYFIX_VERSION_WSTR;
 constexpr wchar_t kAboutWebsite[] = L"https://stanleyll0yd.github.io/apps/copyfix/";
-constexpr wchar_t kAboutWebsiteLink[] =
-    L"<a href=\"https://stanleyll0yd.github.io/apps/copyfix/\">https://stanleyll0yd.github.io/apps/copyfix/</a>";
-constexpr wchar_t kAboutDescription[] =
-    L"Нативная офлайн-утилита для очистки текста.\n"
-    L"Автоматически сохраняет структурированные фрагменты.\n"
-    L"Изменение форматов HTML/RTF требует подтверждения.";
+constexpr wchar_t kAboutGitHubUrl[] = L"https://github.com/StanleyLl0yd/copyfix";
 
 void CenterWindowOnMonitor(HWND dialog, HMONITOR monitor) noexcept {
     MONITORINFO info{sizeof(info)};
@@ -84,51 +98,8 @@ void CenterWindowOnMonitor(HWND dialog, HMONITOR monitor) noexcept {
     SetWindowPos(dialog, nullptr, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
-HRESULT CALLBACK AboutCallback(HWND window, UINT notification, WPARAM, LPARAM data,
-                              LONG_PTR callbackData) noexcept {
-    if (notification == TDN_CREATED) {
-        CenterWindowOnMonitor(window, reinterpret_cast<HMONITOR>(callbackData));
-    } else if (notification == TDN_HYPERLINK_CLICKED && data) {
-        const auto* url = reinterpret_cast<const wchar_t*>(data);
-        if (wcscmp(url, kAboutWebsite) == 0)
-            ShellExecuteW(window, L"open", kAboutWebsite, nullptr, nullptr, SW_SHOWNORMAL);
-    }
-    return S_OK;
-}
-
-void ShowAbout(HWND parent) noexcept {
-    POINT cursor{};
-    const HMONITOR monitor = GetCursorPos(&cursor)
-        ? MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST)
-        : MonitorFromWindow(parent, MONITOR_DEFAULTTONEAREST);
-    TASKDIALOGCONFIG config{};
-    config.cbSize = sizeof(config);
-    config.hwndParent = parent;
-    config.dwFlags = TDF_ENABLE_HYPERLINKS;
-    config.lpCallbackData = reinterpret_cast<LONG_PTR>(monitor);
-    config.dwCommonButtons = TDCBF_OK_BUTTON;
-    config.pszWindowTitle = L"О CopyFix";
-    config.pszMainInstruction = kAboutVersion;
-    config.pszMainIcon = TD_INFORMATION_ICON;
-    config.pszContent = kAboutDescription;
-    config.pszFooter = kAboutWebsiteLink;
-    config.pfCallback = AboutCallback;
-    using TaskDialogFunction = HRESULT (WINAPI*)(const TASKDIALOGCONFIG*, int*, int*, BOOL*);
-    if (HMODULE controls = LoadLibraryExW(L"comctl32.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32)) {
-        auto* show_dialog = reinterpret_cast<TaskDialogFunction>(
-            GetProcAddress(controls, "TaskDialogIndirect"));
-        const bool shown = show_dialog && SUCCEEDED(show_dialog(&config, nullptr, nullptr, nullptr));
-        FreeLibrary(controls);
-        if (shown) return;
-    }
-    constexpr wchar_t fallback[] =
-        L"CopyFix " COPYFIX_VERSION_WSTR L"\n"
-        L"Нативная офлайн-утилита для очистки текста.\n"
-        L"Автоматически сохраняет структурированные фрагменты.\n"
-        L"Изменение форматов HTML/RTF требует подтверждения.\n"
-        L"https://stanleyll0yd.github.io/apps/copyfix/";
-    MessageBoxW(parent, fallback, L"О CopyFix", MB_OK | MB_ICONINFORMATION);
-}
+void ShowAbout(HWND parent) noexcept;
+void RefreshLocalizedWindows() noexcept;
 
 constexpr COLORREF kCanvas = RGB(247, 249, 252);
 constexpr COLORREF kSurface = RGB(255, 255, 255);
@@ -142,6 +113,12 @@ HFONT g_font_body = nullptr;
 HFONT g_font_title = nullptr;
 HFONT g_font_label = nullptr;
 HFONT g_font_caption = nullptr;
+int g_base_font_dpi = 96;
+struct DpiFonts {
+    int dpi = 0;
+    HFONT body = nullptr, title = nullptr, label = nullptr, caption = nullptr;
+};
+DpiFonts g_dpi_fonts[8]{};
 int g_preview_dpi = 96;
 int g_settings_dpi = 96;
 
@@ -155,6 +132,8 @@ struct HotkeyChord {
 struct Settings {
     copyfix::Profile profile = copyfix::Profile::Deep;
     HotkeyChord hotkey;
+    copyfix::i18n::Language language = copyfix::i18n::Language::System;
+    copyfix::ui::Preference theme = copyfix::ui::Preference::System;
 };
 struct ClipSnapshot {
     std::wstring text;
@@ -181,8 +160,16 @@ HICON LoadAppIcon(int pixels) noexcept {
 HWND g_message = nullptr;
 HWND g_preview = nullptr;
 HWND g_settings_window = nullptr;
+HWND g_about_window = nullptr;
+copyfix::Profile g_draft_profile = copyfix::Profile::Deep;
+copyfix::i18n::Language g_draft_language = copyfix::i18n::Language::System;
+copyfix::ui::Preference g_draft_theme = copyfix::ui::Preference::System;
+bool g_theme_preview_active = false;
 NOTIFYICONDATAW g_tray{};
 Settings g_settings;
+using UiText = copyfix::i18n::Text;
+const wchar_t* Tr(UiText id) noexcept { return copyfix::i18n::Get(id,g_settings.language); }
+const wchar_t* DraftTr(UiText id) noexcept { return copyfix::i18n::Get(id,g_draft_language); }
 Pending g_pending;
 Undo g_undo;
 HANDLE g_instance_mutex = nullptr;
@@ -196,15 +183,129 @@ HotkeyChord g_registered_hotkey;
 // Injectable only for deterministic window tests; production uses MessageBoxW.
 auto g_hotkey_warning_dialog = &MessageBoxW;
 int Scale(int px, int dpi) noexcept { return MulDiv(px, dpi, 96); }
+
+struct SpawnRect {
+    HMONITOR monitor = nullptr;
+    int x = CW_USEDEFAULT;
+    int y = CW_USEDEFAULT;
+    int width = 0;
+    int height = 0;
+};
+
+SpawnRect PositionedOnCursorMonitor(int widthDip, int heightDip, HWND fallback) noexcept {
+    POINT cursor{};
+    const HMONITOR monitor = GetCursorPos(&cursor)
+        ? MonitorFromPoint(cursor,MONITOR_DEFAULTTONEAREST)
+        : MonitorFromWindow(fallback,MONITOR_DEFAULTTONEAREST);
+    UINT dpiX = 96, dpiY = 96;
+    if (!monitor || FAILED(GetDpiForMonitor(monitor,MDT_EFFECTIVE_DPI,&dpiX,&dpiY)))
+        dpiX = GetDpiForSystem();
+    const int width = Scale(widthDip,static_cast<int>(dpiX));
+    const int height = Scale(heightDip,static_cast<int>(dpiX));
+    MONITORINFO info{sizeof(info)};
+    if (!monitor || !GetMonitorInfoW(monitor,&info))
+        return {monitor,CW_USEDEFAULT,CW_USEDEFAULT,width,height};
+    const int spaceX = info.rcWork.right-info.rcWork.left-width;
+    const int spaceY = info.rcWork.bottom-info.rcWork.top-height;
+    return {monitor,info.rcWork.left+std::max(0,spaceX/2),
+            info.rcWork.top+std::max(0,spaceY/2),width,height};
+}
+
+
+bool RenderPreviewText(HWND window);
+
+void UpdateWindowTheme(HWND window) noexcept {
+    if (!window) return;
+    copyfix::ui::ThemeWindow(window);
+    InvalidateRect(window, nullptr, TRUE);
+    for (HWND child = GetWindow(window, GW_CHILD); child;
+         child = GetWindow(child, GW_HWNDNEXT))
+        InvalidateRect(child, nullptr, TRUE);
+}
+
+void SynchronizeSystemTheme() noexcept {
+    const auto choice = g_theme_preview_active ? g_draft_theme : g_settings.theme;
+    const bool shouldDark = copyfix::ui::ResolveDark(choice,copyfix::ui::ReadSystemDark());
+    const bool contrast = copyfix::ui::ReadHighContrast();
+    if (shouldDark == copyfix::ui::dark &&
+        contrast == copyfix::ui::highContrast && !contrast) return;
+    copyfix::ui::SetHighContrast(contrast);
+    copyfix::ui::SetDark(shouldDark);
+    g_canvas_brush = copyfix::ui::CanvasBrush();
+    g_surface_brush = copyfix::ui::SurfaceBrush();
+    UpdateWindowTheme(g_settings_window);
+    UpdateWindowTheme(g_preview);
+    UpdateWindowTheme(g_about_window);
+    if (g_preview) RenderPreviewText(g_preview);
+}
+
+void InitWindowTheme(HWND window) noexcept {
+    copyfix::ui::ThemeWindow(window);
+}
+
 HFONT MakeFont(int points, int weight, int dpi) {
     return CreateFontW(-MulDiv(points, dpi, 72), 0, 0, 0, weight,
                        FALSE, FALSE, FALSE, DEFAULT_CHARSET,
                        OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
                        DEFAULT_PITCH | FF_SWISS, L"Segoe UI");
 }
-void ApplyFont(HWND hwnd, HFONT font) {
-    if (hwnd && font) SendMessageW(hwnd, WM_SETFONT, reinterpret_cast<WPARAM>(font), TRUE);
+HFONT FontForDpi(HFONT original, int dpi) {
+    if (!original || dpi <= 0 || dpi == g_base_font_dpi) return original;
+    if (original != g_font_body && original != g_font_title &&
+        original != g_font_label && original != g_font_caption) return original;
+    DpiFonts* fonts = nullptr;
+    for (auto& item : g_dpi_fonts) {
+        if (item.dpi == dpi) { fonts = &item; break; }
+    }
+    if (!fonts) {
+        for (auto& item : g_dpi_fonts) {
+            if (item.dpi == 0) {
+                fonts = &item;
+                item.dpi = dpi;
+                item.body = MakeFont(10,FW_NORMAL,dpi);
+                item.title = MakeFont(17,FW_SEMIBOLD,dpi);
+                item.label = MakeFont(9,FW_SEMIBOLD,dpi);
+                item.caption = MakeFont(9,FW_NORMAL,dpi);
+                break;
+            }
+        }
+    }
+    if (!fonts) return original;
+    HFONT scaled = original == g_font_body ? fonts->body :
+        original == g_font_title ? fonts->title :
+        original == g_font_label ? fonts->label : fonts->caption;
+    return scaled ? scaled : original;
 }
+
+HFONT OriginalFont(HFONT current) noexcept {
+    if (current == g_font_body || current == g_font_title ||
+        current == g_font_label || current == g_font_caption) return current;
+    for (const auto& item : g_dpi_fonts) {
+        if (item.dpi == 0) continue;
+        if (current == item.body) return g_font_body;
+        if (current == item.title) return g_font_title;
+        if (current == item.label) return g_font_label;
+        if (current == item.caption) return g_font_caption;
+    }
+    return nullptr;
+}
+
+void ApplyFont(HWND hwnd, HFONT font) {
+    if (hwnd && font) {
+        const auto scaled = FontForDpi(font,static_cast<int>(GetDpiForWindow(hwnd)));
+        SendMessageW(hwnd,WM_SETFONT,reinterpret_cast<WPARAM>(scaled),TRUE);
+    }
+}
+
+void UpdateFontsForWindow(HWND window) {
+    for (HWND child = GetWindow(window,GW_CHILD); child;
+         child = GetWindow(child,GW_HWNDNEXT)) {
+        const auto current = reinterpret_cast<HFONT>(SendMessageW(child,WM_GETFONT,0,0));
+        const auto original = OriginalFont(current);
+        if (original) ApplyFont(child,original);
+    }
+}
+
 HWND MakeLabel(HWND parent, int id, const wchar_t* text, HFONT font) {
     HWND label = CreateWindowExW(0, L"STATIC", text, WS_CHILD | WS_VISIBLE | SS_LEFT,
                                 0, 0, 1, 1, parent,
@@ -213,42 +314,266 @@ HWND MakeLabel(HWND parent, int id, const wchar_t* text, HFONT font) {
     ApplyFont(label, font);
     return label;
 }
+void SetChildCaption(HWND parent, UINT id, const wchar_t* caption) noexcept {
+    if (HWND child=GetDlgItem(parent,id)) SetWindowTextW(child,caption);
+}
 void Position(HWND parent, UINT id, int x, int y, int w, int h, int dpi) {
     if (auto child = GetDlgItem(parent, id))
         MoveWindow(child, Scale(x,dpi), Scale(y,dpi),
                    std::max(1, Scale(w,dpi)), std::max(1, Scale(h,dpi)), TRUE);
 }
-void DrawActionButton(const DRAWITEMSTRUCT* item) {
-    if (!item || item->CtlType != ODT_BUTTON) return;
-    const bool primary = item->CtlID == kPreviewAccept || item->CtlID == kSettingsSave;
-    const bool pressed = (item->itemState & ODS_SELECTED) != 0;
-    const auto fill = CreateSolidBrush(primary ? (pressed ? RGB(29, 78, 216) : kBlue)
-                                             : (pressed ? RGB(233, 238, 246) : kSurface));
-    const auto pen = CreatePen(PS_SOLID, 1, primary ? kBlue : kBorder);
-    HGDIOBJ oldbrush = SelectObject(item->hDC, fill);
-    HGDIOBJ oldpen = SelectObject(item->hDC, pen);
-    RECT box = item->rcItem;
-    RoundRect(item->hDC, box.left, box.top, box.right, box.bottom,
-              Scale(12, g_preview_dpi), Scale(12, g_preview_dpi));
-    SelectObject(item->hDC, oldbrush);
-    SelectObject(item->hDC, oldpen);
-    DeleteObject(fill);
-    DeleteObject(pen);
-    wchar_t text[100]{};
-    GetWindowTextW(item->hwndItem, text, static_cast<int>(std::size(text)));
-    SetBkMode(item->hDC, TRANSPARENT);
-    SetTextColor(item->hDC, primary ? RGB(255,255,255) : kInk);
-    const auto priorfont = SelectObject(item->hDC, g_font_label ? g_font_label : GetStockObject(DEFAULT_GUI_FONT));
-    DrawTextW(item->hDC, text, -1, &box, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-    SelectObject(item->hDC, priorfont);
-    if (item->itemState & ODS_FOCUS) {
-        RECT focus = box;
-        InflateRect(&focus, -Scale(4,g_preview_dpi), -Scale(4,g_preview_dpi));
-        DrawFocusRect(item->hDC, &focus);
+constexpr wchar_t kHoverProperty[] = L"CopyFix.OwnerDraw.Hover";
+void SetHovered(HWND window,bool on) noexcept {
+    const bool old=GetPropW(window,kHoverProperty)!=nullptr;
+    if (old==on) return;
+    if (on) SetPropW(window,kHoverProperty,reinterpret_cast<HANDLE>(1));
+    else RemovePropW(window,kHoverProperty);
+    InvalidateRect(window,nullptr,FALSE);
+}
+void TrackControlHover(HWND window) noexcept {
+    if (GetPropW(window,kHoverProperty)) return;
+    TRACKMOUSEEVENT track{sizeof(track),TME_LEAVE,window,0};
+    if (TrackMouseEvent(&track)) SetHovered(window,true);
+}
+LRESULT CALLBACK ActionButtonSubclass(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp,
+                                      UINT_PTR id,DWORD_PTR) {
+    switch (msg) {
+    case WM_MOUSEMOVE: TrackControlHover(hwnd); break;
+    case WM_MOUSELEAVE: SetHovered(hwnd,false); break;
+    case WM_SETFOCUS:
+    case WM_KILLFOCUS:
+    case WM_ENABLE: InvalidateRect(hwnd,nullptr,FALSE); break;
+    case WM_NCDESTROY:
+        RemovePropW(hwnd,kHoverProperty);
+        RemoveWindowSubclass(hwnd,ActionButtonSubclass,id);
+        break;
+    }
+    return DefSubclassProc(hwnd,msg,wp,lp);
+}
+void StyleActionButton(HWND hwnd) noexcept {
+    if (hwnd) SetWindowSubclass(hwnd,ActionButtonSubclass,2,0);
+}
+
+void DrawNativeCheckBox(HWND window, HDC dc) noexcept {
+    RECT box{}; GetClientRect(window,&box);
+    const UINT id=static_cast<UINT>(GetDlgCtrlID(window));
+    const bool onCanvas=id==kPreviewShowBreaks || id==kPreviewShowSpaces;
+    const HBRUSH background=onCanvas ? g_canvas_brush : g_surface_brush;
+    FillRect(dc,&box,background ? background :
+             static_cast<HBRUSH>(GetStockObject(WHITE_BRUSH)));
+    const auto& c=copyfix::ui::colors;
+    const int dpi=static_cast<int>(GetDpiForWindow(window));
+    const int tick=Scale(16,dpi),left=Scale(3,dpi);
+    const int y=(box.bottom-tick)/2;
+    const bool checked=SendMessageW(window,BM_GETCHECK,0,0)==BST_CHECKED;
+    const bool enabled=IsWindowEnabled(window)!=FALSE;
+    const bool hovered=GetPropW(window,kHoverProperty)!=nullptr;
+    copyfix::ui::Rounded(dc,RECT{left,y,left+tick,y+tick},
+        checked ? c.blue : c.surface,
+        checked ? c.blue : hovered ? copyfix::ui::Mix(c.border,c.blue,35) : c.border,
+        Scale(6,dpi));
+    if (checked) {
+        HFONT symbol=CreateFontW(-MulDiv(10,dpi,72),0,0,0,FW_BOLD,
+            FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,
+            CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH|FF_SWISS,
+            L"Segoe UI Symbol");
+        if (symbol) {
+            const HGDIOBJ old=SelectObject(dc,symbol);
+            const int mode=SetBkMode(dc,TRANSPARENT);
+            const COLORREF color=SetTextColor(dc,copyfix::ui::highContrast
+                ? GetSysColor(COLOR_HIGHLIGHTTEXT) : RGB(255,255,255));
+            RECT glyph{left,y-Scale(1,dpi),left+tick,y+tick};
+            DrawTextW(dc,L"✓",1,&glyph,DT_CENTER|DT_VCENTER|DT_SINGLELINE|DT_NOPREFIX);
+            SetTextColor(dc,color); SetBkMode(dc,mode);
+            SelectObject(dc,old); DeleteObject(symbol);
+        }
+    }
+    wchar_t caption[100]{};
+    GetWindowTextW(window,caption,static_cast<int>(std::size(caption)));
+    SetBkMode(dc,TRANSPARENT);
+    SetTextColor(dc,enabled ? c.ink : c.muted);
+    const HGDIOBJ oldFont=SelectObject(dc,g_font_body
+        ? FontForDpi(g_font_body,dpi) : GetStockObject(DEFAULT_GUI_FONT));
+    RECT label{left+tick+Scale(8,dpi),0,box.right,box.bottom};
+    DrawTextW(dc,caption,-1,&label,DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS);
+    SelectObject(dc,oldFont);
+    if (GetFocus()==window) {
+        RECT ring=label; InflateRect(&ring,-Scale(2,dpi),-Scale(4,dpi));
+        HPEN pen=CreatePen(PS_SOLID,1,c.blue);
+        if (pen) {
+            const HGDIOBJ oldPen=SelectObject(dc,pen);
+            const HGDIOBJ oldBrush=SelectObject(dc,GetStockObject(HOLLOW_BRUSH));
+            RoundRect(dc,ring.left,ring.top,ring.right,ring.bottom,Scale(5,dpi),Scale(5,dpi));
+            SelectObject(dc,oldBrush); SelectObject(dc,oldPen); DeleteObject(pen);
+        }
     }
 }
 
+LRESULT CALLBACK CheckBoxSubclass(HWND window,UINT msg,WPARAM wparam,
+                                  LPARAM lparam,UINT_PTR id,DWORD_PTR) {
+    switch (msg) {
+    case WM_ERASEBKGND: return 1;
+    case WM_PAINT: {
+        PAINTSTRUCT ps{};
+        HDC dc = BeginPaint(window,&ps);
+        DrawNativeCheckBox(window,dc);
+        EndPaint(window,&ps);
+        return 0;
+    }
+    case WM_PRINTCLIENT:
+        DrawNativeCheckBox(window,reinterpret_cast<HDC>(wparam));
+        return 0;
+    case WM_MOUSEMOVE: TrackControlHover(window); break;
+    case WM_MOUSELEAVE: SetHovered(window,false); break;
+    case WM_SETFOCUS:
+    case WM_KILLFOCUS:
+    case WM_ENABLE: {
+        const LRESULT result = DefSubclassProc(window,msg,wparam,lparam);
+        InvalidateRect(window,nullptr,TRUE);
+        return result;
+    }
+    case WM_NCDESTROY:
+        RemovePropW(window,kHoverProperty);
+        RemoveWindowSubclass(window,CheckBoxSubclass,id);
+        break;
+    }
+    return DefSubclassProc(window,msg,wparam,lparam);
+}
 
+bool StyleCheckBox(HWND window) noexcept {
+    return window && SetWindowSubclass(window,CheckBoxSubclass,1,0) != FALSE;
+}
+
+void DrawNativeCombo(const DRAWITEMSTRUCT* item) noexcept {
+    if (!item || item->CtlType != ODT_COMBOBOX) return;
+    const auto& c=copyfix::ui::colors;
+    const bool field=(item->itemState & ODS_COMBOBOXEDIT)!=0;
+    const bool selected=!field && (item->itemState & ODS_SELECTED)!=0;
+    HBRUSH brush=CreateSolidBrush(selected ? c.selected : c.surface);
+    if (!brush) return;
+    FillRect(item->hDC,&item->rcItem,brush);
+    DeleteObject(brush);
+    if (item->itemID==static_cast<UINT>(-1)) return;
+    wchar_t value[80]{};
+    if (SendMessageW(item->hwndItem,CB_GETLBTEXT,item->itemID,
+        reinterpret_cast<LPARAM>(value))==CB_ERR) return;
+    const int dpi=static_cast<int>(GetDpiForWindow(item->hwndItem));
+    const int oldMode=SetBkMode(item->hDC,TRANSPARENT);
+    const COLORREF oldColor=SetTextColor(item->hDC,
+        copyfix::ui::highContrast && selected
+            ? GetSysColor(COLOR_HIGHLIGHTTEXT) : c.ink);
+    const HGDIOBJ oldFont=SelectObject(item->hDC,g_font_body
+        ? FontForDpi(g_font_body,dpi) : GetStockObject(DEFAULT_GUI_FONT));
+    RECT text=item->rcItem;
+    text.left+=Scale(12,dpi); text.right-=Scale(7,dpi);
+    DrawTextW(item->hDC,value,-1,&text,
+        DT_LEFT|DT_SINGLELINE|DT_VCENTER|DT_END_ELLIPSIS|DT_NOPREFIX);
+    SelectObject(item->hDC,oldFont);
+    SetTextColor(item->hDC,oldColor); SetBkMode(item->hDC,oldMode);
+    if (selected && !copyfix::ui::highContrast) {
+        RECT marker{item->rcItem.left+Scale(3,dpi),
+                    item->rcItem.top+Scale(5,dpi),
+                    item->rcItem.left+Scale(5,dpi),
+                    item->rcItem.bottom-Scale(5,dpi)};
+        HBRUSH accent=CreateSolidBrush(c.blue);
+        if (accent) { FillRect(item->hDC,&marker,accent); DeleteObject(accent); }
+    }
+    if ((item->itemState & ODS_FOCUS) && !field && !selected)
+        DrawFocusRect(item->hDC,&item->rcItem);
+}
+
+void DrawActionButton(const DRAWITEMSTRUCT* item) {
+    if (!item) return;
+    if (item->CtlType==ODT_COMBOBOX) {
+        DrawNativeCombo(item);
+        return;
+    }
+    if (item->CtlType!=ODT_BUTTON) return;
+    const auto& c=copyfix::ui::colors;
+    const bool primary=item->CtlID==kPreviewAccept || item->CtlID==kSettingsSave;
+    const bool segment=item->CtlID>=kProfileGentle && item->CtlID<=kProfileDeep;
+    const bool selected=segment &&
+        item->CtlID==kProfileGentle+static_cast<UINT>(g_draft_profile);
+    const bool pressed=(item->itemState & ODS_SELECTED)!=0;
+    const bool disabled=(item->itemState & ODS_DISABLED)!=0 ||
+                        IsWindowEnabled(item->hwndItem)==FALSE;
+    const bool hovered=GetPropW(item->hwndItem,kHoverProperty)!=nullptr;
+    const int dpi=static_cast<int>(GetDpiForWindow(item->hwndItem));
+    COLORREF fill=c.surface,border=c.border;
+    if (segment) {
+        HBRUSH base=CreateSolidBrush(c.raised);
+        if (base) { FillRect(item->hDC,&item->rcItem,base); DeleteObject(base); }
+        if (selected) {
+            fill=pressed ? copyfix::ui::Mix(c.blue,c.ink,18)
+                 : hovered ? copyfix::ui::Mix(c.blue,c.surface,10) : c.blue;
+            RECT pill=item->rcItem;
+            InflateRect(&pill,-Scale(1,dpi),-Scale(1,dpi));
+            copyfix::ui::Rounded(item->hDC,pill,fill,fill,
+                                 Scale(copyfix::ui::SegmentCorner,dpi));
+        } else if (hovered && !disabled) {
+            fill=copyfix::ui::Mix(c.raised,c.blue,12);
+            RECT pill=item->rcItem;
+            InflateRect(&pill,-Scale(2,dpi),-Scale(2,dpi));
+            copyfix::ui::Rounded(item->hDC,pill,fill,fill,
+                                 Scale(copyfix::ui::SegmentCorner,dpi));
+        }
+    } else {
+        // Owner-drawn rounded buttons leave corner pixels outside RoundRect.
+        // Clear them with the current parent surface, never the stale class
+        // brush (which can still be light after switching to dark mode).
+        const bool inAbout = item->CtlID==kAboutProject || item->CtlID==kAboutGitHub;
+        HBRUSH background=CreateSolidBrush(inAbout ? c.surface : c.canvas);
+        if (background) {
+            FillRect(item->hDC,&item->rcItem,background);
+            DeleteObject(background);
+        }
+        if (primary) {
+            fill=pressed ? copyfix::ui::Mix(c.blue,c.ink,18)
+                 : hovered ? copyfix::ui::Mix(c.blue,c.surface,9) : c.blue;
+            border=fill;
+        } else {
+            fill=disabled ? copyfix::ui::Mix(c.surface,c.canvas,40)
+                 : pressed ? copyfix::ui::Mix(c.raised,c.blue,12)
+                 : hovered ? c.raised : c.surface;
+            border=hovered ? copyfix::ui::Mix(c.border,c.blue,22) : c.border;
+        }
+        copyfix::ui::Rounded(item->hDC,item->rcItem,fill,border,
+                             Scale(copyfix::ui::ControlCorner,dpi));
+    }
+    wchar_t labelText[100]{};
+    GetWindowTextW(item->hwndItem,labelText,static_cast<int>(std::size(labelText)));
+    const int oldMode=SetBkMode(item->hDC,TRANSPARENT);
+    const COLORREF ink=disabled ? c.muted :
+        primary || selected ? (copyfix::ui::highContrast
+            ? GetSysColor(COLOR_HIGHLIGHTTEXT) : RGB(255,255,255)) : c.ink;
+    const COLORREF oldColor=SetTextColor(item->hDC,ink);
+    const HFONT font=(item->CtlID==kAboutProject || item->CtlID==kAboutGitHub)
+        ? g_font_body : g_font_label;
+    const HGDIOBJ oldFont=SelectObject(item->hDC,font
+        ? FontForDpi(font,dpi) : GetStockObject(DEFAULT_GUI_FONT));
+    RECT text=item->rcItem;
+    InflateRect(&text,-Scale(8,dpi),0);
+    DrawTextW(item->hDC,labelText,-1,&text,
+        DT_CENTER|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS|DT_NOPREFIX);
+    SelectObject(item->hDC,oldFont);
+    SetTextColor(item->hDC,oldColor); SetBkMode(item->hDC,oldMode);
+    if ((item->itemState & ODS_FOCUS) &&
+        !(SendMessageW(item->hwndItem,WM_QUERYUISTATE,0,0)&UISF_HIDEFOCUS)) {
+        const COLORREF focus=(primary || selected) &&
+            !copyfix::ui::highContrast ? RGB(255,255,255) : c.blue;
+        HPEN pen=CreatePen(PS_SOLID,std::max(1,Scale(1,dpi)),focus);
+        if (pen) {
+            const HGDIOBJ oldPen=SelectObject(item->hDC,pen);
+            const HGDIOBJ oldBrush=SelectObject(item->hDC,GetStockObject(HOLLOW_BRUSH));
+            RECT ring=item->rcItem; InflateRect(&ring,-Scale(3,dpi),-Scale(3,dpi));
+            RoundRect(item->hDC,ring.left,ring.top,ring.right,ring.bottom,
+                Scale(copyfix::ui::ControlCorner,dpi),
+                Scale(copyfix::ui::ControlCorner,dpi));
+            SelectObject(item->hDC,oldBrush); SelectObject(item->hDC,oldPen);
+            DeleteObject(pen);
+        }
+    }
+}
 
 // Windows global shortcuts use modifiers plus exactly one virtual key.
 constexpr UINT kHotkeyModifierMask = MOD_ALT | MOD_CONTROL | MOD_SHIFT;
@@ -421,8 +746,16 @@ void LoadSettings() noexcept {
     };
     const DWORD profile = read(L"Profile", static_cast<DWORD>(copyfix::Profile::Deep));
     const DWORD hotkey = read(L"Hotkey", 0);
+    const DWORD language = read(L"Language", 0);
+    const DWORD theme = read(L"Theme", 0);
     if (profile <= 2) g_settings.profile = static_cast<copyfix::Profile>(profile);
     g_settings.hotkey = DecodeHotkey(hotkey);
+    g_settings.language=copyfix::i18n::IsValid(language)
+        ? static_cast<copyfix::i18n::Language>(language)
+        : copyfix::i18n::Language::System;
+    g_settings.theme=copyfix::ui::ValidPreference(theme)
+        ? static_cast<copyfix::ui::Preference>(theme)
+        : copyfix::ui::Preference::System;
     RegCloseKey(key);
 }
 
@@ -433,11 +766,17 @@ bool SaveSettings() noexcept {
                         nullptr) != ERROR_SUCCESS) return false;
     const DWORD profile = static_cast<DWORD>(g_settings.profile);
     const DWORD hotkey = EncodeHotkey(g_settings.hotkey);
+    const DWORD language = static_cast<DWORD>(g_settings.language);
+    const DWORD theme = static_cast<DWORD>(g_settings.theme);
     const bool ok =
         RegSetValueExW(key, L"Profile", 0, REG_DWORD,
                        reinterpret_cast<const BYTE*>(&profile), sizeof(profile)) == ERROR_SUCCESS &&
         RegSetValueExW(key, L"Hotkey", 0, REG_DWORD,
-                       reinterpret_cast<const BYTE*>(&hotkey), sizeof(hotkey)) == ERROR_SUCCESS;
+                       reinterpret_cast<const BYTE*>(&hotkey), sizeof(hotkey)) == ERROR_SUCCESS &&
+        RegSetValueExW(key, L"Language", 0, REG_DWORD,
+                       reinterpret_cast<const BYTE*>(&language), sizeof(language)) == ERROR_SUCCESS &&
+        RegSetValueExW(key, L"Theme", 0, REG_DWORD,
+                       reinterpret_cast<const BYTE*>(&theme), sizeof(theme)) == ERROR_SUCCESS;
     RegCloseKey(key);
     return ok;
 }
@@ -455,8 +794,8 @@ void Notify(const wchar_t* message) {
 // claim that the utility is ready for keyboard use.
 void NotifyStartup(bool hotkey_registered) {
     Notify(hotkey_registered
-        ? L"CopyFix запущен и готов к работе."
-        : L"Горячая клавиша недоступна. Откройте настройки CopyFix.");
+        ? Tr(UiText::NotifyStartupOK)
+        : Tr(UiText::NotifyStartupFailed));
 }
 
 // Probe without touching the active shortcut. A successful probe is not a
@@ -623,10 +962,10 @@ void AcceptPending() {
             next_undo.after_sequence = sequence;
             next_undo.available = true;
             g_undo = std::move(next_undo);
-            Notify(L"Исправленный текст находится в буфере обмена.");
-        } else Notify(L"Запись не завершена. Проверьте содержимое буфера обмена.");
+            Notify(Tr(UiText::NotifyApplied));
+        } else Notify(Tr(UiText::NotifyWriteFailed));
     } catch (const std::bad_alloc&) {
-        Notify(L"Недостаточно памяти. Буфер не изменён.");
+        Notify(Tr(UiText::NotifyMemoryFailed));
     }
     ClearPending();
 }
@@ -638,22 +977,49 @@ void LayoutPreview(HWND window) {
     const int dpi = g_preview_dpi;
     const int w = MulDiv(client.right, 96, dpi);
     const int h = MulDiv(client.bottom, 96, dpi);
-    const int margin = 26, gap = 20;
-    const int column = std::max(150, (w - 2 * margin - gap) / 2);
-    const int edit_y = 146;
-    const int edit_height = std::max(100, h - edit_y - 112);
-    Position(window, kPreviewTitle, margin, 22, w - 2*margin, 39, dpi);
-    Position(window, kPreviewSubtitle, margin, 64, w - 2*margin, 22, dpi);
-    Position(window, kPreviewBeforeLabel, margin, 112, column, 28, dpi);
-    Position(window, kPreviewAfterLabel, margin + column + gap, 112, column, 28, dpi);
-    Position(window, kPreviewBeforeEdit, margin, edit_y, column, edit_height, dpi);
-    Position(window, kPreviewAfterEdit, margin + column + gap, edit_y, column, edit_height, dpi);
-    Position(window, kPreviewNote, margin, h - 98, std::max(160,w-300), 23, dpi);
-    Position(window, kPreviewShowBreaks, margin, h - 70, 220, 25, dpi);
-    Position(window, kPreviewShowSpaces, margin + 232, h - 70, 175, 25, dpi);
-    Position(window, kPreviewCancel, w - 282, h - 84, 112, 44, dpi);
-    Position(window, kPreviewAccept, w - 162, h - 84, 136, 44, dpi);
+    const int margin = 22, gap = 14;
+    const int column = std::max(150, (w - 2*margin - gap)/2);
+    const int textY = 128;
+    const int textHeight = std::max(110, h-textY-119);
+    Position(window, kPreviewTitle, 67, 17, w-89, 31, dpi);
+    Position(window, kPreviewSubtitle, 67, 49, w-89, 25, dpi);
+    Position(window, kPreviewBeforeLabel, margin+12, 100, column-24, 22, dpi);
+    Position(window, kPreviewAfterLabel, margin+column+gap+12, 100, column-24, 22, dpi);
+    Position(window, kPreviewBeforeEdit, margin+11, textY, column-22, textHeight, dpi);
+    Position(window, kPreviewAfterEdit, margin+column+gap+11, textY, column-22, textHeight, dpi);
+    Position(window, kPreviewNote, margin+5, h-96, std::max(150,w-300), 23, dpi);
+    Position(window, kPreviewShowBreaks, margin+5, h-66, 205, 25, dpi);
+    Position(window, kPreviewShowSpaces, margin+218, h-66, 183, 25, dpi);
+    Position(window, kPreviewCancel, w-248, h-65, 98, 35, dpi);
+    Position(window, kPreviewAccept, w-138, h-65, 116, 35, dpi);
     InvalidateRect(window, nullptr, TRUE);
+}
+
+void DrawPreviewSurface(HWND window, HDC dc) noexcept {
+    RECT client{}; GetClientRect(window, &client);
+    FillRect(dc, &client, g_canvas_brush ? g_canvas_brush
+                                        : static_cast<HBRUSH>(GetStockObject(WHITE_BRUSH)));
+    const int dpi = g_preview_dpi;
+    const int margin = Scale(22,dpi), gap = Scale(14,dpi);
+    const int width = client.right;
+    const int column = std::max(Scale(150,dpi), (width-2*margin-gap)/2);
+    const auto& colors = copyfix::ui::colors;
+    copyfix::ui::Badge(dc, Scale(23,dpi), Scale(20,dpi), Scale(32,dpi),dpi);
+    const int top = Scale(94,dpi);
+    const int bottom = client.bottom-Scale(108,dpi);
+    copyfix::ui::Rounded(dc,RECT{margin, top, margin+column, bottom},
+                          colors.surface, colors.border,
+                          Scale(copyfix::ui::CardCorner,dpi));
+    copyfix::ui::Rounded(dc,
+        RECT{margin+column+gap, top, margin+column*2+gap, bottom},
+        colors.surface, colors.border, Scale(copyfix::ui::CardCorner,dpi));
+    HBRUSH stroke = CreateSolidBrush(colors.border);
+    if (stroke) {
+        RECT line{margin,client.bottom-Scale(104,dpi),
+                  client.right-margin,client.bottom-Scale(103,dpi)};
+        FillRect(dc,&line,stroke);
+        DeleteObject(stroke);
+    }
 }
 
 // RichEdit represents each hard paragraph break as a single CR, unlike
@@ -675,7 +1041,14 @@ bool SetPreviewRichText(HWND control, const std::wstring& text) {
     if (!control) return false;
     SendMessageW(control, EM_EXLIMITTEXT, 0, static_cast<LPARAM>(kMaxPreviewChars*3));
     if (!SetWindowTextW(control, text.c_str())) return false;
-    SendMessageW(control, EM_SETBKGNDCOLOR, 0, static_cast<LPARAM>(kSurface));
+    SendMessageW(control, EM_SETBKGNDCOLOR, 0,
+                 static_cast<LPARAM>(copyfix::ui::colors.paper));
+    CHARFORMAT2W format{};
+    format.cbSize = sizeof(format);
+    format.dwMask = CFM_COLOR;
+    format.crTextColor = copyfix::ui::colors.ink;
+    SendMessageW(control, EM_SETCHARFORMAT, SCF_ALL,
+                 reinterpret_cast<LPARAM>(&format));
     return true;
 }
 
@@ -719,11 +1092,11 @@ bool RenderPreviewText(HWND window) {
         return false;
     // Subtle formatting marks must be painted before stronger content marks.
     if (g_show_spaces) {
-        MarkChanges(before, diff.minorRemoved, RGB(255, 246, 243));
-        MarkChanges(after, diff.minorAdded, RGB(242, 250, 246));
+        MarkChanges(before, diff.minorRemoved, copyfix::ui::colors.minorRemoved);
+        MarkChanges(after, diff.minorAdded, copyfix::ui::colors.minorAdded);
     }
-    MarkChanges(before, diff.removed, RGB(255, 225, 225));
-    MarkChanges(after, diff.added, RGB(218, 247, 231));
+    MarkChanges(before, diff.removed, copyfix::ui::colors.removed);
+    MarkChanges(after, diff.added, copyfix::ui::colors.added);
     if (have_before_scroll) SendMessageW(before, EM_SETSCROLLPOS, 0,
                                           reinterpret_cast<LPARAM>(&before_scroll));
     if (have_after_scroll) SendMessageW(after, EM_SETSCROLLPOS, 0,
@@ -734,17 +1107,40 @@ bool RenderPreviewText(HWND window) {
     }
 }
 
+void UpdatePreviewLabels(HWND window) noexcept {
+    if (!IsWindow(window)) return;
+    SetWindowTextW(window,Tr(UiText::PreviewWindow));
+    SetChildCaption(window,kPreviewTitle,Tr(UiText::PreviewTitle));
+    SetChildCaption(window,kPreviewSubtitle,Tr(UiText::PreviewSubtitle));
+    SetChildCaption(window,kPreviewBeforeLabel,Tr(UiText::SourceText));
+    SetChildCaption(window,kPreviewAfterLabel,Tr(UiText::ResultText));
+    const wchar_t* profile=g_settings.profile==copyfix::Profile::Gentle
+        ? Tr(UiText::ProfileGentleLower) : g_settings.profile==copyfix::Profile::Smart
+        ? Tr(UiText::ProfileSmartLower) : Tr(UiText::ProfileDeepLower);
+    wchar_t status[128]{};
+    swprintf_s(status,L"%zu%s%s",g_pending.after.changes,
+               Tr(UiText::PreviewStatusSuffix),profile);
+    SetChildCaption(window,kPreviewNote,status);
+    SetChildCaption(window,kPreviewShowBreaks,Tr(UiText::ShowBreaks));
+    SetChildCaption(window,kPreviewShowSpaces,Tr(UiText::ShowSpaces));
+    SetChildCaption(window,kPreviewAccept,Tr(UiText::Apply));
+    SetChildCaption(window,kPreviewCancel,Tr(UiText::Cancel));
+    InvalidateRect(window,nullptr,FALSE);
+}
+
 LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam) {
     switch (msg) {
     case WM_CREATE: {
         g_preview_dpi = static_cast<int>(GetDpiForWindow(window));
-        const wchar_t* profile = g_settings.profile == copyfix::Profile::Gentle ? L"бережный" :
-                                 g_settings.profile == copyfix::Profile::Smart ? L"умный" : L"глубокий";
-        MakeLabel(window, kPreviewTitle, L"Проверьте изменения", g_font_title);
+        InitWindowTheme(window);
+        const wchar_t* profile = g_settings.profile == copyfix::Profile::Gentle
+            ? Tr(UiText::ProfileGentleLower) : g_settings.profile == copyfix::Profile::Smart
+            ? Tr(UiText::ProfileSmartLower) : Tr(UiText::ProfileDeepLower);
+        MakeLabel(window, kPreviewTitle, Tr(UiText::PreviewTitle), g_font_title);
         MakeLabel(window, kPreviewSubtitle,
-                  L"Розовый: удалено  •  Зелёный: добавлено. Подсветка пробелов доступна отдельно.", g_font_caption);
-        MakeLabel(window, kPreviewBeforeLabel, L"ИСХОДНЫЙ ТЕКСТ", g_font_label);
-        MakeLabel(window, kPreviewAfterLabel, L"РЕЗУЛЬТАТ ОБРАБОТКИ", g_font_label);
+                  Tr(UiText::PreviewSubtitle), g_font_caption);
+        MakeLabel(window, kPreviewBeforeLabel, Tr(UiText::SourceText), g_font_label);
+        MakeLabel(window, kPreviewAfterLabel, Tr(UiText::ResultText), g_font_label);
         wchar_t status[128]{};
         std::size_t number = g_pending.after.changes;
         std::size_t digits = 0;
@@ -753,75 +1149,105 @@ LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
             number /= 10;
         } while (number);
         std::reverse(status, status + digits);
-        wcscat_s(status, L" изменений  |  Профиль: ");
+        wcscat_s(status, Tr(UiText::PreviewStatusSuffix));
         wcscat_s(status, profile);
         MakeLabel(window, kPreviewNote, status, g_font_caption);
         const DWORD style = WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_TABSTOP | ES_MULTILINE |
                             ES_AUTOVSCROLL | ES_READONLY | ES_NOHIDESEL;
-        HWND before = CreateWindowExW(WS_EX_CLIENTEDGE, MSFTEDIT_CLASS, L"",
+        HWND before = CreateWindowExW(0, MSFTEDIT_CLASS, L"",
                                      style, 0, 0, 1, 1, window,
                                      reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kPreviewBeforeEdit)),
                                      g_instance, nullptr);
-        HWND after = CreateWindowExW(WS_EX_CLIENTEDGE, MSFTEDIT_CLASS, L"",
+        HWND after = CreateWindowExW(0, MSFTEDIT_CLASS, L"",
                                     style, 0, 0, 1, 1, window,
                                     reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kPreviewAfterEdit)),
                                     g_instance, nullptr);
         if (!before || !after) return -1;
         ApplyFont(before, g_font_body);
         ApplyFont(after, g_font_body);
-        SendMessageW(before, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(12,12));
-        SendMessageW(after, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(12,12));
-        HWND toggle = CreateWindowExW(0, L"BUTTON", L"↵ Показать переносы строк",
+        const int inset=Scale(14,g_preview_dpi);
+        SendMessageW(before, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN,
+                     MAKELPARAM(inset,inset));
+        SendMessageW(after, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN,
+                     MAKELPARAM(inset,inset));
+        HWND toggle = CreateWindowExW(0, L"BUTTON", Tr(UiText::ShowBreaks),
                                       WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
                                       0,0,1,1,window,
                                       reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kPreviewShowBreaks)),
                                       g_instance,nullptr);
         ApplyFont(toggle, g_font_caption);
-        HWND spaces = CreateWindowExW(0, L"BUTTON", L"Подсветка пробелов",
+        StyleCheckBox(toggle);
+        HWND spaces = CreateWindowExW(0, L"BUTTON", Tr(UiText::ShowSpaces),
                                     WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
                                     0,0,1,1,window,
                                     reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kPreviewShowSpaces)),
                                     g_instance,nullptr);
         ApplyFont(spaces, g_font_caption);
+        StyleCheckBox(spaces);
         g_show_breaks = false;
         g_show_spaces = false;
         if (!RenderPreviewText(window)) return -1;
-        CreateWindowW(L"BUTTON", L"Применить", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW,
-                      0,0,1,1,window,reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kPreviewAccept)),g_instance,nullptr);
-        CreateWindowW(L"BUTTON", L"Отмена", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW,
-                      0,0,1,1,window,reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kPreviewCancel)),g_instance,nullptr);
+        HWND accept=CreateWindowW(L"BUTTON",Tr(UiText::Apply),
+            WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_OWNERDRAW,0,0,1,1,window,
+            reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kPreviewAccept)),g_instance,nullptr);
+        HWND cancel=CreateWindowW(L"BUTTON",Tr(UiText::Cancel),
+            WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_OWNERDRAW,0,0,1,1,window,
+            reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kPreviewCancel)),g_instance,nullptr);
+        if (!accept || !cancel) return -1;
+        ApplyFont(accept,g_font_label); ApplyFont(cancel,g_font_label);
+        StyleActionButton(accept); StyleActionButton(cancel);
         LayoutPreview(window);
         return 0;
     }
     case WM_SIZE: LayoutPreview(window); return 0;
     case WM_DPICHANGED: {
+        g_preview_dpi = HIWORD(wparam);
         auto* suggested = reinterpret_cast<const RECT*>(lparam);
         SetWindowPos(window, nullptr, suggested->left, suggested->top,
                      suggested->right - suggested->left, suggested->bottom - suggested->top,
                      SWP_NOZORDER | SWP_NOACTIVATE);
+        UpdateFontsForWindow(window);
+        const int inset=Scale(14,g_preview_dpi);
+        for (UINT id : {kPreviewBeforeEdit,kPreviewAfterEdit})
+            SendDlgItemMessageW(window,id,EM_SETMARGINS,
+                EC_LEFTMARGIN|EC_RIGHTMARGIN,MAKELPARAM(inset,inset));
         return 0;
     }
+    case WM_ERASEBKGND: return 1;
     case WM_CTLCOLORSTATIC: {
         auto dc = reinterpret_cast<HDC>(wparam);
         const UINT id = static_cast<UINT>(GetDlgCtrlID(reinterpret_cast<HWND>(lparam)));
         SetBkMode(dc, TRANSPARENT);
+        const auto& palette = copyfix::ui::colors;
         SetTextColor(dc, id == kPreviewTitle || id == kPreviewBeforeLabel ||
-                         id == kPreviewAfterLabel ? kInk : kMuted);
+                         id == kPreviewAfterLabel ? palette.ink
+            : id == kPreviewNote ? copyfix::ui::Mix(palette.muted,palette.ink,45)
+                                 : palette.muted);
+        const bool onCard = id == kPreviewBeforeLabel || id == kPreviewAfterLabel;
+        return reinterpret_cast<LRESULT>(onCard ? g_surface_brush : g_canvas_brush);
+    }
+    case WM_CTLCOLORBTN: {
+        auto dc = reinterpret_cast<HDC>(wparam);
+        SetTextColor(dc, copyfix::ui::colors.ink);
+        SetBkColor(dc, copyfix::ui::colors.canvas);
         return reinterpret_cast<LRESULT>(g_canvas_brush);
     }
+    case WM_SETTINGCHANGE:
+    case WM_THEMECHANGED:
+        SynchronizeSystemTheme();
+        UpdateWindowTheme(window);
+        return 0;
     case WM_DRAWITEM: DrawActionButton(reinterpret_cast<const DRAWITEMSTRUCT*>(lparam)); return TRUE;
     case WM_PAINT: {
-        PAINTSTRUCT ps{}; const auto dc = BeginPaint(window, &ps);
-        RECT bounds{}; GetClientRect(window, &bounds);
-        RECT line{Scale(26,g_preview_dpi), Scale(98,g_preview_dpi),
-                  bounds.right - Scale(26,g_preview_dpi), Scale(99,g_preview_dpi)};
-        HBRUSH border = CreateSolidBrush(kBorder); FillRect(dc, &line, border); DeleteObject(border);
+        PAINTSTRUCT ps{};
+        const auto dc = BeginPaint(window, &ps);
+        DrawPreviewSurface(window, dc);
         EndPaint(window, &ps);
         return 0;
     }
     case WM_GETMINMAXINFO: {
         auto* bounds = reinterpret_cast<MINMAXINFO*>(lparam);
-        bounds->ptMinTrackSize = POINT{Scale(760,g_preview_dpi), Scale(510,g_preview_dpi)};
+        bounds->ptMinTrackSize = POINT{Scale(760,g_preview_dpi), Scale(520,g_preview_dpi)};
         return 0;
     }
     case WM_COMMAND: {
@@ -835,7 +1261,7 @@ LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
                 g_show_spaces = SendMessageW(from, BM_GETCHECK, 0, 0) == BST_CHECKED;
                 if (!RenderPreviewText(window)) {
                     DestroyWindow(window);
-                    Notify(L"Недостаточно памяти для предпросмотра. Буфер не изменён.");
+                    Notify(Tr(UiText::NotifyPreviewMemoryFailed));
                 }
                 return 0;
             }
@@ -843,7 +1269,7 @@ LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
                 g_show_breaks = SendMessageW(from, BM_GETCHECK, 0, 0) == BST_CHECKED;
                 if (!RenderPreviewText(window)) {
                     DestroyWindow(window);
-                    Notify(L"Недостаточно памяти для предпросмотра. Буфер не изменён.");
+                    Notify(Tr(UiText::NotifyPreviewMemoryFailed));
                 }
                 return 0;
             }
@@ -867,39 +1293,38 @@ LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
 }
 
 void OpenPreview() {
+    SynchronizeSystemTheme();
     if (g_preview) { SetForegroundWindow(g_preview); return; }
-    g_preview = CreateWindowExW(WS_EX_APPWINDOW, L"CopyFixPreview", L"CopyFix - проверка текста",
-        WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, CW_USEDEFAULT, CW_USEDEFAULT,
-        Scale(1040,96), Scale(690,96), nullptr, nullptr, g_instance, nullptr);
+    const auto spawn = PositionedOnCursorMonitor(1000,640,g_message);
+    g_preview = CreateWindowExW(WS_EX_APPWINDOW, L"CopyFixPreview", Tr(UiText::PreviewWindow),
+        WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, spawn.x, spawn.y,
+        spawn.width, spawn.height, nullptr, nullptr, g_instance, nullptr);
     if (!g_preview) {
         ClearPending();
-        Notify(L"Не удалось открыть предпросмотр.");
+        Notify(Tr(UiText::NotifyPreviewOpenFailed));
         return;
     }
-    POINT cursor{};
-    const HMONITOR monitor = GetCursorPos(&cursor)
-        ? MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST)
-        : MonitorFromWindow(g_message, MONITOR_DEFAULTTONEAREST);
-    CenterWindowOnMonitor(g_preview, monitor);
+    CenterWindowOnMonitor(g_preview, spawn.monitor);
+    InitWindowTheme(g_preview);
     ShowWindow(g_preview, SW_SHOWNORMAL);
 }
 
 void FixClipboard(bool force_preview, bool one_line = false) {
     if (g_preview) { SetForegroundWindow(g_preview); return; }
     ClipSnapshot snapshot;
-    if (!Snapshot(snapshot)) { Notify(L"Нет подходящего текста или буфер недоступен."); return; }
-    if (snapshot.text.empty()) { Notify(L"Буфер содержит пустой текст."); return; }
+    if (!Snapshot(snapshot)) { Notify(Tr(UiText::NotifyNoText)); return; }
+    if (snapshot.text.empty()) { Notify(Tr(UiText::NotifyEmpty)); return; }
     copyfix::Result cleaned;
     try {
         cleaned = one_line ? copyfix::OneLine(snapshot.text)
                            : copyfix::Clean(snapshot.text, g_settings.profile);
     } catch (const std::bad_alloc&) {
-        Notify(L"Недостаточно памяти. Буфер не изменён.");
+        Notify(Tr(UiText::NotifyMemoryFailed));
         return;
     }
-    if (cleaned.protected_structure) { Notify(L"Обнаружен структурированный текст: оставлен без изменений."); return; }
+    if (cleaned.protected_structure) { Notify(Tr(UiText::NotifyProtected)); return; }
     if (cleaned.text == snapshot.text || EqualsClipboardLineEndings(cleaned.text, snapshot.text)) {
-        Notify(L"Изменений не найдено.");
+        Notify(Tr(UiText::NotifyUnchanged));
         return;
     }
     g_pending = Pending{std::move(snapshot), std::move(cleaned)};
@@ -908,7 +1333,7 @@ void FixClipboard(bool force_preview, bool one_line = false) {
         if (g_pending.before.text.size() > kMaxPreviewChars ||
             g_pending.after.text.size() > kMaxPreviewChars) {
             ClearPending();
-            Notify(L"Текст слишком велик для безопасного предпросмотра. Разделите его на части.");
+            Notify(Tr(UiText::NotifyTooLarge));
             return;
         }
         OpenPreview();
@@ -918,33 +1343,78 @@ void FixClipboard(bool force_preview, bool one_line = false) {
 }
 
 void UndoLast() {
-    if (!g_undo.available) { Notify(L"Нет исправления для отмены."); return; }
+    if (!g_undo.available) { Notify(Tr(UiText::NotifyUndoMissing)); return; }
     ClipSnapshot current;
     if (!Snapshot(current) || current.sequence != g_undo.after_sequence ||
         current.text != g_undo.after) {
         ClearUndo();
-        Notify(L"Буфер изменился: отмена невозможна.");
+        Notify(Tr(UiText::NotifyUndoStale));
         return;
     }
     const bool restored = WriteIfUnchanged(current, g_undo.before, nullptr);
     if (restored) {
         ClearUndo();
-        Notify(L"Исходный текст восстановлен (только plain text).");
-    } else Notify(L"Не удалось восстановить текст, буфер не изменён или занят.");
+        Notify(Tr(UiText::NotifyUndoOK));
+    } else Notify(Tr(UiText::NotifyUndoFailed));
 }
 
 void ShowShortcutWarning(HWND window, bool occupied) noexcept {
     if (!IsWindow(window)) return;
     ResetHotkeyChoice(window);
     const wchar_t* message = occupied
-        ? L"Сочетание уже занято другой программой или зарезервировано Windows. "
-          L"Прежняя комбинация сохранена."
-        : L"Комбинация недопустима. Выберите Ctrl или Alt, при желании Shift, "
-          L"и клавишу из списка.";
+        ? DraftTr(UiText::ShortcutOccupied) : DraftTr(UiText::ShortcutInvalid);
     if (HWND status = GetDlgItem(window, kSettingsFeedback))
         SetWindowTextW(status, message);
-    g_hotkey_warning_dialog(window, message, L"CopyFix — горячая клавиша",
+    g_hotkey_warning_dialog(window, message, DraftTr(UiText::ShortcutWarningTitle),
                             MB_OK | MB_ICONWARNING);
+}
+
+const wchar_t* ProfileHelpText(copyfix::Profile profile) noexcept {
+    switch (profile) {
+    case copyfix::Profile::Gentle:
+        return DraftTr(UiText::ProfileHelpGentle);
+    case copyfix::Profile::Smart:
+        return DraftTr(UiText::ProfileHelpSmart);
+    case copyfix::Profile::Deep:
+        return DraftTr(UiText::ProfileHelpDeep);
+    }
+    return L"";
+}
+
+void DrawSettingsSurface(HWND window, HDC dc) noexcept {
+    RECT client{};
+    GetClientRect(window, &client);
+    FillRect(dc, &client, g_canvas_brush ? g_canvas_brush
+                                        : static_cast<HBRUSH>(GetStockObject(WHITE_BRUSH)));
+    const int dpi = g_settings_dpi;
+    const int w = client.right;
+    const auto& c = copyfix::ui::colors;
+    copyfix::ui::Badge(dc, Scale(23,dpi), Scale(20,dpi), Scale(32,dpi),dpi);
+    copyfix::ui::Rounded(dc,
+        RECT{Scale(20,dpi), Scale(91,dpi), w-Scale(20,dpi), Scale(169,dpi)},
+        c.surface, c.border, Scale(copyfix::ui::CardCorner,dpi));
+    copyfix::ui::Rounded(dc,
+        RECT{Scale(20,dpi), Scale(181,dpi), w-Scale(20,dpi), Scale(285,dpi)},
+        c.surface, c.border, Scale(copyfix::ui::CardCorner,dpi));
+    copyfix::ui::Rounded(dc,
+        RECT{Scale(20,dpi), Scale(297,dpi), w-Scale(20,dpi), Scale(399,dpi)},
+        c.surface, c.border, Scale(copyfix::ui::CardCorner,dpi));
+    copyfix::ui::Rounded(dc,
+        RECT{Scale(20,dpi), Scale(411,dpi), w-Scale(20,dpi), Scale(511,dpi)},
+        c.surface, c.border, Scale(copyfix::ui::CardCorner,dpi));
+    const int widthDip=MulDiv(w,96,dpi);
+    const int segmentWidth=(widthDip-76)/3;
+    copyfix::ui::Rounded(dc,
+        RECT{Scale(34,dpi),Scale(214,dpi),
+             Scale(42+segmentWidth*3,dpi),Scale(250,dpi)},
+        c.raised,c.border,Scale(copyfix::ui::SegmentCorner,dpi));
+    const RECT separator{Scale(20,dpi), client.bottom-Scale(61,dpi),
+                         w-Scale(20,dpi), client.bottom-Scale(60,dpi)};
+    HBRUSH stroke = CreateSolidBrush(c.border);
+    if (stroke) {
+        FillRect(dc, &separator, stroke);
+        DeleteObject(stroke);
+    }
 }
 
 void LayoutSettings(HWND window) {
@@ -952,29 +1422,85 @@ void LayoutSettings(HWND window) {
     const int dpi = g_settings_dpi;
     const int w = MulDiv(bounds.right, 96, dpi);
     const int h = MulDiv(bounds.bottom, 96, dpi);
-    Position(window, kSettingsTitle, 26, 22, w-52, 38, dpi);
-    Position(window, kSettingsSubtitle, 26, 64, w-52, 40, dpi);
-    Position(window, 420, 26, 124, w-52, 24, dpi);
-    Position(window, kSettingsCtrl, 26, 154, 120, 30, dpi);
-    Position(window, kSettingsAlt, 164, 154, 110, 30, dpi);
-    Position(window, kSettingsShift, 302, 154, 145, 30, dpi);
-    Position(window, kHotkeyInput, 26, 192, w-52, 240, dpi);
-    Position(window, 421, 26, 249, w-52, 24, dpi);
-    Position(window, kComboProfile, 26, 279, w-52, 240, dpi);
-    Position(window, kSettingsFeedback, 26, h-113, w-52, 46, dpi);
-    Position(window, kSettingsCancel, w-286, h-64, 122, 42, dpi);
-    Position(window, kSettingsSave, w-156, h-64, 130, 42, dpi);
+    // Four compact cards; the footer anchors to the client
+    // edge, not to the outer Win32 frame. No label crosses a card or divider.
+    Position(window, kSettingsTitle, 65, 17, w-85, 31, dpi);
+    Position(window, kSettingsSubtitle, 65, 50, w-86, 32, dpi);
+    Position(window, 420, 36, 99, w-72, 19, dpi);
+    Position(window, kSettingsCtrl, 36, 124, 81, 28, dpi);
+    Position(window, kSettingsAlt, 126, 124, 74, 28, dpi);
+    Position(window, kSettingsShift, 208, 124, 95, 28, dpi);
+    // COMBOBOX height includes its popup. Keep six visible rows, not a
+    // screen-height popup; CBS_HASSTRINGS is mandatory with owner-draw text.
+    Position(window, kHotkeyInput, w-178, 119, 142, 181, dpi);
+    if (HWND combo = GetDlgItem(window,kHotkeyInput))
+        SendMessageW(combo,CB_SETMINVISIBLE,6,0);
+    Position(window, 421, 36, 188, w-72, 19, dpi);
+    const int segmentWidth = (w-76)/3;
+    Position(window, kProfileGentle, 38, 216, segmentWidth, 33, dpi);
+    Position(window, kProfileSmart, 38+segmentWidth, 216, segmentWidth, 33, dpi);
+    Position(window, kProfileDeep, 38+2*segmentWidth, 216, segmentWidth, 33, dpi);
+    Position(window, kSettingsExplanation, 36, 259, w-72, 21, dpi);
+    Position(window, kSettingsLanguageSection, 36, 306, w-72, 19, dpi);
+    Position(window, kSettingsLanguageInput, 36, 332, w-72, 108, dpi);
+    Position(window, kSettingsLanguageHint, 36, 374, w-72, 22, dpi);
+    Position(window, kSettingsThemeSection, 36, 420, w-72, 19, dpi);
+    Position(window, kSettingsThemeInput, 36, 446, w-72, 108, dpi);
+    Position(window, kSettingsThemeHint, 36, 484, w-72, 21, dpi);
+    Position(window, kSettingsFeedback, 26, 516, w-52, 22, dpi);
+    Position(window, kSettingsCancel, w-250, h-48, 104, 34, dpi);
+    Position(window, kSettingsSave, w-136, h-48, 116, 34, dpi);
+}
+
+void UpdateSettingsLabels(HWND window) noexcept {
+    if (!IsWindow(window)) return;
+    SetWindowTextW(window,DraftTr(UiText::SettingsWindow));
+    SetChildCaption(window,kSettingsTitle,DraftTr(UiText::SettingsTitle));
+    SetChildCaption(window,kSettingsSubtitle,DraftTr(UiText::SettingsSubtitle));
+    SetChildCaption(window,420,DraftTr(UiText::HotkeySection));
+    SetChildCaption(window,421,DraftTr(UiText::ProfileSection));
+    for (UINT id=kProfileGentle; id<=kProfileDeep; ++id) {
+        const UiText profileText=id==kProfileGentle ? UiText::ProfileGentle :
+            id==kProfileSmart ? UiText::ProfileSmart : UiText::ProfileDeep;
+        SetChildCaption(window,id,DraftTr(profileText));
+    }
+    SetChildCaption(window,kSettingsExplanation,ProfileHelpText(g_draft_profile));
+    SetChildCaption(window,kSettingsLanguageSection,DraftTr(UiText::LanguageSection));
+    SetChildCaption(window,kSettingsLanguageHint,DraftTr(UiText::LanguageHint));
+    SetChildCaption(window,kSettingsThemeSection,DraftTr(UiText::ThemeSection));
+    SetChildCaption(window,kSettingsThemeHint,DraftTr(UiText::ThemeHint));
+    SetChildCaption(window,kSettingsCancel,DraftTr(UiText::Cancel));
+    SetChildCaption(window,kSettingsSave,DraftTr(UiText::Save));
+    if (HWND combo=GetDlgItem(window,kSettingsLanguageInput)) {
+        SendMessageW(combo,CB_RESETCONTENT,0,0);
+        for (UiText key : {UiText::LanguageSystem,UiText::LanguageRussian,
+                           UiText::LanguageEnglish})
+            SendMessageW(combo,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(DraftTr(key)));
+        SendMessageW(combo,CB_SETCURSEL,static_cast<WPARAM>(g_draft_language),0);
+    }
+    if (HWND combo=GetDlgItem(window,kSettingsThemeInput)) {
+        SendMessageW(combo,CB_RESETCONTENT,0,0);
+        for (UiText key : {UiText::ThemeSystem,UiText::ThemeLight,UiText::ThemeDark})
+            SendMessageW(combo,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(DraftTr(key)));
+        SendMessageW(combo,CB_SETCURSEL,static_cast<WPARAM>(g_draft_theme),0);
+    }
+    InvalidateRect(window,nullptr,FALSE);
 }
 
 LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam) {
     switch (msg) {
     case WM_CREATE: {
         g_settings_dpi = static_cast<int>(GetDpiForWindow(window));
-        MakeLabel(window,kSettingsTitle,L"Настройки",g_font_title);
+        InitWindowTheme(window);
+        g_draft_profile = g_settings.profile;
+        g_draft_language = g_settings.language;
+        g_draft_theme = g_settings.theme;
+        g_theme_preview_active = true;
+        MakeLabel(window,kSettingsTitle,DraftTr(UiText::SettingsTitle),g_font_title);
         MakeLabel(window,kSettingsSubtitle,
-                  L"Отметьте Ctrl или Alt, при необходимости Shift, затем выберите клавишу.",
+                  DraftTr(UiText::SettingsSubtitle),
                   g_font_caption);
-        MakeLabel(window,420,L"ГОРЯЧАЯ КЛАВИША",g_font_label);
+        MakeLabel(window,420,DraftTr(UiText::HotkeySection),g_font_label);
         const HotkeyKeyItem modifiers[] = {
             {L"Ctrl", kSettingsCtrl}, {L"Alt", kSettingsAlt},
             {L"Shift", kSettingsShift},
@@ -987,47 +1513,168 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
                 g_instance, nullptr);
             if (!control) return -1;
             ApplyFont(control, g_font_body);
+            StyleCheckBox(control);
         }
         HWND hotkey = CreateWindowW(L"COMBOBOX", nullptr,
-            WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST | WS_VSCROLL,
+            WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST |
+            CBS_OWNERDRAWFIXED | CBS_HASSTRINGS | CBS_NOINTEGRALHEIGHT | WS_VSCROLL,
             0, 0, 1, 1, window,
             reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kHotkeyInput)),
             g_instance, nullptr);
         if (!hotkey) return -1;
         PopulateHotkeyKeys(hotkey, g_settings.hotkey.key);
+        SendMessageW(hotkey, CB_SETMINVISIBLE, 6, 0);
         ResetHotkeyChoice(window);
         ApplyFont(hotkey,g_font_body);
-        MakeLabel(window,421,L"ПРОФИЛЬ ОБРАБОТКИ",g_font_label);
-        HWND profile=CreateWindowW(L"COMBOBOX",nullptr,WS_CHILD | WS_VISIBLE | WS_TABSTOP |
-            CBS_DROPDOWNLIST | WS_VSCROLL,0,0,1,1,window,
-            reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kComboProfile)),g_instance,nullptr);
-        for(const auto* name:{L"Бережный",L"Умный",L"Глубокий"})
-            SendMessageW(profile,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(name));
-        SendMessageW(profile,CB_SETCURSEL,static_cast<WPARAM>(g_settings.profile),0);
-        ApplyFont(profile,g_font_body);
+        MakeLabel(window,421,DraftTr(UiText::ProfileSection),g_font_label);
+        const wchar_t* profileNames[]{DraftTr(UiText::ProfileGentle),
+            DraftTr(UiText::ProfileSmart),DraftTr(UiText::ProfileDeep)};
+        for (UINT index = 0; index < 3; ++index) {
+            const HWND button = CreateWindowW(L"BUTTON", profileNames[index],
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW,
+                0,0,1,1,window,
+                reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kProfileGentle+index)),
+                g_instance,nullptr);
+            if (!button) return -1;
+            ApplyFont(button,g_font_body);
+            StyleActionButton(button);
+        }
+        MakeLabel(window,kSettingsExplanation,ProfileHelpText(g_draft_profile),g_font_caption);
+        MakeLabel(window,kSettingsLanguageSection,DraftTr(UiText::LanguageSection),g_font_label);
+        HWND lang=CreateWindowW(L"COMBOBOX",nullptr,
+            WS_CHILD|WS_VISIBLE|WS_TABSTOP|CBS_DROPDOWNLIST|
+            CBS_OWNERDRAWFIXED|CBS_HASSTRINGS|CBS_NOINTEGRALHEIGHT|WS_VSCROLL,
+            0,0,1,1,window,
+            reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kSettingsLanguageInput)),
+            g_instance,nullptr);
+        if (!lang) return -1;
+        ApplyFont(lang,g_font_body);
+        for (UiText text : {UiText::LanguageSystem,UiText::LanguageRussian,
+                            UiText::LanguageEnglish})
+            SendMessageW(lang,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(DraftTr(text)));
+        SendMessageW(lang,CB_SETCURSEL,static_cast<WPARAM>(g_draft_language),0);
+        MakeLabel(window,kSettingsLanguageHint,DraftTr(UiText::LanguageHint),g_font_caption);
+        MakeLabel(window,kSettingsThemeSection,DraftTr(UiText::ThemeSection),g_font_label);
+        HWND theme=CreateWindowW(L"COMBOBOX",nullptr,
+            WS_CHILD|WS_VISIBLE|WS_TABSTOP|CBS_DROPDOWNLIST|
+            CBS_OWNERDRAWFIXED|CBS_HASSTRINGS|CBS_NOINTEGRALHEIGHT|WS_VSCROLL,
+            0,0,1,1,window,
+            reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kSettingsThemeInput)),
+            g_instance,nullptr);
+        if (!theme) return -1;
+        ApplyFont(theme,g_font_body);
+        for (UiText text : {UiText::ThemeSystem,UiText::ThemeLight,UiText::ThemeDark})
+            SendMessageW(theme,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(DraftTr(text)));
+        SendMessageW(theme,CB_SETCURSEL,static_cast<WPARAM>(g_draft_theme),0);
+        MakeLabel(window,kSettingsThemeHint,DraftTr(UiText::ThemeHint),g_font_caption);
         MakeLabel(window,kSettingsFeedback,L"",g_font_caption);
-        CreateWindowW(L"BUTTON",L"Сохранить",WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW,
-            0,0,1,1,window,reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kSettingsSave)),g_instance,nullptr);
-        CreateWindowW(L"BUTTON",L"Отмена",WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW,
-            0,0,1,1,window,reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kSettingsCancel)),g_instance,nullptr);
+        HWND save=CreateWindowW(L"BUTTON",DraftTr(UiText::Save),
+            WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_OWNERDRAW,0,0,1,1,window,
+            reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kSettingsSave)),g_instance,nullptr);
+        HWND cancel=CreateWindowW(L"BUTTON",DraftTr(UiText::Cancel),
+            WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_OWNERDRAW,0,0,1,1,window,
+            reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kSettingsCancel)),g_instance,nullptr);
+        if (!save || !cancel) return -1;
+        ApplyFont(save,g_font_label); ApplyFont(cancel,g_font_label);
+        StyleActionButton(save); StyleActionButton(cancel);
         LayoutSettings(window);
         return 0;
     }
     case WM_SIZE: LayoutSettings(window); return 0;
+    case WM_ERASEBKGND:
+        return 1;
+    case WM_PAINT: {
+        PAINTSTRUCT ps{};
+        const auto dc = BeginPaint(window, &ps);
+        DrawSettingsSurface(window, dc);
+        EndPaint(window, &ps);
+        return 0;
+    }
     case WM_CTLCOLORSTATIC: {
         auto dc = reinterpret_cast<HDC>(wparam);
         SetBkMode(dc,TRANSPARENT);
         const UINT id = static_cast<UINT>(GetDlgCtrlID(reinterpret_cast<HWND>(lparam)));
-        SetTextColor(dc,id==kSettingsFeedback ? RGB(172,38,38) :
-            (id==kSettingsTitle||id==420||id==421 ? kInk : kMuted));
-        return reinterpret_cast<LRESULT>(g_canvas_brush);
+        const bool insideCard = id == 420 || id == 421 || id == kSettingsExplanation ||
+            id == kSettingsLanguageSection || id == kSettingsLanguageHint ||
+            id == kSettingsThemeSection || id == kSettingsThemeHint;
+        SetTextColor(dc,id==kSettingsFeedback ? copyfix::ui::colors.warning :
+            (id==kSettingsTitle || id==420 || id==421 ||
+             id==kSettingsLanguageSection || id==kSettingsThemeSection
+              ? copyfix::ui::colors.ink : copyfix::ui::colors.muted));
+        return reinterpret_cast<LRESULT>(insideCard ? g_surface_brush : g_canvas_brush);
+    }
+    case WM_CTLCOLORBTN:
+    case WM_CTLCOLORLISTBOX: {
+        const auto dc = reinterpret_cast<HDC>(wparam);
+        SetTextColor(dc, copyfix::ui::colors.ink);
+        SetBkColor(dc, copyfix::ui::colors.surface);
+        return reinterpret_cast<LRESULT>(g_surface_brush);
+    }
+    case WM_MEASUREITEM: {
+        auto* measure = reinterpret_cast<MEASUREITEMSTRUCT*>(lparam);
+        if (measure && (measure->CtlID == kHotkeyInput ||
+                        measure->CtlID == kSettingsLanguageInput ||
+                        measure->CtlID == kSettingsThemeInput)) {
+            measure->itemHeight = static_cast<UINT>(Scale(25,g_settings_dpi));
+            return TRUE;
+        }
+        break;
     }
     case WM_DRAWITEM: DrawActionButton(reinterpret_cast<const DRAWITEMSTRUCT*>(lparam));return TRUE;
+    case WM_SETTINGCHANGE:
+    case WM_THEMECHANGED:
+        SynchronizeSystemTheme();
+        UpdateWindowTheme(window);
+        return 0;
+    case WM_DPICHANGED: {
+        g_settings_dpi = HIWORD(wparam);
+        const auto* proposed = reinterpret_cast<const RECT*>(lparam);
+        SetWindowPos(window,nullptr,proposed->left,proposed->top,
+                     proposed->right-proposed->left,proposed->bottom-proposed->top,
+                     SWP_NOZORDER | SWP_NOACTIVATE);
+        LayoutSettings(window);
+        UpdateFontsForWindow(window);
+        return 0;
+    }
     case WM_COMMAND:
+        if (LOWORD(wparam) == kSettingsThemeInput &&
+            HIWORD(wparam) == CBN_SELCHANGE &&
+            reinterpret_cast<HWND>(lparam) == GetDlgItem(window,kSettingsThemeInput)) {
+            const LRESULT value=SendDlgItemMessageW(window,kSettingsThemeInput,CB_GETCURSEL,0,0);
+            if (value>=0 && value<=2) {
+                g_draft_theme=static_cast<copyfix::ui::Preference>(value);
+                SynchronizeSystemTheme();
+            }
+            return 0;
+        }
+        if (LOWORD(wparam) == kSettingsLanguageInput &&
+            HIWORD(wparam) == CBN_SELCHANGE &&
+            reinterpret_cast<HWND>(lparam) == GetDlgItem(window,kSettingsLanguageInput)) {
+            const LRESULT value=SendDlgItemMessageW(window,kSettingsLanguageInput,CB_GETCURSEL,0,0);
+            if (value>=0 && value<=2) {
+                g_draft_language=static_cast<copyfix::i18n::Language>(value);
+                UpdateSettingsLabels(window);
+            }
+            return 0;
+        }
+        if (LOWORD(wparam) >= kProfileGentle && LOWORD(wparam) <= kProfileDeep &&
+            HIWORD(wparam) == BN_CLICKED &&
+            reinterpret_cast<HWND>(lparam) == GetDlgItem(window, LOWORD(wparam))) {
+            g_draft_profile = static_cast<copyfix::Profile>(LOWORD(wparam) - kProfileGentle);
+            if (HWND info = GetDlgItem(window,kSettingsExplanation))
+                SetWindowTextW(info,ProfileHelpText(g_draft_profile));
+            for (UINT id = kProfileGentle; id <= kProfileDeep; ++id)
+                InvalidateRect(GetDlgItem(window,id),nullptr,TRUE);
+            return 0;
+        }
         if (LOWORD(wparam) == kSettingsSave) {
             const HotkeyChord next_hotkey = ReadHotkeyChoice(window);
-            const int next_profile = static_cast<int>(SendMessageW(GetDlgItem(window, kComboProfile), CB_GETCURSEL, 0, 0));
-            if (next_profile < 0 || next_profile > 2) return 0;
+            const auto next_profile = g_draft_profile;
+            const LRESULT selected=SendDlgItemMessageW(window,kSettingsLanguageInput,CB_GETCURSEL,0,0);
+            const LRESULT themeChoice=SendDlgItemMessageW(window,kSettingsThemeInput,CB_GETCURSEL,0,0);
+            if (selected<0 || selected>2 || themeChoice<0 || themeChoice>2) return 0;
+            g_draft_language=static_cast<copyfix::i18n::Language>(selected);
+            g_draft_theme=static_cast<copyfix::ui::Preference>(themeChoice);
             if (!ValidHotkey(next_hotkey)) {
                 ShowShortcutWarning(window, false);
                 return 0;
@@ -1037,10 +1684,13 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
                 return 0;
             }
             g_settings.hotkey = next_hotkey;
-            g_settings.profile = static_cast<copyfix::Profile>(next_profile);
+            g_settings.profile = next_profile;
+            g_settings.language = g_draft_language;
+            g_settings.theme = g_draft_theme;
             if (!SaveSettings())
-                MessageBoxW(window,L"Не удалось сохранить параметры в HKCU. Они действуют до выхода из CopyFix.",
+                MessageBoxW(window,DraftTr(UiText::SettingsSaveFailed),
                             L"CopyFix",MB_OK | MB_ICONWARNING);
+            RefreshLocalizedWindows();
             DestroyWindow(window);
             return 0;
         }
@@ -1049,24 +1699,215 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
         }
         break;
     case WM_CLOSE: DestroyWindow(window); return 0;
-    case WM_DESTROY: g_settings_window = nullptr; return 0;
+    case WM_DESTROY:
+        g_settings_window = nullptr;
+        g_theme_preview_active = false;
+        SynchronizeSystemTheme();
+        return 0;
     }
     return DefWindowProcW(window,msg,wparam,lparam);
 }
 
 void OpenSettings() {
+    SynchronizeSystemTheme();
     if (g_settings_window) { SetForegroundWindow(g_settings_window); return; }
-    g_settings_window = CreateWindowExW(WS_EX_APPWINDOW,L"CopyFixSettings",L"CopyFix - настройки",
-        WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
-        CW_USEDEFAULT,CW_USEDEFAULT,Scale(510,96),Scale(492,96),
+    const auto spawn = PositionedOnCursorMonitor(500,642,g_message);
+    g_settings_window = CreateWindowExW(WS_EX_APPWINDOW,L"CopyFixSettings",Tr(UiText::SettingsWindow),
+        WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_CLIPCHILDREN,
+        spawn.x,spawn.y,spawn.width,spawn.height,
         nullptr,nullptr,g_instance,nullptr);
     if (!g_settings_window) return;
-    POINT cursor{};
-    const HMONITOR monitor = GetCursorPos(&cursor)
-        ? MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST)
-        : MonitorFromWindow(g_message, MONITOR_DEFAULTTONEAREST);
-    CenterWindowOnMonitor(g_settings_window, monitor);
+    CenterWindowOnMonitor(g_settings_window, spawn.monitor);
     ShowWindow(g_settings_window, SW_SHOWNORMAL);
+}
+
+HWND MakeCenteredLabel(HWND parent, UINT id, const wchar_t* text,
+                       HFONT font) {
+    HWND child = CreateWindowExW(0, L"STATIC", text,
+        WS_CHILD | WS_VISIBLE | SS_CENTER,
+        0,0,1,1,parent,
+        reinterpret_cast<HMENU>(static_cast<UINT_PTR>(id)),
+        g_instance,nullptr);
+    ApplyFont(child,font);
+    return child;
+}
+
+void LayoutAbout(HWND window) {
+    RECT bounds{}; GetClientRect(window, &bounds);
+    const int dpi = static_cast<int>(GetDpiForWindow(window));
+    const int w = MulDiv(bounds.right,96,dpi);
+    Position(window,kAboutIcon,(w-54)/2,21,54,54,dpi);
+    Position(window,kAboutTitle,28,84,w-56,31,dpi);
+    Position(window,kAboutVersionLabel,28,114,w-56,21,dpi);
+    Position(window,kAboutDescriptionLabel,28,144,w-56,31,dpi);
+    Position(window,kAboutProject,30,189,w-60,34,dpi);
+    Position(window,kAboutGitHub,30,232,w-60,34,dpi);
+    Position(window,kAboutLicense,22,283,w-44,28,dpi);
+}
+
+void DrawAboutSurface(HWND window, HDC dc) noexcept {
+    RECT client{}; GetClientRect(window,&client);
+    FillRect(dc,&client,g_canvas_brush ? g_canvas_brush
+                                      : static_cast<HBRUSH>(GetStockObject(WHITE_BRUSH)));
+    const auto& p = copyfix::ui::colors;
+    const int dpi = static_cast<int>(GetDpiForWindow(window));
+    copyfix::ui::Rounded(dc,
+        RECT{Scale(16,dpi),Scale(14,dpi),
+             client.right-Scale(16,dpi),client.bottom-Scale(14,dpi)},
+        p.surface,p.border,Scale(copyfix::ui::CardCorner,dpi));
+}
+
+bool DrawAboutIcon(const DRAWITEMSTRUCT* item) noexcept {
+    if (!item || item->CtlID != kAboutIcon || !item->hDC) return false;
+    // SS_OWNERDRAW avoids the default SS_ICON white background in dark mode.
+    // Draw the canonical embedded icon with its native alpha on our card.
+    const auto& palette=copyfix::ui::colors;
+    HBRUSH background=CreateSolidBrush(palette.surface);
+    if (!background) return false;
+    FillRect(item->hDC,&item->rcItem,background);
+    DeleteObject(background);
+    const int width=item->rcItem.right-item->rcItem.left;
+    const int height=item->rcItem.bottom-item->rcItem.top;
+    const int size=std::min(width,height);
+    if (size<=0) return false;
+    const HICON icon=LoadAppIcon(size);
+    return DrawIconEx(item->hDC,
+        item->rcItem.left+(width-size)/2,
+        item->rcItem.top+(height-size)/2,
+        icon,size,size,0,nullptr,DI_NORMAL)!=FALSE;
+}
+
+void UpdateAboutLabels(HWND window) noexcept {
+    if (!IsWindow(window)) return;
+    SetWindowTextW(window,Tr(UiText::AboutWindow));
+    SetChildCaption(window,kAboutDescriptionLabel,Tr(UiText::AboutDescription));
+    SetChildCaption(window,kAboutProject,Tr(UiText::AboutProject));
+    SetChildCaption(window,kAboutLicense,Tr(UiText::AboutLicense));
+    InvalidateRect(window,nullptr,FALSE);
+}
+
+LRESULT CALLBACK AboutProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam) {
+    switch (msg) {
+    case WM_CREATE: {
+        InitWindowTheme(window);
+        HWND icon = CreateWindowExW(0,L"STATIC",nullptr,
+            WS_CHILD | WS_VISIBLE | SS_OWNERDRAW,
+            0,0,1,1,window,
+            reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kAboutIcon)),
+            g_instance,nullptr);
+        if (!icon) return -1;
+        MakeCenteredLabel(window,kAboutTitle,L"CopyFix",g_font_title);
+        MakeCenteredLabel(window,kAboutVersionLabel,kAboutVersionString,g_font_label);
+        MakeCenteredLabel(window,kAboutDescriptionLabel,
+            Tr(UiText::AboutDescription),g_font_body);
+        HWND project = CreateWindowExW(0,L"BUTTON",Tr(UiText::AboutProject),
+            WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_OWNERDRAW,
+            0,0,1,1,window,
+            reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kAboutProject)),
+            g_instance,nullptr);
+        HWND github = CreateWindowExW(0,L"BUTTON",L"GitHub",
+            WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_OWNERDRAW,
+            0,0,1,1,window,
+            reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kAboutGitHub)),
+            g_instance,nullptr);
+        if (!project || !github) return -1;
+        ApplyFont(project,g_font_body);
+        ApplyFont(github,g_font_body);
+        StyleActionButton(project);
+        StyleActionButton(github);
+        MakeCenteredLabel(window,kAboutLicense,
+            Tr(UiText::AboutLicense),g_font_caption);
+        LayoutAbout(window);
+        return 0;
+    }
+    case WM_ERASEBKGND: return 1;
+    case WM_PAINT: {
+        PAINTSTRUCT ps{};
+        const auto dc = BeginPaint(window,&ps);
+        DrawAboutSurface(window,dc);
+        EndPaint(window,&ps);
+        return 0;
+    }
+    case WM_CTLCOLORSTATIC: {
+        auto dc = reinterpret_cast<HDC>(wparam);
+        SetBkMode(dc,TRANSPARENT);
+        const UINT id = static_cast<UINT>(GetDlgCtrlID(reinterpret_cast<HWND>(lparam)));
+        SetTextColor(dc,id == kAboutTitle ? copyfix::ui::colors.ink
+            : (id == kAboutVersionLabel ? copyfix::ui::colors.blue
+                                        : copyfix::ui::colors.muted));
+        return reinterpret_cast<LRESULT>(g_surface_brush);
+    }
+    case WM_DRAWITEM: {
+        const auto* item=reinterpret_cast<const DRAWITEMSTRUCT*>(lparam);
+        if (item && item->CtlID==kAboutIcon) return DrawAboutIcon(item) ? TRUE : FALSE;
+        DrawActionButton(item);
+        return TRUE;
+    }
+    case WM_COMMAND:
+        if (HIWORD(wparam) == BN_CLICKED &&
+            LOWORD(wparam) == kAboutProject &&
+            reinterpret_cast<HWND>(lparam) == GetDlgItem(window,kAboutProject)) {
+            ShellExecuteW(window,L"open",kAboutWebsite,nullptr,nullptr,SW_SHOWNORMAL);
+            return 0;
+        }
+        if (HIWORD(wparam) == BN_CLICKED &&
+            LOWORD(wparam) == kAboutGitHub &&
+            reinterpret_cast<HWND>(lparam) == GetDlgItem(window,kAboutGitHub)) {
+            ShellExecuteW(window,L"open",kAboutGitHubUrl,nullptr,nullptr,SW_SHOWNORMAL);
+            return 0;
+        }
+        if (LOWORD(wparam) == IDCANCEL && HIWORD(wparam) == 0 && !lparam) {
+            DestroyWindow(window);
+            return 0;
+        }
+        break;
+    case WM_SETTINGCHANGE:
+    case WM_THEMECHANGED:
+        SynchronizeSystemTheme();
+        UpdateWindowTheme(window);
+        return 0;
+    case WM_DPICHANGED: {
+        const auto* rect = reinterpret_cast<const RECT*>(lparam);
+        SetWindowPos(window,nullptr,rect->left,rect->top,
+                     rect->right-rect->left,rect->bottom-rect->top,
+                     SWP_NOZORDER|SWP_NOACTIVATE);
+        // Owner-drawn icon paints with the new control size after relayout.
+        LayoutAbout(window);
+        UpdateFontsForWindow(window);
+        return 0;
+    }
+    case WM_CLOSE: DestroyWindow(window); return 0;
+    case WM_DESTROY: g_about_window = nullptr; return 0;
+    }
+    return DefWindowProcW(window,msg,wparam,lparam);
+}
+
+void ShowAbout(HWND parent) noexcept {
+    SynchronizeSystemTheme();
+    if (g_about_window) {
+        SetForegroundWindow(g_about_window);
+        return;
+    }
+    const auto spawn = PositionedOnCursorMonitor(420,370,parent);
+    g_about_window = CreateWindowExW(WS_EX_APPWINDOW,L"CopyFixAbout",
+        Tr(UiText::AboutWindow),WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_CLIPCHILDREN,
+        spawn.x,spawn.y,spawn.width,spawn.height,
+        nullptr,nullptr,g_instance,nullptr);
+    if (!g_about_window) return;
+    CenterWindowOnMonitor(g_about_window,spawn.monitor);
+    InitWindowTheme(g_about_window);
+    ShowWindow(g_about_window,SW_SHOWNORMAL);
+}
+
+void RefreshLocalizedWindows() noexcept {
+    UpdateSettingsLabels(g_settings_window);
+    UpdatePreviewLabels(g_preview);
+    UpdateAboutLabels(g_about_window);
+    if (g_tray.hWnd) {
+        wcscpy_s(g_tray.szTip,Tr(UiText::TrayTooltip));
+        g_tray.uFlags=NIF_TIP;
+        Shell_NotifyIconW(NIM_MODIFY,&g_tray);
+    }
 }
 
 void ShowMenu() {
@@ -1077,21 +1918,21 @@ void ShowMenu() {
         if (menu) DestroyMenu(menu);
         return;
     }
-    AppendMenuW(menu, MF_STRING, kMenuFix, L"Исправить текст");
-    AppendMenuW(menu, MF_STRING, kMenuPreview, L"Предпросмотр изменений");
-    AppendMenuW(menu, MF_STRING, kMenuOneLine, L"В одну строку (предпросмотр)");
-    AppendMenuW(menu, MF_STRING | (g_undo.available ? 0 : MF_GRAYED), kMenuUndo, L"Отменить исправление");
+    AppendMenuW(menu, MF_STRING, kMenuFix, Tr(UiText::MenuFix));
+    AppendMenuW(menu, MF_STRING, kMenuPreview, Tr(UiText::MenuPreview));
+    AppendMenuW(menu, MF_STRING, kMenuOneLine, Tr(UiText::MenuOneLine));
+    AppendMenuW(menu, MF_STRING | (g_undo.available ? 0 : MF_GRAYED), kMenuUndo, Tr(UiText::MenuUndo));
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(profiles, MF_STRING, kMenuGentle, L"Бережный");
-    AppendMenuW(profiles, MF_STRING, kMenuSmart, L"Умный");
-    AppendMenuW(profiles, MF_STRING, kMenuDeep, L"Глубокий");
+    AppendMenuW(profiles, MF_STRING, kMenuGentle, Tr(UiText::ProfileGentle));
+    AppendMenuW(profiles, MF_STRING, kMenuSmart, Tr(UiText::ProfileSmart));
+    AppendMenuW(profiles, MF_STRING, kMenuDeep, Tr(UiText::ProfileDeep));
     CheckMenuRadioItem(profiles, kMenuGentle, kMenuDeep,
                        kMenuGentle + static_cast<UINT>(g_settings.profile), MF_BYCOMMAND);
-    AppendMenuW(menu, MF_POPUP, reinterpret_cast<UINT_PTR>(profiles), L"Профиль");
-    AppendMenuW(menu, MF_STRING, kMenuSettings, L"Настройки");
-    AppendMenuW(menu, MF_STRING, kMenuAbout, L"О программе");
+    AppendMenuW(menu, MF_POPUP, reinterpret_cast<UINT_PTR>(profiles), Tr(UiText::MenuProfile));
+    AppendMenuW(menu, MF_STRING, kMenuSettings, Tr(UiText::MenuSettings));
+    AppendMenuW(menu, MF_STRING, kMenuAbout, Tr(UiText::MenuAbout));
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(menu, MF_STRING, kMenuExit, L"Выход");
+    AppendMenuW(menu, MF_STRING, kMenuExit, Tr(UiText::MenuExit));
     POINT p{};
     GetCursorPos(&p);
     SetForegroundWindow(g_message);
@@ -1119,13 +1960,18 @@ LRESULT CALLBACK MessageProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
         g_tray.uFlags = NIF_ICON | NIF_TIP | NIF_MESSAGE;
         g_tray.uCallbackMessage = kTrayMessage;
         g_tray.hIcon = LoadAppIcon(GetSystemMetrics(SM_CXSMICON));
-        wcscpy_s(g_tray.szTip, L"CopyFix - очистка текста");
+        wcscpy_s(g_tray.szTip, Tr(UiText::TrayTooltip));
         Shell_NotifyIconW(NIM_ADD, &g_tray);
         g_tray.uVersion = NOTIFYICON_VERSION_4;
         Shell_NotifyIconW(NIM_SETVERSION, &g_tray);
         NotifyStartup(hotkey_ok);
         return 0;
     }
+    case WM_SETTINGCHANGE:
+    case WM_THEMECHANGED:
+        SynchronizeSystemTheme();
+        RefreshLocalizedWindows();
+        return 0;
     case WM_HOTKEY:
         if (wparam == g_hotkey_id) {
             // Shortcut capture must not accidentally process the clipboard.
@@ -1148,7 +1994,7 @@ LRESULT CALLBACK MessageProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
         case kMenuUndo: UndoLast(); break;
         case kMenuGentle: case kMenuSmart: case kMenuDeep:
             g_settings.profile = static_cast<copyfix::Profile>(LOWORD(wparam) - kMenuGentle);
-            if (!SaveSettings()) Notify(L"Не удалось сохранить профиль в реестре HKCU.");
+            if (!SaveSettings()) Notify(Tr(UiText::NotifyProfileSaveFailed));
             break;
         case kMenuSettings: OpenSettings(); break;
         case kMenuAbout: ShowAbout(window); break;
@@ -1159,6 +2005,7 @@ LRESULT CALLBACK MessageProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
     case WM_DESTROY:
         if (g_preview) DestroyWindow(g_preview);
         if (g_settings_window) DestroyWindow(g_settings_window);
+        if (g_about_window) DestroyWindow(g_about_window);
         if (g_hotkey_registered) UnregisterHotKey(window, g_hotkey_id);
         Shell_NotifyIconW(NIM_DELETE, &g_tray);
         ClearPending(); ClearUndo();
@@ -1177,28 +2024,30 @@ int WINAPI wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE, _In_ PWSTR, _In
     if (!g_instance_mutex) return 1;
     if (GetLastError() == ERROR_ALREADY_EXISTS) {
         CloseHandle(g_instance_mutex);
-        MessageBoxW(nullptr,
-                    L"CopyFix уже запущен. Чтобы использовать новую версию, "
-                    L"закройте работающий экземпляр через значок в трее "
-                    L"и затем запустите этот файл снова.",
-                    L"CopyFix - уже запущен", MB_OK | MB_ICONINFORMATION);
+        LoadSettings();
+        MessageBoxW(nullptr,Tr(UiText::InstanceRunning),
+                    Tr(UiText::InstanceTitle), MB_OK | MB_ICONINFORMATION);
         return 0;
     }
     LoadSettings();
      g_richedit_module = LoadLibraryW(L"Msftedit.dll");
     if (!g_richedit_module) {
-        MessageBoxW(nullptr, L"Не удалось загрузить системный редактор Msftedit.dll.",
+        MessageBoxW(nullptr, Tr(UiText::RichEditMissing),
                     L"CopyFix", MB_ICONERROR | MB_OK);
         CloseHandle(g_instance_mutex);
         return 1;
     }
-    g_canvas_brush = CreateSolidBrush(kCanvas);
-    g_surface_brush = CreateSolidBrush(kSurface);
+    copyfix::ui::SetHighContrast(copyfix::ui::ReadHighContrast());
+    copyfix::ui::SetDark(copyfix::ui::ResolveDark(
+        g_settings.theme,copyfix::ui::ReadSystemDark()));
+    g_canvas_brush = copyfix::ui::CanvasBrush();
+    g_surface_brush = copyfix::ui::SurfaceBrush();
     const int dpi = static_cast<int>(GetDpiForSystem());
-    g_font_body = MakeFont(11, FW_NORMAL, dpi);
-    g_font_title = MakeFont(22, FW_SEMIBOLD, dpi);
-    g_font_label = MakeFont(10, FW_SEMIBOLD, dpi);
-    g_font_caption = MakeFont(10, FW_NORMAL, dpi);
+    g_base_font_dpi = dpi;
+    g_font_body = MakeFont(10, FW_NORMAL, dpi);
+    g_font_title = MakeFont(17, FW_SEMIBOLD, dpi);
+    g_font_label = MakeFont(9, FW_SEMIBOLD, dpi);
+    g_font_caption = MakeFont(9, FW_NORMAL, dpi);
     g_taskbar_created = RegisterWindowMessageW(L"TaskbarCreated");
     const HICON large_icon = LoadAppIcon(GetSystemMetrics(SM_CXICON));
     const HICON small_icon = LoadAppIcon(GetSystemMetrics(SM_CXSMICON));
@@ -1208,7 +2057,9 @@ int WINAPI wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE, _In_ PWSTR, _In
         {sizeof(WNDCLASSEXW), 0, PreviewProc, 0, 0, instance, large_icon, nullptr,
             g_canvas_brush, nullptr, L"CopyFixPreview", small_icon},
         {sizeof(WNDCLASSEXW), 0, SettingsProc, 0, 0, instance, large_icon, nullptr,
-            g_canvas_brush, nullptr, L"CopyFixSettings", small_icon}
+            g_canvas_brush, nullptr, L"CopyFixSettings", small_icon},
+        {sizeof(WNDCLASSEXW), 0, AboutProc, 0, 0, instance, large_icon, nullptr,
+            g_canvas_brush, nullptr, L"CopyFixAbout", small_icon}
     };
     for (const auto& wc : classes) {
         if (!RegisterClassExW(&wc)) { CloseHandle(g_instance_mutex); return 2; }
@@ -1221,15 +2072,22 @@ int WINAPI wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE, _In_ PWSTR, _In
     while (GetMessageW(&message, nullptr, 0, 0) > 0) {
         if (g_preview && IsDialogMessageW(g_preview, &message)) continue;
         if (g_settings_window && IsDialogMessageW(g_settings_window, &message)) continue;
+        if (g_about_window && IsDialogMessageW(g_about_window, &message)) continue;
         TranslateMessage(&message);
         DispatchMessageW(&message);
+    }
+    for (const auto& fonts : g_dpi_fonts) {
+        if (fonts.body) DeleteObject(fonts.body);
+        if (fonts.title) DeleteObject(fonts.title);
+        if (fonts.label) DeleteObject(fonts.label);
+        if (fonts.caption) DeleteObject(fonts.caption);
     }
     if (g_font_body) DeleteObject(g_font_body);
     if (g_font_title) DeleteObject(g_font_title);
     if (g_font_label) DeleteObject(g_font_label);
     if (g_font_caption) DeleteObject(g_font_caption);
-    if (g_canvas_brush) DeleteObject(g_canvas_brush);
-    if (g_surface_brush) DeleteObject(g_surface_brush);
+    copyfix::ui::FreeBrushes();
+    g_canvas_brush = g_surface_brush = nullptr;
     if (g_richedit_module) FreeLibrary(g_richedit_module);
     CloseHandle(g_instance_mutex);
     return static_cast<int>(message.wParam);

@@ -9,6 +9,7 @@
 int main() {
     const auto Fail = [](int code) { std::cerr << "PREVIEW_SMOKE_FAILURE_" << code << "\n"; return code; };
     g_instance = GetModuleHandleW(nullptr);
+    g_settings.language=copyfix::i18n::Language::Russian;
     g_richedit_module = LoadLibraryW(L"Msftedit.dll");
     if (!g_richedit_module) return Fail(9);
     g_canvas_brush = CreateSolidBrush(kCanvas);
@@ -50,12 +51,102 @@ int main() {
     if (!GetWindowTextW(GetDlgItem(preview, kPreviewNote), status, 128) ||
         wcsstr(status, L"изменений") == nullptr || wcsstr(status, L"глубокий") == nullptr)
         return Fail(34);
+    g_settings.language=copyfix::i18n::Language::English;
+    UpdatePreviewLabels(preview);
+    GetWindowTextW(GetDlgItem(preview,kPreviewTitle),status,128);
+    if (wcscmp(status,L"Review changes")!=0) return Fail(46);
+    GetWindowTextW(GetDlgItem(preview,kPreviewNote),status,128);
+    if (!wcsstr(status,L"changes") || !wcsstr(status,L"deep"))
+        return Fail(47);
+    g_settings.language=copyfix::i18n::Language::Russian;
+    UpdatePreviewLabels(preview);
     // A missing/unavailable RichEdit is a hard preview failure, never an
     // implicit approval or a destructive clipboard write.
     if (SetPreviewRichText(nullptr, L"текст") ||
         RenderPreviewText(nullptr)) return Fail(33);
     if (!before || !after || GetDlgCtrlID(after) == IDCANCEL ||
         GetDlgCtrlID(before) == GetDlgCtrlID(after)) return Fail(12);
+    // Theme overrides must recolor existing RichEdit panes, not only window
+    // frames. EM_SETBKGNDCOLOR returns the previous control background.
+    g_settings.theme=copyfix::ui::Preference::Dark;
+    SynchronizeSystemTheme();
+    if (!copyfix::ui::dark ||
+        static_cast<COLORREF>(SendMessageW(before,EM_SETBKGNDCOLOR,0,
+            copyfix::ui::Dark.paper))!=copyfix::ui::Dark.paper ||
+        static_cast<COLORREF>(SendMessageW(after,EM_SETBKGNDCOLOR,0,
+            copyfix::ui::Dark.paper))!=copyfix::ui::Dark.paper)
+        return Fail(50);
+    g_settings.theme=copyfix::ui::Preference::Light;
+    SynchronizeSystemTheme();
+    if (copyfix::ui::dark ||
+        static_cast<COLORREF>(SendMessageW(before,EM_SETBKGNDCOLOR,0,
+            copyfix::ui::Light.paper))!=copyfix::ui::Light.paper ||
+        static_cast<COLORREF>(SendMessageW(after,EM_SETBKGNDCOLOR,0,
+            copyfix::ui::Light.paper))!=copyfix::ui::Light.paper)
+        return Fail(51);
+    // Both content panes must stay within their cards and above the footer,
+    // including at the minimum supported window size.
+    const auto relative = [&](UINT id) {
+        RECT box{};
+        if (HWND child = GetDlgItem(preview,id); child && GetWindowRect(child,&box))
+            MapWindowPoints(nullptr,preview,reinterpret_cast<POINT*>(&box),2);
+        return box;
+    };
+    const auto checkLayout = [&]() {
+        RECT client{};
+        GetClientRect(preview,&client);
+        const int dpi = static_cast<int>(GetDpiForWindow(preview));
+        const RECT a = relative(kPreviewBeforeEdit);
+        const RECT b = relative(kPreviewAfterEdit);
+        const RECT note = relative(kPreviewNote);
+        const RECT apply = relative(kPreviewAccept);
+        const RECT toggles = relative(kPreviewShowBreaks);
+        const RECT spaces = relative(kPreviewShowSpaces);
+        return a.left >= Scale(22,dpi) && a.top >= Scale(94,dpi) &&
+               a.right < b.left && b.right <= client.right-Scale(22,dpi) &&
+               a.bottom <= client.bottom-Scale(108,dpi) &&
+               b.bottom <= client.bottom-Scale(108,dpi) &&
+               note.top > a.bottom &&
+               toggles.top > note.bottom &&
+               toggles.top-note.bottom <= Scale(12,dpi) &&
+               spaces.top == toggles.top && spaces.bottom == toggles.bottom &&
+               (toggles.top > apply.top ? toggles.top-apply.top :
+                    apply.top-toggles.top) <= Scale(5,dpi) &&
+               apply.top > note.bottom && apply.bottom <= client.bottom;
+    };
+    for (UINT id : {kPreviewAccept,kPreviewCancel}) {
+        DWORD_PTR data=0;
+        if (!GetWindowSubclass(GetDlgItem(preview,id),
+                               ActionButtonSubclass,2,&data)) return Fail(44);
+    }
+    wchar_t toggleLabel[80]{};
+    GetWindowTextW(GetDlgItem(preview,kPreviewShowBreaks),
+                   toggleLabel,static_cast<int>(std::size(toggleLabel)));
+    if (wcscmp(toggleLabel,L"Показать переносы строк")!=0)
+        return Fail(45);
+    // The status bar is supporting information, but must remain readable
+    // against both light and dark backgrounds.
+    const HWND note=GetDlgItem(preview,kPreviewNote);
+    const HDC dc=GetDC(preview);
+    if (!dc) return Fail(48);
+    const auto expected=copyfix::ui::Mix(copyfix::ui::colors.muted,
+                                         copyfix::ui::colors.ink,45);
+    SendMessageW(preview,WM_CTLCOLORSTATIC,reinterpret_cast<WPARAM>(dc),
+                 reinterpret_cast<LPARAM>(note));
+    const bool goodContrast=GetTextColor(dc)==expected;
+    ReleaseDC(preview,dc);
+    if (!goodContrast) return Fail(49);
+    if (!checkLayout()) return Fail(41);
+    RECT previousSize{};
+    GetWindowRect(preview,&previousSize);
+    SetWindowPos(preview,nullptr,0,0,Scale(800,g_preview_dpi),
+                 Scale(550,g_preview_dpi),SWP_NOMOVE|SWP_NOZORDER);
+    if (!checkLayout()) return Fail(42);
+    SetWindowPos(preview,nullptr,0,0,
+                 previousSize.right-previousSize.left,
+                 previousSize.bottom-previousSize.top,
+                 SWP_NOMOVE|SWP_NOZORDER);
+    if (!checkLayout()) return Fail(43);
     wchar_t class_name[60]{};
     GetClassNameW(after, class_name, static_cast<int>(std::size(class_name)));
     if (wcscmp(class_name, L"RICHEDIT50W") != 0) return Fail(13);
@@ -72,7 +163,20 @@ int main() {
     CHARFORMAT2W fmt{};
     fmt.cbSize = sizeof(fmt);
     SendMessageW(after, EM_GETCHARFORMAT, SCF_SELECTION, reinterpret_cast<LPARAM>(&fmt));
-    if (!(fmt.dwMask & CFM_BACKCOLOR) || fmt.crBackColor != RGB(218, 247, 231)) return Fail(15);
+    if (!(fmt.dwMask & CFM_BACKCOLOR) ||
+        fmt.crBackColor != copyfix::ui::Light.added) return Fail(15);
+
+    // The same content/diff structure must remain readable with dark colors.
+    copyfix::ui::SetDark(true);
+    if (!RenderPreviewText(preview)) return Fail(38);
+    SendMessageW(after, EM_EXSETSEL, 0, reinterpret_cast<LPARAM>(&highlight));
+    fmt = {};
+    fmt.cbSize = sizeof(fmt);
+    SendMessageW(after, EM_GETCHARFORMAT, SCF_SELECTION, reinterpret_cast<LPARAM>(&fmt));
+    if (!(fmt.dwMask & CFM_BACKCOLOR) ||
+        fmt.crBackColor != copyfix::ui::Dark.added) return Fail(39);
+    copyfix::ui::SetDark(false);
+    if (!RenderPreviewText(preview)) return Fail(40);
     const auto toggle = GetDlgItem(preview, kPreviewShowBreaks);
     if (!toggle) return Fail(19);
     SendMessageW(toggle, BM_SETCHECK, BST_CHECKED, 0);

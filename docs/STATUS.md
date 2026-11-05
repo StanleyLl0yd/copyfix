@@ -1,4 +1,25 @@
-# CopyFix Windows 1.0.0 — RELEASED / ACCEPTED (2026-11-03)
+# CopyFix — Current project status (2026-11-05)
+
+## Windows 1.1.0 — RELEASED / ACCEPTED
+
+- Protected main `28e8bf2040370f90bcf87cbbc768468826de7e7a`, [PR #38](https://github.com/StanleyLl0yd/copyfix/pull/38) MERGED.
+- [GitHub Release v1.1.0](https://github.com/StanleyLl0yd/copyfix/releases/tag/v1.1.0) published, one unsigned portable Windows x64 EXE, 324096 bytes, SHA-256 `9b0ca168c74b00502a3dfabda8b9bb21d965bee9ee68b93273d805ff5f08520d`.
+- User acceptance **16/16 PASS**, plus Windows startup notification accepted. Exact-main [CI #42000538398](https://github.com/StanleyLl0yd/copyfix/actions/runs/42000538398): Windows 9/9 PASS, Clang 3/3 PASS.
+
+## Windows 1.2.0 — VISUAL REDESIGN IN PROGRESS
+
+- [PR #40](https://github.com/StanleyLl0yd/copyfix/pull/40), **Draft**. Not merged, not released.
+- Approved visual directions: Settings **C**, Preview **A**, About **C**, all in light/dark Windows themes, without radio buttons in Settings.
+- Native Win32/GDI/DWM/shcore, one portable EXE, existing RichEdit/text engine and canonical icon unchanged. The unreleased 1.2.0 draft adds persisted Language (automatic/Russian/English) and Theme (automatic/light/dark) selectors, complete RU/EN UI strings, immediate theme preview, Cancel rollback and compatibility with existing HKCU values. Owner visual acceptance is outstanding.
+- Design and acceptance: [FLUENT-REDESIGN-1.2.0.md](FLUENT-REDESIGN-1.2.0.md). Owner has not yet accepted the new implementation; do not create Release.
+
+## Android
+
+- Roadmap agreed; implementation still **not started** and requires separate permission.
+
+---
+
+## Historical baseline — Windows 1.0.0 (2026-11-03)
 
 This is the verified record for the published Windows 1.0.0 release. The owner accepted the final GUI checks on Windows 10/11; exact OS build/runtime inventories remain unrecorded.
 

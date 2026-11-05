@@ -50,11 +50,16 @@ int main() {
     Cleanup cleanup;
     g_instance = GetModuleHandleW(nullptr);
     g_settings = Settings{};
-    if (g_settings.profile != copyfix::Profile::Deep || g_settings.hotkey != HotkeyChord{})
+    if (g_settings.profile != copyfix::Profile::Deep ||
+        g_settings.hotkey != HotkeyChord{} ||
+        g_settings.language != copyfix::i18n::Language::System ||
+        g_settings.theme != copyfix::ui::Preference::System)
         return fail(2);
 
     g_settings.profile = copyfix::Profile::Smart;
     g_settings.hotkey = {MOD_CONTROL | MOD_ALT, L'C'};
+    g_settings.language = copyfix::i18n::Language::English;
+    g_settings.theme = copyfix::ui::Preference::Dark;
     cleanup.created_key = true;  // Also clean a partially created key on failure.
     if (!SaveSettings()) return fail(3);
 
@@ -73,11 +78,28 @@ int main() {
         RegQueryValueExW(key, L"Hotkey", nullptr, &type,
                          reinterpret_cast<BYTE*>(&hotkey), &size) == ERROR_SUCCESS &&
         type == REG_DWORD && size == sizeof(DWORD) && hotkey == 2;
-    if (!valid_profile || !valid_hotkey) { RegCloseKey(key); return fail(5); }
+    type=0; size=sizeof(DWORD);
+    DWORD language=0;
+    const bool valid_language=
+        RegQueryValueExW(key,L"Language",nullptr,&type,
+                         reinterpret_cast<BYTE*>(&language),&size)==ERROR_SUCCESS &&
+        type==REG_DWORD && size==sizeof(DWORD) && language==2;
+    type=0; size=sizeof(DWORD);
+    DWORD theme=0;
+    const bool valid_theme=
+        RegQueryValueExW(key,L"Theme",nullptr,&type,
+                         reinterpret_cast<BYTE*>(&theme),&size)==ERROR_SUCCESS &&
+        type==REG_DWORD && size==sizeof(DWORD) && theme==2;
+    if (!valid_profile || !valid_hotkey || !valid_language || !valid_theme) {
+        RegCloseKey(key); return fail(5);
+    }
 
     g_settings = Settings{};
     LoadSettings();
-    if (g_settings.profile != copyfix::Profile::Smart || g_settings.hotkey != HotkeyChord{MOD_CONTROL | MOD_ALT, L'C'}) {
+    if (g_settings.profile != copyfix::Profile::Smart ||
+        g_settings.hotkey != HotkeyChord{MOD_CONTROL | MOD_ALT, L'C'} ||
+        g_settings.language != copyfix::i18n::Language::English ||
+        g_settings.theme != copyfix::ui::Preference::Dark) {
         RegCloseKey(key); return fail(6);
     }
 
@@ -131,8 +153,49 @@ int main() {
     if (!SaveSettings()) { RegCloseKey(key); return fail(15); }
     g_settings = Settings{};
     LoadSettings();
-    if (g_settings.hotkey != custom) { RegCloseKey(key); return fail(16); }
+    if (g_settings.hotkey != custom ||
+        g_settings.language != copyfix::i18n::Language::English ||
+        g_settings.theme != copyfix::ui::Preference::Dark) {
+        RegCloseKey(key); return fail(16);
+    }
+    const DWORD invalidLanguage=99;
+    if (RegSetValueExW(key,L"Language",0,REG_DWORD,
+            reinterpret_cast<const BYTE*>(&invalidLanguage),
+            sizeof(invalidLanguage))!=ERROR_SUCCESS) {
+        RegCloseKey(key); return fail(55);
+    }
+    g_settings.language=copyfix::i18n::Language::English;
+    LoadSettings();
+    if (g_settings.language!=copyfix::i18n::Language::System) {
+        RegCloseKey(key); return fail(56);
+    }
+    g_settings.language=copyfix::i18n::Language::Russian;
+    const DWORD invalidTheme=42;
+    if (RegSetValueExW(key,L"Theme",0,REG_DWORD,
+             reinterpret_cast<const BYTE*>(&invalidTheme),
+             sizeof(invalidTheme)) != ERROR_SUCCESS) {
+        RegCloseKey(key); return fail(65);
+    }
+    g_settings.theme=copyfix::ui::Preference::Dark;
+    LoadSettings();
+    if (g_settings.theme!=copyfix::ui::Preference::System) {
+        RegCloseKey(key); return fail(66);
+    }
+    g_settings.theme=copyfix::ui::Preference::Light;
+    g_settings.language=copyfix::i18n::Language::Russian;
 
+    if (wcscmp(copyfix::i18n::Get(UiText::SettingsTitle,
+              copyfix::i18n::Language::English),L"Settings")!=0 ||
+        wcscmp(copyfix::i18n::Get(UiText::SettingsTitle,
+              copyfix::i18n::Language::Russian),L"Настройки")!=0 ||
+        copyfix::i18n::IsValid(99))
+        return fail(62);
+    for (std::size_t index=0; index<static_cast<std::size_t>(UiText::Count); ++index) {
+        const auto key=static_cast<UiText>(index);
+        if (!*copyfix::i18n::Get(key,copyfix::i18n::Language::Russian) ||
+            !*copyfix::i18n::Get(key,copyfix::i18n::Language::English))
+            return fail(63);
+    }
     // Every supported keyboard option must be selectable without generating
     // a physical chord; Windows may consume occupied global shortcuts.
     const HotkeyChord examples[] = {
@@ -219,6 +282,183 @@ int main() {
             f8Index = index;
     }
     if (f8Index < 0) return fail(31);
+    // Regression from owner-draw combo without CBS_HASSTRINGS: the visible
+    // labels were garbage Unicode even though CB_GETITEMDATA keys worked.
+    if (!(GetWindowLongPtrW(editor,GWL_STYLE) & CBS_HASSTRINGS))
+        return fail(44);
+    const auto named = [&](int index, const wchar_t* expected) {
+        wchar_t label[64]{};
+        const LRESULT size = SendMessageW(editor,CB_GETLBTEXTLEN,index,0);
+        if (size < 1 || size >= static_cast<LRESULT>(std::size(label)))
+            return false;
+        if (SendMessageW(editor,CB_GETLBTEXT,index,
+                         reinterpret_cast<LPARAM>(label)) != size)
+            return false;
+        return wcscmp(label,expected) == 0;
+    };
+    if (!named(0,L"A") || !named(25,L"Z") ||
+        !named(26,L"0") || !named(35,L"9") ||
+        !named(36,L"F1") || !named(f8Index,L"F8"))
+        return fail(45);
+    // The closed control displays the selected F9, so opening the native
+    // dropdown scrolls to F9. Earlier function keys must still exist above it.
+    for (int row=36; row<59; ++row) {
+        const int fn=row<47 ? row-35 : row-34;
+        wchar_t expected[12]{};
+        swprintf_s(expected,L"F%d",fn);
+        if (!named(row,expected)) return fail(64);
+    }
+    bool sawSpecial = false;
+    for (int index=0; index<count; ++index) {
+        wchar_t label[64]{};
+        const LRESULT length = SendMessageW(editor,CB_GETLBTEXTLEN,index,0);
+        if (length < 1 || length >= static_cast<LRESULT>(std::size(label)) ||
+            SendMessageW(editor,CB_GETLBTEXT,index,
+                reinterpret_cast<LPARAM>(label)) != length)
+            return fail(46);
+        for (int letter=0; letter<length; ++letter)
+            if (label[letter] < L' ' || label[letter] == 0xFFFD)
+                return fail(47);
+        if (wcscmp(label,L"Numpad +") == 0) sawSpecial = true;
+    }
+    if (!sawSpecial) return fail(48);
+    // Closed combobox must remain short, with a bounded dropdown and legible
+    // items; 34-pixel items made the earlier popup excessive.
+    const int dpi = static_cast<int>(GetDpiForWindow(editor));
+    if (SendMessageW(editor,CB_GETITEMHEIGHT,0,0) > Scale(28,dpi))
+        return fail(49);
+    RECT dropdown{};
+    if (!SendMessageW(editor,CB_GETDROPPEDCONTROLRECT,0,
+                      reinterpret_cast<LPARAM>(&dropdown)) ||
+        dropdown.bottom-dropdown.top > Scale(225,dpi))
+        return fail(50);
+    // Layout contract: help fits within its profile card and the footer is
+    // fully visible. This detects the clipped/overlapping Settings screenshot.
+    const auto relative = [&](UINT id) {
+        RECT rect{};
+        HWND control = GetDlgItem(g_settings_window,id);
+        if (control && GetWindowRect(control,&rect))
+            MapWindowPoints(nullptr,g_settings_window,
+                            reinterpret_cast<POINT*>(&rect),2);
+        return rect;
+    };
+    RECT client{};
+    GetClientRect(g_settings_window,&client);
+    const RECT explanationRect = relative(kSettingsExplanation);
+    const RECT profileRect = relative(kProfileDeep);
+    const RECT feedbackRect = relative(kSettingsFeedback);
+    const RECT cancelRect = relative(kSettingsCancel);
+    const RECT saveRect = relative(kSettingsSave);
+    const RECT gentleRect=relative(kProfileGentle);
+    const RECT smartRect=relative(kProfileSmart);
+    if (gentleRect.right!=smartRect.left ||
+        smartRect.right!=profileRect.left ||
+        gentleRect.top!=smartRect.top ||
+        smartRect.top!=profileRect.top ||
+        gentleRect.bottom!=smartRect.bottom ||
+        smartRect.bottom!=profileRect.bottom) return fail(52);
+    for (UINT id : {kProfileGentle,kProfileSmart,kProfileDeep,
+                    kSettingsSave,kSettingsCancel}) {
+        DWORD_PTR data=0;
+        if (!GetWindowSubclass(GetDlgItem(g_settings_window,id),
+                               ActionButtonSubclass,2,&data))
+            return fail(53);
+    }
+    const RECT comboRect=relative(kHotkeyInput);
+    const RECT shiftRect=relative(kSettingsShift);
+    const HWND languageCombo=GetDlgItem(g_settings_window,kSettingsLanguageInput);
+    if (!languageCombo ||
+        SendMessageW(languageCombo,CB_GETCOUNT,0,0)!=3 ||
+        SendMessageW(languageCombo,CB_GETCURSEL,0,0)!=1)
+        return fail(57);
+    const RECT languageRect=relative(kSettingsLanguageInput);
+    const RECT languageSection=relative(kSettingsLanguageSection);
+    const RECT languageHint=relative(kSettingsLanguageHint);
+    const HWND themeCombo=GetDlgItem(g_settings_window,kSettingsThemeInput);
+    if (!themeCombo ||
+        !(GetWindowLongPtrW(themeCombo,GWL_STYLE) & CBS_HASSTRINGS) ||
+        SendMessageW(themeCombo,CB_GETCOUNT,0,0)!=3 ||
+        SendMessageW(themeCombo,CB_GETCURSEL,0,0)!=1)
+        return fail(67);
+    const RECT themeRect=relative(kSettingsThemeInput);
+    const RECT themeSection=relative(kSettingsThemeSection);
+    const RECT themeHint=relative(kSettingsThemeHint);
+    if (themeRect.left < Scale(20,dpi) ||
+        themeSection.top < Scale(411,dpi) ||
+        themeHint.bottom > Scale(511,dpi) ||
+        themeHint.top <= themeSection.bottom ||
+        themeRect.top <= languageHint.bottom ||
+        themeHint.bottom >= feedbackRect.top)
+        return fail(68);
+    if (languageRect.left<Scale(20,dpi) ||
+        languageSection.top<Scale(297,dpi) ||
+        languageHint.bottom>Scale(399,dpi) ||
+        languageHint.top<=languageSection.bottom ||
+        languageHint.bottom>=feedbackRect.top)
+        return fail(58);
+    SendMessageW(languageCombo,CB_SETCURSEL,2,0);
+    SendMessageW(g_settings_window,WM_COMMAND,
+        MAKEWPARAM(kSettingsLanguageInput,CBN_SELCHANGE),
+        reinterpret_cast<LPARAM>(languageCombo));
+    wchar_t settingsCaption[64]{};
+    GetWindowTextW(GetDlgItem(g_settings_window,kSettingsTitle),
+                   settingsCaption,static_cast<int>(std::size(settingsCaption)));
+    if (g_draft_language!=copyfix::i18n::Language::English ||
+        wcscmp(settingsCaption,L"Settings")!=0 ||
+        g_settings.language!=copyfix::i18n::Language::Russian)
+        return fail(59);
+    SendMessageW(languageCombo,CB_SETCURSEL,1,0);
+    SendMessageW(g_settings_window,WM_COMMAND,
+        MAKEWPARAM(kSettingsLanguageInput,CBN_SELCHANGE),
+        reinterpret_cast<LPARAM>(languageCombo));
+    if (g_draft_language!=copyfix::i18n::Language::Russian)
+        return fail(60);
+
+    // Live preview is independent from persistence and must roll back
+    // when Settings is closed without saving.
+    SendMessageW(themeCombo,CB_SETCURSEL,2,0);
+    SendMessageW(g_settings_window,WM_COMMAND,
+        MAKEWPARAM(kSettingsThemeInput,CBN_SELCHANGE),
+        reinterpret_cast<LPARAM>(themeCombo));
+    if (g_draft_theme!=copyfix::ui::Preference::Dark ||
+        g_settings.theme!=copyfix::ui::Preference::Light ||
+        !copyfix::ui::dark || !g_theme_preview_active)
+        return fail(69);
+    SendMessageW(themeCombo,CB_SETCURSEL,0,0);
+    SendMessageW(g_settings_window,WM_COMMAND,
+        MAKEWPARAM(kSettingsThemeInput,CBN_SELCHANGE),
+        reinterpret_cast<LPARAM>(themeCombo));
+    if (g_draft_theme!=copyfix::ui::Preference::System ||
+        copyfix::ui::dark != copyfix::ui::ReadSystemDark())
+        return fail(70);
+    SendMessageW(themeCombo,CB_SETCURSEL,2,0);
+    SendMessageW(g_settings_window,WM_COMMAND,
+        MAKEWPARAM(kSettingsThemeInput,CBN_SELCHANGE),
+        reinterpret_cast<LPARAM>(themeCombo));
+    if (!copyfix::ui::dark) return fail(71);
+
+    if (comboRect.left<=shiftRect.right ||
+        comboRect.top>shiftRect.bottom ||
+        comboRect.bottom<=comboRect.top) return fail(54);
+    if (profileRect.top < Scale(181,dpi) || profileRect.bottom > Scale(285,dpi) ||
+        explanationRect.top < profileRect.bottom ||
+        explanationRect.bottom > Scale(285,dpi) ||
+        feedbackRect.top < Scale(285,dpi) ||
+        feedbackRect.bottom > client.bottom-Scale(61,dpi) ||
+        cancelRect.bottom > client.bottom ||
+        saveRect.bottom > client.bottom ||
+        cancelRect.top <= feedbackRect.bottom ||
+        saveRect.left <= cancelRect.right) {
+        std::cerr << "GEOMETRY " << dpi
+                  << " client=" << client.right << "," << client.bottom
+                  << " profile=" << profileRect.top << "," << profileRect.bottom
+                  << " explanation=" << explanationRect.top << "," << explanationRect.bottom
+                  << " feedback=" << feedbackRect.top << "," << feedbackRect.bottom
+                  << " cancel=" << cancelRect.top << "," << cancelRect.bottom
+                  << " save=" << saveRect.left << "," << saveRect.bottom
+                  << " cancelRight=" << cancelRect.right << "\n";
+        return fail(51);
+    }
     SendDlgItemMessageW(g_settings_window, kSettingsShift, BM_SETCHECK, BST_CHECKED, 0);
     SendDlgItemMessageW(g_settings_window, kSettingsAlt, BM_SETCHECK, BST_UNCHECKED, 0);
     SendMessageW(editor, CB_SETCURSEL, f8Index, 0);
@@ -226,8 +466,29 @@ int main() {
         return fail(32);
     ResetHotkeyChoice(g_settings_window);
     if (ReadHotkeyChoice(g_settings_window) != g_settings.hotkey) return fail(33);
+    // Approved Settings C uses three segmented buttons, never radio buttons.
+    for (UINT id = kProfileGentle; id <= kProfileDeep; ++id)
+        if (!GetDlgItem(g_settings_window,id)) return fail(41);
+    HWND smart = GetDlgItem(g_settings_window,kProfileSmart);
+    SendMessageW(g_settings_window,WM_COMMAND,
+        MAKEWPARAM(kProfileSmart,BN_CLICKED),reinterpret_cast<LPARAM>(smart));
+    wchar_t explanation[160]{};
+    GetWindowTextW(GetDlgItem(g_settings_window,kSettingsExplanation),
+                   explanation,static_cast<int>(std::size(explanation)));
+    if (g_draft_profile != copyfix::Profile::Smart ||
+        g_settings.profile != copyfix::Profile::Deep ||
+        !wcsstr(explanation,L"баланс")) return fail(42);
+    HWND deep = GetDlgItem(g_settings_window,kProfileDeep);
+    SendMessageW(g_settings_window,WM_COMMAND,
+        MAKEWPARAM(kProfileDeep,BN_CLICKED),reinterpret_cast<LPARAM>(deep));
+    if (g_draft_profile != copyfix::Profile::Deep ||
+        g_settings.profile != copyfix::Profile::Deep) return fail(43);
     DestroyWindow(g_settings_window);
     if (g_settings_window) return fail(26);
+    if (g_settings.language!=copyfix::i18n::Language::Russian ||
+        g_settings.theme!=copyfix::ui::Preference::Light ||
+        copyfix::ui::dark || g_theme_preview_active)
+        return fail(61);
     // Global hotkeys may be used by the CI desktop; only enforce registration
     // and rollback when the initial combination is actually available.
     const HotkeyChord original{MOD_CONTROL | MOD_ALT, VK_F9};
