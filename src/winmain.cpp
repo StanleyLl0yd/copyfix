@@ -964,9 +964,9 @@ void LayoutPreview(HWND window) {
     Position(window, kPreviewAfterLabel, margin+column+gap+12, 100, column-24, 22, dpi);
     Position(window, kPreviewBeforeEdit, margin+11, textY, column-22, textHeight, dpi);
     Position(window, kPreviewAfterEdit, margin+column+gap+11, textY, column-22, textHeight, dpi);
-    Position(window, kPreviewNote, margin+5, h-99, std::max(150,w-300), 23, dpi);
-    Position(window, kPreviewShowBreaks, margin+5, h-62, 205, 25, dpi);
-    Position(window, kPreviewShowSpaces, margin+218, h-62, 183, 25, dpi);
+    Position(window, kPreviewNote, margin+5, h-96, std::max(150,w-300), 23, dpi);
+    Position(window, kPreviewShowBreaks, margin+5, h-66, 205, 25, dpi);
+    Position(window, kPreviewShowSpaces, margin+218, h-66, 183, 25, dpi);
     Position(window, kPreviewCancel, w-248, h-65, 98, 35, dpi);
     Position(window, kPreviewAccept, w-138, h-65, 116, 35, dpi);
     InvalidateRect(window, nullptr, TRUE);
@@ -1195,9 +1195,11 @@ LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
         auto dc = reinterpret_cast<HDC>(wparam);
         const UINT id = static_cast<UINT>(GetDlgCtrlID(reinterpret_cast<HWND>(lparam)));
         SetBkMode(dc, TRANSPARENT);
+        const auto& palette = copyfix::ui::colors;
         SetTextColor(dc, id == kPreviewTitle || id == kPreviewBeforeLabel ||
-                         id == kPreviewAfterLabel ? copyfix::ui::colors.ink
-                                                 : copyfix::ui::colors.muted);
+                         id == kPreviewAfterLabel ? palette.ink
+            : id == kPreviewNote ? copyfix::ui::Mix(palette.muted,palette.ink,45)
+                                 : palette.muted);
         const bool onCard = id == kPreviewBeforeLabel || id == kPreviewAfterLabel;
         return reinterpret_cast<LRESULT>(onCard ? g_surface_brush : g_canvas_brush);
     }
@@ -1661,7 +1663,7 @@ void LayoutAbout(HWND window) {
     RECT bounds{}; GetClientRect(window, &bounds);
     const int dpi = static_cast<int>(GetDpiForWindow(window));
     const int w = MulDiv(bounds.right,96,dpi);
-    Position(window,kAboutIcon,(w-48)/2,24,48,48,dpi);
+    Position(window,kAboutIcon,(w-54)/2,21,54,54,dpi);
     Position(window,kAboutTitle,28,84,w-56,31,dpi);
     Position(window,kAboutVersionLabel,28,114,w-56,21,dpi);
     Position(window,kAboutDescriptionLabel,28,144,w-56,31,dpi);
@@ -1701,7 +1703,8 @@ LRESULT CALLBACK AboutProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam) 
             reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kAboutIcon)),
             g_instance,nullptr);
         if (!icon) return -1;
-        SendMessageW(icon,STM_SETICON,reinterpret_cast<WPARAM>(LoadAppIcon(48)),0);
+        SendMessageW(icon,STM_SETICON,reinterpret_cast<WPARAM>(
+            LoadAppIcon(Scale(54,static_cast<int>(GetDpiForWindow(window))))),0);
         MakeCenteredLabel(window,kAboutTitle,L"CopyFix",g_font_title);
         MakeCenteredLabel(window,kAboutVersionLabel,kAboutVersionString,g_font_label);
         MakeCenteredLabel(window,kAboutDescriptionLabel,
@@ -1770,10 +1773,14 @@ LRESULT CALLBACK AboutProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam) 
         UpdateWindowTheme(window);
         return 0;
     case WM_DPICHANGED: {
+        const int dpi=HIWORD(wparam);
         const auto* rect = reinterpret_cast<const RECT*>(lparam);
         SetWindowPos(window,nullptr,rect->left,rect->top,
                      rect->right-rect->left,rect->bottom-rect->top,
                      SWP_NOZORDER|SWP_NOACTIVATE);
+        if (HWND icon=GetDlgItem(window,kAboutIcon))
+            SendMessageW(icon,STM_SETICON,
+                reinterpret_cast<WPARAM>(LoadAppIcon(Scale(54,dpi))),0);
         LayoutAbout(window);
         UpdateFontsForWindow(window);
         return 0;
