@@ -451,6 +451,14 @@ void Notify(const wchar_t* message) {
     Shell_NotifyIconW(NIM_MODIFY, &g_tray);
 }
 
+// Match the existing native notification style; a failed hotkey must not
+// claim that the utility is ready for keyboard use.
+void NotifyStartup(bool hotkey_registered) {
+    Notify(hotkey_registered
+        ? L"CopyFix запущен и готов к работе."
+        : L"Горячая клавиша недоступна. Откройте настройки CopyFix.");
+}
+
 // Probe without touching the active shortcut. A successful probe is not a
 // guarantee: another process may reserve the chord before Save.
 bool HotkeyAvailable(HotkeyChord chord) noexcept {
@@ -1115,7 +1123,7 @@ LRESULT CALLBACK MessageProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
         Shell_NotifyIconW(NIM_ADD, &g_tray);
         g_tray.uVersion = NOTIFYICON_VERSION_4;
         Shell_NotifyIconW(NIM_SETVERSION, &g_tray);
-        if (!hotkey_ok) Notify(L"Сочетание занято. Откройте настройки CopyFix.");
+        NotifyStartup(hotkey_ok);
         return 0;
     }
     case WM_HOTKEY:
