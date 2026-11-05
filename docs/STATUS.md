@@ -10,7 +10,7 @@
 
 - [PR #40](https://github.com/StanleyLl0yd/copyfix/pull/40), **Draft**. Not merged, not released.
 - Approved visual directions: Settings **C**, Preview **A**, About **C**, all in light/dark Windows themes, without radio buttons in Settings.
-- Native Win32/GDI/DWM/shcore, one portable EXE, existing RichEdit/text engine/persistence and canonical icon unchanged.
+- Native Win32/GDI/DWM/shcore, one portable EXE, existing RichEdit/text engine and canonical icon unchanged. The unreleased 1.2.0 draft adds a persisted Language selector (automatic Windows UI language, Russian, English) with complete RU/EN UI strings and compatibility with existing HKCU values. Owner visual acceptance is outstanding.
 - Design and acceptance: [FLUENT-REDESIGN-1.2.0.md](FLUENT-REDESIGN-1.2.0.md). Owner has not yet accepted the new implementation; do not create Release.
 
 ## Android
