@@ -242,10 +242,10 @@ HFONT FontForDpi(HFONT original, int dpi) {
             if (item.dpi == 0) {
                 fonts = &item;
                 item.dpi = dpi;
-                item.body = MakeFont(11,FW_NORMAL,dpi);
-                item.title = MakeFont(22,FW_SEMIBOLD,dpi);
-                item.label = MakeFont(10,FW_SEMIBOLD,dpi);
-                item.caption = MakeFont(10,FW_NORMAL,dpi);
+                item.body = MakeFont(10,FW_NORMAL,dpi);
+                item.title = MakeFont(17,FW_SEMIBOLD,dpi);
+                item.label = MakeFont(9,FW_SEMIBOLD,dpi);
+                item.caption = MakeFont(9,FW_NORMAL,dpi);
                 break;
             }
         }
@@ -419,7 +419,7 @@ void DrawActionButton(const DRAWITEMSTRUCT* item) {
                                               : (pressed ? c.raised : c.surface);
     const COLORREF border = (primary || selected) ? c.blue : c.border;
     const int dpi = static_cast<int>(GetDpiForWindow(item->hwndItem));
-    copyfix::ui::Rounded(item->hDC, item->rcItem, fill, border, Scale(13,dpi));
+    copyfix::ui::Rounded(item->hDC, item->rcItem, fill, border, Scale(9,dpi));
     wchar_t text[100]{};
     GetWindowTextW(item->hwndItem, text, static_cast<int>(std::size(text)));
     SetBkMode(item->hDC, TRANSPARENT);
@@ -825,21 +825,21 @@ void LayoutPreview(HWND window) {
     const int dpi = g_preview_dpi;
     const int w = MulDiv(client.right, 96, dpi);
     const int h = MulDiv(client.bottom, 96, dpi);
-    const int margin = 25, gap = 18;
-    const int column = std::max(150, (w - 2 * margin - gap) / 2);
-    const int edit_y = 149;
-    const int edit_height = std::max(100, h - edit_y - 140);
-    Position(window, kPreviewTitle, 86, 22, w-112, 39, dpi);
-    Position(window, kPreviewSubtitle, 86, 63, w-112, 25, dpi);
-    Position(window, kPreviewBeforeLabel, margin + 14, 113, column-28, 27, dpi);
-    Position(window, kPreviewAfterLabel, margin+column+gap+14, 113, column-28, 27, dpi);
-    Position(window, kPreviewBeforeEdit, margin+12, edit_y, column-24, edit_height, dpi);
-    Position(window, kPreviewAfterEdit, margin+column+gap+12, edit_y, column-24, edit_height, dpi);
-    Position(window, kPreviewNote, margin+5, h-108, std::max(150,w-300), 24, dpi);
-    Position(window, kPreviewShowBreaks, margin+5, h-72, 220, 25, dpi);
-    Position(window, kPreviewShowSpaces, margin+235, h-72, 190, 25, dpi);
-    Position(window, kPreviewCancel, w-288, h-83, 113, 44, dpi);
-    Position(window, kPreviewAccept, w-160, h-83, 134, 44, dpi);
+    const int margin = 22, gap = 14;
+    const int column = std::max(150, (w - 2*margin - gap)/2);
+    const int textY = 128;
+    const int textHeight = std::max(110, h-textY-119);
+    Position(window, kPreviewTitle, 67, 17, w-89, 31, dpi);
+    Position(window, kPreviewSubtitle, 67, 49, w-89, 25, dpi);
+    Position(window, kPreviewBeforeLabel, margin+12, 100, column-24, 22, dpi);
+    Position(window, kPreviewAfterLabel, margin+column+gap+12, 100, column-24, 22, dpi);
+    Position(window, kPreviewBeforeEdit, margin+11, textY, column-22, textHeight, dpi);
+    Position(window, kPreviewAfterEdit, margin+column+gap+11, textY, column-22, textHeight, dpi);
+    Position(window, kPreviewNote, margin+5, h-99, std::max(150,w-300), 23, dpi);
+    Position(window, kPreviewShowBreaks, margin+5, h-62, 205, 25, dpi);
+    Position(window, kPreviewShowSpaces, margin+218, h-62, 183, 25, dpi);
+    Position(window, kPreviewCancel, w-248, h-65, 98, 35, dpi);
+    Position(window, kPreviewAccept, w-138, h-65, 116, 35, dpi);
     InvalidateRect(window, nullptr, TRUE);
 }
 
@@ -848,22 +848,22 @@ void DrawPreviewSurface(HWND window, HDC dc) noexcept {
     FillRect(dc, &client, g_canvas_brush ? g_canvas_brush
                                         : static_cast<HBRUSH>(GetStockObject(WHITE_BRUSH)));
     const int dpi = g_preview_dpi;
-    const int margin = Scale(25,dpi), gap = Scale(18,dpi);
+    const int margin = Scale(22,dpi), gap = Scale(14,dpi);
     const int width = client.right;
     const int column = std::max(Scale(150,dpi), (width-2*margin-gap)/2);
     const auto& colors = copyfix::ui::colors;
-    copyfix::ui::Badge(dc, Scale(28,dpi), Scale(26,dpi), Scale(39,dpi));
-    const int top = Scale(107,dpi);
-    const int bottom = client.bottom-Scale(122,dpi);
+    copyfix::ui::Badge(dc, Scale(23,dpi), Scale(20,dpi), Scale(32,dpi));
+    const int top = Scale(94,dpi);
+    const int bottom = client.bottom-Scale(108,dpi);
     copyfix::ui::Rounded(dc,RECT{margin, top, margin+column, bottom},
-                          colors.surface, colors.border, Scale(15,dpi));
+                          colors.surface, colors.border, Scale(12,dpi));
     copyfix::ui::Rounded(dc,
         RECT{margin+column+gap, top, margin+column*2+gap, bottom},
-        colors.surface, colors.border, Scale(15,dpi));
+        colors.surface, colors.border, Scale(12,dpi));
     HBRUSH stroke = CreateSolidBrush(colors.border);
     if (stroke) {
-        RECT line{margin,client.bottom-Scale(116,dpi),
-                  client.right-margin,client.bottom-Scale(115,dpi)};
+        RECT line{margin,client.bottom-Scale(104,dpi),
+                  client.right-margin,client.bottom-Scale(103,dpi)};
         FillRect(dc,&line,stroke);
         DeleteObject(stroke);
     }
@@ -1058,7 +1058,7 @@ LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
     }
     case WM_GETMINMAXINFO: {
         auto* bounds = reinterpret_cast<MINMAXINFO*>(lparam);
-        bounds->ptMinTrackSize = POINT{Scale(760,g_preview_dpi), Scale(510,g_preview_dpi)};
+        bounds->ptMinTrackSize = POINT{Scale(760,g_preview_dpi), Scale(520,g_preview_dpi)};
         return 0;
     }
     case WM_COMMAND: {
@@ -1106,7 +1106,7 @@ LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
 void OpenPreview() {
     SynchronizeSystemTheme();
     if (g_preview) { SetForegroundWindow(g_preview); return; }
-    const auto spawn = PositionedOnCursorMonitor(1040,690,g_message);
+    const auto spawn = PositionedOnCursorMonitor(1000,640,g_message);
     g_preview = CreateWindowExW(WS_EX_APPWINDOW, L"CopyFixPreview", L"CopyFix - проверка текста",
         WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, spawn.x, spawn.y,
         spawn.width, spawn.height, nullptr, nullptr, g_instance, nullptr);
@@ -1203,15 +1203,15 @@ void DrawSettingsSurface(HWND window, HDC dc) noexcept {
     const int dpi = g_settings_dpi;
     const int w = client.right;
     const auto& c = copyfix::ui::colors;
-    copyfix::ui::Badge(dc, Scale(27,dpi), Scale(26,dpi), Scale(40,dpi));
+    copyfix::ui::Badge(dc, Scale(23,dpi), Scale(20,dpi), Scale(32,dpi));
     copyfix::ui::Rounded(dc,
-        RECT{Scale(22,dpi), Scale(112,dpi), w-Scale(22,dpi), Scale(213,dpi)},
-        c.surface, c.border, Scale(16,dpi));
+        RECT{Scale(20,dpi), Scale(91,dpi), w-Scale(20,dpi), Scale(169,dpi)},
+        c.surface, c.border, Scale(12,dpi));
     copyfix::ui::Rounded(dc,
-        RECT{Scale(22,dpi), Scale(225,dpi), w-Scale(22,dpi), Scale(337,dpi)},
-        c.surface, c.border, Scale(16,dpi));
-    const RECT separator{Scale(22,dpi), client.bottom-Scale(80,dpi),
-                         w-Scale(22,dpi), client.bottom-Scale(79,dpi)};
+        RECT{Scale(20,dpi), Scale(181,dpi), w-Scale(20,dpi), Scale(285,dpi)},
+        c.surface, c.border, Scale(12,dpi));
+    const RECT separator{Scale(20,dpi), client.bottom-Scale(61,dpi),
+                         w-Scale(20,dpi), client.bottom-Scale(60,dpi)};
     HBRUSH stroke = CreateSolidBrush(c.border);
     if (stroke) {
         FillRect(dc, &separator, stroke);
@@ -1224,22 +1224,28 @@ void LayoutSettings(HWND window) {
     const int dpi = g_settings_dpi;
     const int w = MulDiv(bounds.right, 96, dpi);
     const int h = MulDiv(bounds.bottom, 96, dpi);
-    Position(window, kSettingsTitle, 82, 22, w-110, 39, dpi);
-    Position(window, kSettingsSubtitle, 82, 64, w-106, 42, dpi);
-    Position(window, 420, 38, 121, w-72, 24, dpi);
-    Position(window, kSettingsCtrl, 38, 157, 86, 29, dpi);
-    Position(window, kSettingsAlt, 138, 157, 81, 29, dpi);
-    Position(window, kSettingsShift, 224, 157, 85, 29, dpi);
-    Position(window, kHotkeyInput, w-172, 153, 132, 220, dpi);
-    Position(window, 421, 38, 233, w-72, 24, dpi);
-    const int segmentWidth = std::max(95, (w - 80)/3);
-    Position(window, kProfileGentle, 38, 265, segmentWidth, 37, dpi);
-    Position(window, kProfileSmart, 38+segmentWidth, 265, segmentWidth, 37, dpi);
-    Position(window, kProfileDeep, 38+2*segmentWidth, 265, segmentWidth, 37, dpi);
-    Position(window, kSettingsExplanation, 38, 308, w-76, 27, dpi);
-    Position(window, kSettingsFeedback, 27, h-119, w-54, 43, dpi);
-    Position(window, kSettingsCancel, w-280, h-65, 120, 42, dpi);
-    Position(window, kSettingsSave, w-153, h-65, 130, 42, dpi);
+    // The two cards are deliberately compact; the footer anchors to the client
+    // edge, not to the outer Win32 frame. No label crosses a card or divider.
+    Position(window, kSettingsTitle, 65, 17, w-85, 31, dpi);
+    Position(window, kSettingsSubtitle, 65, 50, w-86, 32, dpi);
+    Position(window, 420, 36, 99, w-72, 19, dpi);
+    Position(window, kSettingsCtrl, 36, 124, 81, 28, dpi);
+    Position(window, kSettingsAlt, 126, 124, 74, 28, dpi);
+    Position(window, kSettingsShift, 208, 124, 95, 28, dpi);
+    // COMBOBOX height includes its popup. Keep eight visible rows, not a
+    // screen-height popup; CBS_HASSTRINGS is mandatory with owner-draw text.
+    Position(window, kHotkeyInput, w-178, 119, 142, 239, dpi);
+    if (HWND combo = GetDlgItem(window,kHotkeyInput))
+        SendMessageW(combo,CB_SETMINVISIBLE,8,0);
+    Position(window, 421, 36, 188, w-72, 19, dpi);
+    const int segmentWidth = (w-80)/3;
+    Position(window, kProfileGentle, 36, 216, segmentWidth, 33, dpi);
+    Position(window, kProfileSmart, 40+segmentWidth, 216, segmentWidth, 33, dpi);
+    Position(window, kProfileDeep, 44+2*segmentWidth, 216, segmentWidth, 33, dpi);
+    Position(window, kSettingsExplanation, 36, 259, w-72, 21, dpi);
+    Position(window, kSettingsFeedback, 26, 288, w-52, 35, dpi);
+    Position(window, kSettingsCancel, w-250, h-48, 104, 34, dpi);
+    Position(window, kSettingsSave, w-136, h-48, 116, 34, dpi);
 }
 
 LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam) {
@@ -1269,12 +1275,13 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
         }
         HWND hotkey = CreateWindowW(L"COMBOBOX", nullptr,
             WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST |
-            CBS_OWNERDRAWFIXED | WS_VSCROLL,
+            CBS_OWNERDRAWFIXED | CBS_HASSTRINGS | CBS_NOINTEGRALHEIGHT | WS_VSCROLL,
             0, 0, 1, 1, window,
             reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kHotkeyInput)),
             g_instance, nullptr);
         if (!hotkey) return -1;
         PopulateHotkeyKeys(hotkey, g_settings.hotkey.key);
+        SendMessageW(hotkey, CB_SETMINVISIBLE, 8, 0);
         ResetHotkeyChoice(window);
         ApplyFont(hotkey,g_font_body);
         MakeLabel(window,421,L"ПРОФИЛЬ ОБРАБОТКИ",g_font_label);
@@ -1327,7 +1334,7 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
     case WM_MEASUREITEM: {
         auto* measure = reinterpret_cast<MEASUREITEMSTRUCT*>(lparam);
         if (measure && measure->CtlID == kHotkeyInput) {
-            measure->itemHeight = static_cast<UINT>(Scale(34,g_settings_dpi));
+            measure->itemHeight = static_cast<UINT>(Scale(25,g_settings_dpi));
             return TRUE;
         }
         break;
@@ -1391,7 +1398,7 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
 void OpenSettings() {
     SynchronizeSystemTheme();
     if (g_settings_window) { SetForegroundWindow(g_settings_window); return; }
-    const auto spawn = PositionedOnCursorMonitor(510,475,g_message);
+    const auto spawn = PositionedOnCursorMonitor(500,424,g_message);
     g_settings_window = CreateWindowExW(WS_EX_APPWINDOW,L"CopyFixSettings",L"CopyFix - настройки",
         WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_CLIPCHILDREN,
         spawn.x,spawn.y,spawn.width,spawn.height,
@@ -1416,13 +1423,13 @@ void LayoutAbout(HWND window) {
     RECT bounds{}; GetClientRect(window, &bounds);
     const int dpi = static_cast<int>(GetDpiForWindow(window));
     const int w = MulDiv(bounds.right,96,dpi);
-    Position(window,kAboutIcon,(w-72)/2,31,72,72,dpi);
-    Position(window,kAboutTitle,30,113,w-60,45,dpi);
-    Position(window,kAboutVersionLabel,30,161,w-60,26,dpi);
-    Position(window,kAboutDescriptionLabel,28,197,w-56,42,dpi);
-    Position(window,kAboutProject,33,256,w-66,43,dpi);
-    Position(window,kAboutGitHub,33,308,w-66,43,dpi);
-    Position(window,kAboutLicense,24,367,w-48,44,dpi);
+    Position(window,kAboutIcon,(w-56)/2,24,56,56,dpi);
+    Position(window,kAboutTitle,28,84,w-56,31,dpi);
+    Position(window,kAboutVersionLabel,28,114,w-56,21,dpi);
+    Position(window,kAboutDescriptionLabel,28,144,w-56,31,dpi);
+    Position(window,kAboutProject,30,189,w-60,34,dpi);
+    Position(window,kAboutGitHub,30,232,w-60,34,dpi);
+    Position(window,kAboutLicense,22,283,w-44,28,dpi);
 }
 
 void DrawAboutSurface(HWND window, HDC dc) noexcept {
@@ -1432,9 +1439,9 @@ void DrawAboutSurface(HWND window, HDC dc) noexcept {
     const auto& p = copyfix::ui::colors;
     const int dpi = static_cast<int>(GetDpiForWindow(window));
     copyfix::ui::Rounded(dc,
-        RECT{Scale(20,dpi),Scale(18,dpi),
-             client.right-Scale(20,dpi),client.bottom-Scale(18,dpi)},
-        p.surface,p.border,Scale(20,dpi));
+        RECT{Scale(16,dpi),Scale(14,dpi),
+             client.right-Scale(16,dpi),client.bottom-Scale(14,dpi)},
+        p.surface,p.border,Scale(14,dpi));
 }
 
 LRESULT CALLBACK AboutProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam) {
@@ -1447,7 +1454,7 @@ LRESULT CALLBACK AboutProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam) 
             reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kAboutIcon)),
             g_instance,nullptr);
         if (!icon) return -1;
-        SendMessageW(icon,STM_SETICON,reinterpret_cast<WPARAM>(LoadAppIcon(64)),0);
+        SendMessageW(icon,STM_SETICON,reinterpret_cast<WPARAM>(LoadAppIcon(48)),0);
         MakeCenteredLabel(window,kAboutTitle,L"CopyFix",g_font_title);
         MakeCenteredLabel(window,kAboutVersionLabel,kAboutVersionString,g_font_label);
         MakeCenteredLabel(window,kAboutDescriptionLabel,
@@ -1534,7 +1541,7 @@ void ShowAbout(HWND parent) noexcept {
         SetForegroundWindow(g_about_window);
         return;
     }
-    const auto spawn = PositionedOnCursorMonitor(420,460,parent);
+    const auto spawn = PositionedOnCursorMonitor(420,370,parent);
     g_about_window = CreateWindowExW(WS_EX_APPWINDOW,L"CopyFixAbout",
         L"CopyFix — о программе",WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_CLIPCHILDREN,
         spawn.x,spawn.y,spawn.width,spawn.height,
@@ -1678,10 +1685,10 @@ int WINAPI wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE, _In_ PWSTR, _In
     g_surface_brush = copyfix::ui::SurfaceBrush();
     const int dpi = static_cast<int>(GetDpiForSystem());
     g_base_font_dpi = dpi;
-    g_font_body = MakeFont(11, FW_NORMAL, dpi);
-    g_font_title = MakeFont(22, FW_SEMIBOLD, dpi);
-    g_font_label = MakeFont(10, FW_SEMIBOLD, dpi);
-    g_font_caption = MakeFont(10, FW_NORMAL, dpi);
+    g_font_body = MakeFont(10, FW_NORMAL, dpi);
+    g_font_title = MakeFont(17, FW_SEMIBOLD, dpi);
+    g_font_label = MakeFont(9, FW_SEMIBOLD, dpi);
+    g_font_caption = MakeFont(9, FW_NORMAL, dpi);
     g_taskbar_created = RegisterWindowMessageW(L"TaskbarCreated");
     const HICON large_icon = LoadAppIcon(GetSystemMetrics(SM_CXICON));
     const HICON small_icon = LoadAppIcon(GetSystemMetrics(SM_CXSMICON));
