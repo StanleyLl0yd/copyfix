@@ -56,6 +56,42 @@ int main() {
         RenderPreviewText(nullptr)) return Fail(33);
     if (!before || !after || GetDlgCtrlID(after) == IDCANCEL ||
         GetDlgCtrlID(before) == GetDlgCtrlID(after)) return Fail(12);
+    // Both content panes must stay within their cards and above the footer,
+    // including at the minimum supported window size.
+    const auto relative = [&](UINT id) {
+        RECT box{};
+        if (HWND child = GetDlgItem(preview,id); child && GetWindowRect(child,&box))
+            MapWindowPoints(nullptr,preview,reinterpret_cast<POINT*>(&box),2);
+        return box;
+    };
+    const auto checkLayout = [&]() {
+        RECT client{};
+        GetClientRect(preview,&client);
+        const int dpi = static_cast<int>(GetDpiForWindow(preview));
+        const RECT a = relative(kPreviewBeforeEdit);
+        const RECT b = relative(kPreviewAfterEdit);
+        const RECT note = relative(kPreviewNote);
+        const RECT apply = relative(kPreviewAccept);
+        const RECT toggles = relative(kPreviewShowBreaks);
+        return a.left >= Scale(22,dpi) && a.top >= Scale(94,dpi) &&
+               a.right < b.left && b.right <= client.right-Scale(22,dpi) &&
+               a.bottom <= client.bottom-Scale(108,dpi) &&
+               b.bottom <= client.bottom-Scale(108,dpi) &&
+               note.top > a.bottom &&
+               toggles.top > note.bottom &&
+               apply.top > note.bottom && apply.bottom <= client.bottom;
+    };
+    if (!checkLayout()) return Fail(41);
+    RECT previousSize{};
+    GetWindowRect(preview,&previousSize);
+    SetWindowPos(preview,nullptr,0,0,Scale(800,g_preview_dpi),
+                 Scale(550,g_preview_dpi),SWP_NOMOVE|SWP_NOZORDER);
+    if (!checkLayout()) return Fail(42);
+    SetWindowPos(preview,nullptr,0,0,
+                 previousSize.right-previousSize.left,
+                 previousSize.bottom-previousSize.top,
+                 SWP_NOMOVE|SWP_NOZORDER);
+    if (!checkLayout()) return Fail(43);
     wchar_t class_name[60]{};
     GetClassNameW(after, class_name, static_cast<int>(std::size(class_name)));
     if (wcscmp(class_name, L"RICHEDIT50W") != 0) return Fail(13);
