@@ -22,7 +22,7 @@ Profiles:
 
 Windows **1.1.0** supports custom global keyboard shortcuts using native Ctrl / Alt / Shift checkboxes and a full key list. Press **Сохранить** to validate through Windows `RegisterHotKey`; an occupied/reserved chord produces an explicit warning and leaves the former active shortcut and Registry setting unchanged. OS-reserved Win/F12, unmodified/Shift-only keys, mouse buttons and universal editing shortcuts such as Ctrl+V/C/X/Z/A/Y or Ctrl+Shift+V are excluded. There is no keyboard hook, keystroke logging or continuous clipboard monitoring. Existing `Hotkey` DWORD values 0/1/2 retain their legacy meanings. An ordinary Windows notification confirms startup, with placement controlled by Windows.
 
-In the **unreleased 1.2.0 development branch**, system Windows light/dark preference determines the appearance of all three native windows. Win32/GDI paints compact surfaces; DWM handles system captions and Windows 11 rounded corners; native RichEdit is retained for side-by-side review. System shcore.dll supports correct initial DPI sizing on the monitor under the cursor. No UI runtime or theme configuration files are shipped.
+In the **unreleased 1.2.0 development branch**, system Windows light/dark preference determines the appearance of all three native windows. Win32/GDI paints compact surfaces; DWM handles system captions and Windows 11 rounded corners; native RichEdit is retained for side-by-side review. System shcore.dll supports correct initial DPI sizing on the monitor under the cursor. The draft adds a Settings language selector with **System default (Windows)**, **Русский**, and **English**. Settings, Preview, About, tray menus, notifications and warnings use the selected language. It adds optional REG_DWORD `Language` (0 auto, 1 Russian, 2 English), preserving existing profile/hotkey values. Other Windows display languages fall back to English. No UI runtime or theme configuration files are shipped.
 
 No spelling correction, AI, OCR, auto-paste, clipboard monitoring, telemetry or advertisements. Windows system DLLs are allowed; settings are stored exclusively under HKCU. Source and distribution terms: [MIT License](LICENSE), copyright (c) 2026 Stanley Lloyd.
 
@@ -40,7 +40,7 @@ The Windows GUI is `build/Release/CopyFix.exe`. Release uses C++20 and static MS
 
 ## Portable configuration
 
-Built-in defaults require no files. Settings are stored exclusively in the per-user Windows Registry (`HKEY_CURRENT_USER\Software\CopyFix`, DWORD values `Profile` and `Hotkey`). No `copyfix.ini` is read or created. If the registry cannot be written, settings still apply for the current run. No administrator rights are required.
+Built-in defaults require no files. Settings are stored exclusively in the per-user Windows Registry (`HKEY_CURRENT_USER\Software\CopyFix`, released 1.1.0: DWORD values `Profile` and `Hotkey`; unreleased 1.2.0 additionally uses `Language`). No `copyfix.ini` is read or created. If the registry cannot be written, settings still apply for the current run. No administrator rights are required.
 
 ## Approved CopyFix icon
 
