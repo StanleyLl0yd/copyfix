@@ -61,6 +61,11 @@ int main() {
     const auto project = relative(kAboutProject);
     const auto github = relative(kAboutGitHub);
     const auto license = relative(kAboutLicense);
+    const int dpi=static_cast<int>(GetDpiForWindow(window));
+    if (icon.right-icon.left != Scale(54,dpi) ||
+        icon.bottom-icon.top != Scale(54,dpi) ||
+        !SendDlgItemMessageW(window,kAboutIcon,STM_GETICON,0,0))
+        return fail(14);
     if (icon.bottom >= title.top || title.bottom >= project.top ||
         project.bottom >= github.top || github.bottom >= license.top ||
         license.bottom > client.bottom-Scale(12,static_cast<int>(GetDpiForWindow(window))) ||
