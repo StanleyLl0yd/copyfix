@@ -83,12 +83,16 @@ int main() {
         const RECT note = relative(kPreviewNote);
         const RECT apply = relative(kPreviewAccept);
         const RECT toggles = relative(kPreviewShowBreaks);
+        const RECT spaces = relative(kPreviewShowSpaces);
         return a.left >= Scale(22,dpi) && a.top >= Scale(94,dpi) &&
                a.right < b.left && b.right <= client.right-Scale(22,dpi) &&
                a.bottom <= client.bottom-Scale(108,dpi) &&
                b.bottom <= client.bottom-Scale(108,dpi) &&
                note.top > a.bottom &&
                toggles.top > note.bottom &&
+               toggles.top-note.bottom <= Scale(12,dpi) &&
+               spaces.top == toggles.top && spaces.bottom == toggles.bottom &&
+               abs(toggles.top-apply.top) <= Scale(5,dpi) &&
                apply.top > note.bottom && apply.bottom <= client.bottom;
     };
     for (UINT id : {kPreviewAccept,kPreviewCancel}) {
@@ -101,6 +105,18 @@ int main() {
                    toggleLabel,static_cast<int>(std::size(toggleLabel)));
     if (wcscmp(toggleLabel,L"Показать переносы строк")!=0)
         return Fail(45);
+    // The status bar is supporting information, but must remain readable
+    // against both light and dark backgrounds.
+    const HWND note=GetDlgItem(preview,kPreviewNote);
+    const HDC dc=GetDC(preview);
+    if (!dc) return Fail(48);
+    const auto expected=copyfix::ui::Mix(copyfix::ui::colors.muted,
+                                         copyfix::ui::colors.ink,45);
+    SendMessageW(preview,WM_CTLCOLORSTATIC,reinterpret_cast<WPARAM>(dc),
+                 reinterpret_cast<LPARAM>(note));
+    const bool goodContrast=GetTextColor(dc)==expected;
+    ReleaseDC(preview,dc);
+    if (!goodContrast) return Fail(49);
     if (!checkLayout()) return Fail(41);
     RECT previousSize{};
     GetWindowRect(preview,&previousSize);
