@@ -1,84 +1,73 @@
+<img src="artwork/app-icon.png" alt="CopyFix icon" width="88" align="right">
+
 # CopyFix
 
-**CopyFix** - лёгкая автономная утилита для очистки скопированного текста в Windows. Работает локально, не отправляет текст в сеть, не записывает историю буфера обмена и не использует перехват клавиатуры.
+**English** · [Русский](README.ru.md)
 
-> Status: **Windows 1.2.0 RELEASED / ACCEPTED** — [Download one unsigned portable `CopyFix.exe`](https://github.com/StanleyLl0yd/copyfix/releases/download/v1.2.0/CopyFix.exe) ([Release v1.2.0](https://github.com/StanleyLl0yd/copyfix/releases/tag/v1.2.0)). **348,160 bytes**, SHA-256 `21a16cc89fbcd285732ad2e19ddfe722ee471279901f5e701f2df011fcec20e8`. [PR #40](https://github.com/StanleyLl0yd/copyfix/pull/40) merged via protected squash; [exact-main CI](https://github.com/StanleyLl0yd/copyfix/actions/runs/42041741692) Windows 10/10 and Clang 3/3 PASS. Owner visually accepted Windows 11 light/dark layouts and dark About fix. Earlier releases v1.1.0 and v1.0.0 remain available.
+**A little help for text that didn't survive copy and paste.**
 
-> **Windows 1.2.0** ships the approved Settings C, Preview A and About C windows with native Windows light/dark themes, plus RU/EN language and automatic/light/dark appearance selectors. See [design and verification record](docs/FLUENT-REDESIGN-1.2.0.md).
+Copy a paragraph from a PDF, paste it into an email, and suddenly every line ends in the middle of a sentence. Sometimes words are split by hyphens. Sometimes the spacing has a life of its own. Fixing it by hand is easy enough, but doing it over and over gets old.
 
-## Use
+CopyFix takes care of that small, surprisingly persistent annoyance. It's a tiny Windows utility that tidies up text already on your clipboard, so you can get back to what you were actually doing.
 
-1. Copy text in another application.
-2. Press **Ctrl+Alt+F9** (configurable), or choose **Исправить текст** in the tray menu.
-3. Paste with Ctrl+V.
-4. When potentially ambiguous changes or rich clipboard formats are involved, confirm the proposed result in a two-column preview. You can cancel without changing the clipboard.
-5. To undo, choose **Отменить исправление** before copying anything new. Undo restores only plain Unicode text, not HTML/RTF representations.
+It works **offline**, stays out of your way in the system tray, and lets you review changes that might need a human decision.
 
-Profiles:
+**[Download CopyFix for Windows](https://github.com/StanleyLl0yd/copyfix/releases/latest)** · [Browse all releases](https://github.com/StanleyLl0yd/copyfix/releases)
 
-- **Бережный**: normalize ASCII spaces and line endings, remove leading BOM, limit extra blank lines. Structured text is passed through unchanged.
-- **Умный**: предлагает объединять переносы внутри обычных абзацев, если следующая строка начинается со строчной буквы (с обязательным предпросмотром).
-- **Глубокий** (default for new users; existing registry choice is respected): дополнительно предлагает исправлять переносы слов: `скопиро-\nван` -> `скопирован`; сохраняет дефис в распознаваемых составных словах вроде `Санкт-Петербург`, `северо-западный`, `бизнес-план`, `веб-сайт` и `интернет-магазин`. Неоднозначные изменения требуют подтверждения.
+## From messy paste to readable text
 
-Windows **1.1.0** supports custom global keyboard shortcuts using native Ctrl / Alt / Shift checkboxes and a full key list. Press **Сохранить** to validate through Windows `RegisterHotKey`; an occupied/reserved chord produces an explicit warning and leaves the former active shortcut and Registry setting unchanged. OS-reserved Win/F12, unmodified/Shift-only keys, mouse buttons and universal editing shortcuts such as Ctrl+V/C/X/Z/A/Y or Ctrl+Shift+V are excluded. There is no keyboard hook, keystroke logging or continuous clipboard monitoring. Existing `Hotkey` DWORD values 0/1/2 retain their legacy meanings. An ordinary Windows notification confirms startup, with placement controlled by Windows.
+CopyFix is especially handy for paragraphs copied from PDFs, documents and web pages. Depending on the selected mode, it can:
 
-In **Windows 1.2.0**, the selected appearance preference (automatic Windows theme, forced light, or forced dark) determines the appearance of all three native windows. Win32/GDI paints compact surfaces; DWM handles system captions and Windows 11 rounded corners; native RichEdit is retained for side-by-side review. System shcore.dll supports correct initial DPI sizing on the monitor under the cursor. The release includes a Settings language selector with **System default (Windows)**, **Русский**, and **English**. Settings, Preview, About, tray menus, notifications and warnings use the selected language. It adds optional REG_DWORD `Language` (0 auto, 1 Russian, 2 English), preserving existing profile/hotkey values. Other Windows display languages fall back to English. A separate theme selector offers **System default (Windows)**, **Light**, and **Dark**, with live preview and Cancel rollback. The user preference is stored as REG_DWORD `Theme` (0 auto, 1 light, 2 dark), while Windows high-contrast mode always takes precedence. No UI runtime or theme configuration files are shipped.
+- Tidy up extra spaces, blank lines and line endings.
+- Suggest joining lines that were wrapped in the middle of a paragraph.
+- Suggest reconnecting words split across lines, while trying to preserve meaningful hyphens.
+- Show the original and proposed text side by side, highlighting what's changed.
 
-No spelling correction, AI, OCR, auto-paste, clipboard monitoring, telemetry or advertisements. Windows system DLLs are allowed; settings are stored exclusively under HKCU. Source and distribution terms: [MIT License](LICENSE), copyright (c) 2026 Stanley Lloyd.
+It isn't a spellchecker or an AI writer. It doesn't try to improve your prose or guess what you meant. Structured content, such as code and data, is handled conservatively; if the result is uncertain, **you get to decide before the clipboard changes**.
 
-## Building on Windows 10/11 x64
+## How to use it
 
-Requires **Visual Studio 2022 Build Tools** (MSVC v143 and Windows SDK) and CMake 3.21+. Build-time dependencies only, not end-user requirements.
+1. Download \`CopyFix.exe\` from the latest release and run it. No installer or administrator rights are needed.
+2. Copy some text as usual.
+3. Press **Ctrl+Alt+F9** (you can change the shortcut), or choose **Fix text** from the tray menu.
+4. If a preview appears, check the highlighted changes and apply or cancel them. Then paste with **Ctrl+V**.
 
-```powershell
+Changed your mind? **Undo** in the tray can restore the previous plain text, as long as the clipboard hasn't been replaced by a newer copy.
+
+### Three ways to clean up
+
+| Mode | Best for |
+| --- | --- |
+| **Gentle** | Cleaning up spaces, line endings and extra blank lines with minimal intervention. |
+| **Smart** | Suggesting fixes for awkward line breaks inside ordinary paragraphs. |
+| **Deep** | Also looking for words broken by end-of-line hyphens. This is the default for a new installation. |
+
+You can switch modes in Settings. The app speaks **English and Russian**, with a manual language choice or automatic detection from Windows. It also offers **system, light and dark** appearance modes.
+
+## Small, local, and deliberately simple
+
+CopyFix is a single portable executable for **Windows 10 and 11 (x64)**. There is no account, cloud service, clipboard history, advertising, telemetry, or background clipboard monitoring. It only processes text when you ask it to. No keyboard hook is installed.
+
+Under the hood it's **C++20 with native Win32**, using Windows GDI/DWM for the interface and RichEdit for the side-by-side preview. There is no Electron, .NET desktop runtime or third-party UI framework. Preferences live in your user profile's Windows Registry, not beside the executable.
+
+**A couple of things worth knowing:** Reflowing text is based on heuristics, so it's worth reviewing suggested joins and hyphen changes. Applying a fix to a clipboard containing rich formats (such as HTML or RTF) replaces those representations with plain text, and Undo restores plain text only. CopyFix warns you with a preview first. The release executable is currently **unsigned**; download it from this repository's official Releases page.
+
+## Build it yourself
+
+You'll need Visual Studio 2022 Build Tools (MSVC and Windows SDK) and CMake 3.21+ on Windows.
+
+\`\`\`powershell
 cmake -S . -B build -G "Visual Studio 17 2022" -A x64
 cmake --build build --config Release --parallel
 ctest --test-dir build -C Release --output-on-failure
-```
+\`\`\`
 
-The Windows GUI is `build/Release/CopyFix.exe`. Release uses C++20 and static MSVC runtime `/MT`; PE imports are checked by CI. Windows 10/11 clean and working installations and the final About/version/link/monitor-centering changes were accepted by the owner; exact OS builds and installed runtime inventories are not independently documented. `tools/check-pe.ps1` checks imports and basic PE hardening and writes SHA-256 diagnostics.
+The resulting app is \`build/Release/CopyFix.exe\`. The release uses the static MSVC runtime, so users don't need to install it separately. For deeper implementation notes, test coverage and known constraints, see [project status](docs/STATUS.md), [Windows QA](docs/QA-WINDOWS.md) and the [audit record](docs/REPOSITORY-AUDIT-2026-11-03.md).
 
-## Portable configuration
+## Want to help?
 
-Built-in defaults require no files. Settings are stored exclusively in the per-user Windows Registry (`HKEY_CURRENT_USER\Software\CopyFix`, current 1.2.0: DWORD values `Profile`, `Hotkey`, `Language`, `Theme`). No `copyfix.ini` is read or created. If the registry cannot be written, settings still apply for the current run. No administrator rights are required.
+A small tool can still benefit from many eyes. If CopyFix mishandles a paragraph, a shortcut, or a corner of the Windows interface, [open an issue](https://github.com/StanleyLl0yd/copyfix/issues) with a reproducible example. Ideas, testing on different Windows configurations, improvements to the text test cases, and focused pull requests are welcome. Please remove any personal or confidential text from examples before posting them.
 
-## Approved CopyFix icon
+And if CopyFix saves you a few minutes of tedious cleanup, consider giving the repository a **⭐ star**. It's a simple way to help other people find it.
 
-The owner-approved canonical raster sources are checked into Git byte-for-byte:
-
-- `artwork/app-icon.png` — original detailed icon (1254×1254; white document, Aa, vivid green arrow on blue).
-- `artwork/tray-16x16.png` — separately approved pixel-optimized 16×16 tray artwork (white document and green arrow, without tiny Aa).
-
-`resources/copyfix.ico` embeds the approved 16×16 PNG **unchanged** and larger 24/32/48/64/128/256 px raster sizes derived from the main source. The native Win32 resource is embedded directly into `CopyFix.exe`; no icon or extra file is required beside the portable executable. `python tools/check-icon.py` validates canonical source checksums and the ICO; use `python tools/build-icon.py` (Pillow required only for explicit regeneration) after owner-approved artwork changes. The original sources must never be overwritten or silently re-encoded.
-
-## Windows interface and test ZIP
-
-The native Windows RichEdit preview (built-in `Msftedit.dll`, no bundled dependency) has side-by-side selectable text with pink highlights for deleted content, green highlights for added content and light neutral-tinted marks for whitespace-only changes. Toggle `↵ Показать настоящие переносы строк` to distinguish source hard line breaks from visual wrapping; markers are for viewing only and are not applied to the clipboard. Each pane retains its own approximate scroll position when markers are toggled. Actual clipboard serialization still uses CRLF; paragraph boundaries are preserved. The GitHub Actions test artifact ZIP contains **only `CopyFix.exe`**; PE audit results remain visible in CI logs. The official [v1.0.0 GitHub Release](https://github.com/StanleyLl0yd/copyfix/releases/tag/v1.0.0) distributes a single unsigned `CopyFix.exe`; CI test ZIPs remain separate, one-EXE artifacts.
-
-## Security and limitations
-
-- The Windows clipboard is not an atomic transaction. Before replacement CopyFix checks the sequence number **and** source text under the clipboard lock, preallocates output memory, and attempts restoration if an OS write unexpectedly fails. The clipboard APIs cannot provide absolute rollback guarantees after `EmptyClipboard()` succeeds.
-- If the clipboard has formats other than plain text, a preview is required because accepting replaces the other representations with plain Unicode text. Undo does not recover rich representations.
-- Clipboard LF newlines are serialized as CRLF for Windows consumers. Previews over 100,000 characters are refused without modifying the clipboard to prevent an uninspectable confirmation.
-- A sequence change invalidates Undo, even if the visible text happens to match; Undo cannot overwrite newly copied content.
-- Structured content detection is deliberately conservative, **not a complete format parser**; it may skip editable plain text. No fixed heuristics can safely infer every real paragraph boundary or preserve every compound word, so potentially destructive joins require explicit confirmation.
-- Avoid copying passwords or secrets if you do not wish them to pass through the CopyFix process memory. CopyFix does not retain a clipboard history or log input/output text.
-- Smart/Deep PDF reflow is heuristic and cannot determine every hyphenated compound without a dictionary or semantic context; do not accept ambiguous transformations without reviewing the highlighted result.
-- The owner reports PASS on clean and working Windows 10/11 installations; exact OS builds and installed runtime inventory are not independently documented. The completed two-pass source/security audit and its remaining limitations are documented in [the exit-audit report](docs/WINDOWS-EXIT-AUDIT.md).
-
-## Repository
-
-- `src/text_engine.*`: platform-independent text transformations.
-- `src/winmain.cpp`: native Win32 shell, clipboard handling and dialogs.
-- `tests/core_tests.cpp`: standalone framework-free tests; 141 shared JSON golden cases, 25 built-in core cases and 900 property-like inputs.
-- `tests/golden_cases.json`: UTF-8 shared golden corpus for future Android parity.
-- `tests/perf_tests.cpp`: 10k/100k/1M-unit integrity and timing probe.
-- `docs/QA-WINDOWS.md`: manual Windows 10/11 integration checklist.
-- `docs/STATUS.md`: verified vs unverified milestone gates.
-- `docs/WINDOWS-EXIT-AUDIT.md`: historical two-pass code/security audit at the earlier baseline.
-- `docs/REPOSITORY-AUDIT-2026-11-03.md`: current repository-wide two-pass review, remediations, measurements, and remaining limitations.
-- `.github/workflows/ci.yml`: MSVC x64 Release build, tests, PE audit and artifact upload (not GitHub Release).
-- `tools/check-pe.ps1`: dependency, offline-import policy, PE security and hash diagnostics.
-- `tools/check-history-bundle.py`: CI-only historical Git bundle integrity and limited credential-pattern screening.
-
-Windows 1.0 acceptance is complete. Android (Kotlin + Compose) is **not started**; a separate owner decision and scope are required before Android development. No backend, shared heavyweight framework, or network permission is planned.
+CopyFix is open source under the [MIT License](LICENSE). Made to solve a small real problem, without becoming a big complicated application.
