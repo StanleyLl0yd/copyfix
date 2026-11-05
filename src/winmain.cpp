@@ -518,6 +518,15 @@ void DrawActionButton(const DRAWITEMSTRUCT* item) {
                                  Scale(copyfix::ui::SegmentCorner,dpi));
         }
     } else {
+        // Owner-drawn rounded buttons leave corner pixels outside RoundRect.
+        // Clear them with the current parent surface, never the stale class
+        // brush (which can still be light after switching to dark mode).
+        const bool inAbout = item->CtlID==kAboutProject || item->CtlID==kAboutGitHub;
+        HBRUSH background=CreateSolidBrush(inAbout ? c.surface : c.canvas);
+        if (background) {
+            FillRect(item->hDC,&item->rcItem,background);
+            DeleteObject(background);
+        }
         if (primary) {
             fill=pressed ? copyfix::ui::Mix(c.blue,c.ink,18)
                  : hovered ? copyfix::ui::Mix(c.blue,c.surface,9) : c.blue;
