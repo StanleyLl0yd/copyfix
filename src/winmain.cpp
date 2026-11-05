@@ -541,7 +541,8 @@ void DrawActionButton(const DRAWITEMSTRUCT* item) {
         DT_CENTER|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS|DT_NOPREFIX);
     SelectObject(item->hDC,oldFont);
     SetTextColor(item->hDC,oldColor); SetBkMode(item->hDC,oldMode);
-    if (item->itemState & ODS_FOCUS) {
+    if ((item->itemState & ODS_FOCUS) &&
+        !(SendMessageW(item->hwndItem,WM_QUERYUISTATE,0,0)&UISF_HIDEFOCUS)) {
         const COLORREF focus=(primary || selected) &&
             !copyfix::ui::highContrast ? RGB(255,255,255) : c.blue;
         HPEN pen=CreatePen(PS_SOLID,std::max(1,Scale(1,dpi)),focus);
@@ -1414,7 +1415,7 @@ void LayoutSettings(HWND window) {
     Position(window, kSettingsLanguageSection, 36, 306, w-72, 19, dpi);
     Position(window, kSettingsLanguageInput, 36, 332, w-72, 108, dpi);
     Position(window, kSettingsLanguageHint, 36, 374, w-72, 22, dpi);
-    Position(window, kSettingsFeedback, 26, 402, w-52, 27, dpi);
+    Position(window, kSettingsFeedback, 26, 402, w-52, 26, dpi);
     Position(window, kSettingsCancel, w-250, h-48, 104, 34, dpi);
     Position(window, kSettingsSave, w-136, h-48, 116, 34, dpi);
 }
