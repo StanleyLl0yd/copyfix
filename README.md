@@ -8,6 +8,12 @@
   <strong>A little help for text that didn't survive copy and paste.</strong>
 </p>
 
+<p align="center">
+  <a href="https://github.com/StanleyLl0yd/copyfix/actions/workflows/ci.yml"><img src="https://github.com/StanleyLl0yd/copyfix/actions/workflows/ci.yml/badge.svg?branch=main" alt="Build"></a>
+  <a href="https://github.com/StanleyLl0yd/copyfix/releases/latest"><img src="https://img.shields.io/badge/Windows-10%20%2F%2011%20x64-0078D4" alt="Windows 10/11 x64"></a>
+  <a href="https://github.com/StanleyLl0yd/copyfix/releases/latest"><img src="https://img.shields.io/github/v/release/StanleyLl0yd/copyfix?label=release" alt="Latest release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/StanleyLl0yd/copyfix?label=license" alt="MIT license"></a>
+</p>
 <p align="center"><strong>English</strong> · <a href="README.ru.md">Русский</a></p>
 
 Copy a paragraph from a PDF, paste it into an email, and suddenly every line ends in the middle of a sentence. Sometimes words are split by hyphens. Sometimes the spacing has a life of its own. Fixing it by hand is easy enough, but doing it over and over gets old.
