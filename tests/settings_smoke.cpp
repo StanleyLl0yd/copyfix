@@ -154,13 +154,25 @@ int main() {
             sizeof(invalidLanguage))!=ERROR_SUCCESS) {
         RegCloseKey(key); return fail(55);
     }
-    g_settings.language=copyfix::i18n::Language::System;
+    g_settings.language=copyfix::i18n::Language::English;
     LoadSettings();
     if (g_settings.language!=copyfix::i18n::Language::System) {
         RegCloseKey(key); return fail(56);
     }
     g_settings.language=copyfix::i18n::Language::Russian;
 
+    if (wcscmp(copyfix::i18n::Get(UiText::SettingsTitle,
+              copyfix::i18n::Language::English),L"Settings")!=0 ||
+        wcscmp(copyfix::i18n::Get(UiText::SettingsTitle,
+              copyfix::i18n::Language::Russian),L"Настройки")!=0 ||
+        copyfix::i18n::IsValid(99))
+        return fail(62);
+    for (std::size_t index=0; index<static_cast<std::size_t>(UiText::Count); ++index) {
+        const auto key=static_cast<UiText>(index);
+        if (!*copyfix::i18n::Get(key,copyfix::i18n::Language::Russian) ||
+            !*copyfix::i18n::Get(key,copyfix::i18n::Language::English))
+            return fail(63);
+    }
     // Every supported keyboard option must be selectable without generating
     // a physical chord; Windows may consume occupied global shortcuts.
     const HotkeyChord examples[] = {
