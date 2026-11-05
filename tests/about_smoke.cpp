@@ -66,6 +66,16 @@ int main() {
         license.right > client.right)
         return fail(8);
 
+    for (UINT id : {kAboutProject,kAboutGitHub}) {
+        DWORD_PTR data=0;
+        if (!GetWindowSubclass(GetDlgItem(window,id),
+                               ActionButtonSubclass,2,&data)) return fail(9);
+    }
+    wchar_t linkLabel[80]{};
+    GetWindowTextW(GetDlgItem(window,kAboutProject),linkLabel,80);
+    if (wcscmp(linkLabel,L"О проекте")!=0) return fail(10);
+    GetWindowTextW(GetDlgItem(window,kAboutGitHub),linkLabel,80);
+    if (wcscmp(linkLabel,L"GitHub")!=0) return fail(11);
     SendMessageW(window,WM_CLOSE,0,0);
     if (g_about_window || IsWindow(window)) return fail(7);
     UnregisterClassW(L"CopyFixAbout",g_instance);
