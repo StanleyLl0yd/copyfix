@@ -33,7 +33,7 @@ inline constexpr int SegmentCorner = 12;
 inline constexpr int ControlHeight = 34;
 
 inline COLORREF Mix(COLORREF from, COLORREF to, int percent) noexcept {
-    const int a = std::max(0, std::min(100, percent));
+    const int a = percent < 0 ? 0 : percent > 100 ? 100 : percent;
     return RGB((GetRValue(from)*(100-a)+GetRValue(to)*a)/100,
                (GetGValue(from)*(100-a)+GetGValue(to)*a)/100,
                (GetBValue(from)*(100-a)+GetBValue(to)*a)/100);
