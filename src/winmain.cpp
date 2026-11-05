@@ -105,6 +105,12 @@ HFONT g_font_body = nullptr;
 HFONT g_font_title = nullptr;
 HFONT g_font_label = nullptr;
 HFONT g_font_caption = nullptr;
+int g_base_font_dpi = 96;
+struct DpiFonts {
+    int dpi = 0;
+    HFONT body = nullptr, title = nullptr, label = nullptr, caption = nullptr;
+};
+DpiFonts g_dpi_fonts[8]{};
 int g_preview_dpi = 96;
 int g_settings_dpi = 96;
 
@@ -223,9 +229,63 @@ HFONT MakeFont(int points, int weight, int dpi) {
                        OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
                        DEFAULT_PITCH | FF_SWISS, L"Segoe UI");
 }
-void ApplyFont(HWND hwnd, HFONT font) {
-    if (hwnd && font) SendMessageW(hwnd, WM_SETFONT, reinterpret_cast<WPARAM>(font), TRUE);
+HFONT FontForDpi(HFONT original, int dpi) {
+    if (!original || dpi <= 0 || dpi == g_base_font_dpi) return original;
+    if (original != g_font_body && original != g_font_title &&
+        original != g_font_label && original != g_font_caption) return original;
+    DpiFonts* fonts = nullptr;
+    for (auto& item : g_dpi_fonts) {
+        if (item.dpi == dpi) { fonts = &item; break; }
+    }
+    if (!fonts) {
+        for (auto& item : g_dpi_fonts) {
+            if (item.dpi == 0) {
+                fonts = &item;
+                item.dpi = dpi;
+                item.body = MakeFont(11,FW_NORMAL,dpi);
+                item.title = MakeFont(22,FW_SEMIBOLD,dpi);
+                item.label = MakeFont(10,FW_SEMIBOLD,dpi);
+                item.caption = MakeFont(10,FW_NORMAL,dpi);
+                break;
+            }
+        }
+    }
+    if (!fonts) return original;
+    HFONT scaled = original == g_font_body ? fonts->body :
+        original == g_font_title ? fonts->title :
+        original == g_font_label ? fonts->label : fonts->caption;
+    return scaled ? scaled : original;
 }
+
+HFONT OriginalFont(HFONT current) noexcept {
+    if (current == g_font_body || current == g_font_title ||
+        current == g_font_label || current == g_font_caption) return current;
+    for (const auto& item : g_dpi_fonts) {
+        if (item.dpi == 0) continue;
+        if (current == item.body) return g_font_body;
+        if (current == item.title) return g_font_title;
+        if (current == item.label) return g_font_label;
+        if (current == item.caption) return g_font_caption;
+    }
+    return nullptr;
+}
+
+void ApplyFont(HWND hwnd, HFONT font) {
+    if (hwnd && font) {
+        const auto scaled = FontForDpi(font,static_cast<int>(GetDpiForWindow(hwnd)));
+        SendMessageW(hwnd,WM_SETFONT,reinterpret_cast<WPARAM>(scaled),TRUE);
+    }
+}
+
+void UpdateFontsForWindow(HWND window) {
+    for (HWND child = GetWindow(window,GW_CHILD); child;
+         child = GetWindow(child,GW_HWNDNEXT)) {
+        const auto current = reinterpret_cast<HFONT>(SendMessageW(child,WM_GETFONT,0,0));
+        const auto original = OriginalFont(current);
+        if (original) ApplyFont(child,original);
+    }
+}
+
 HWND MakeLabel(HWND parent, int id, const wchar_t* text, HFONT font) {
     HWND label = CreateWindowExW(0, L"STATIC", text, WS_CHILD | WS_VISIBLE | SS_LEFT,
                                 0, 0, 1, 1, parent,
@@ -272,7 +332,7 @@ void DrawNativeCheckBox(HWND window, HDC dc) noexcept {
     SetBkMode(dc,TRANSPARENT);
     SetTextColor(dc,enabled ? c.ink : c.muted);
     const HGDIOBJ oldFont = SelectObject(dc,
-        g_font_body ? g_font_body : GetStockObject(DEFAULT_GUI_FONT));
+        g_font_body ? FontForDpi(g_font_body,dpi) : GetStockObject(DEFAULT_GUI_FONT));
     RECT textBox{left+tick+Scale(8,dpi),0,box.right,box.bottom};
     DrawTextW(dc,label,-1,&textBox,DT_LEFT|DT_VCENTER|DT_SINGLELINE);
     SelectObject(dc,oldFont);
@@ -330,7 +390,9 @@ void DrawNativeCombo(const DRAWITEMSTRUCT* item) noexcept {
         SetBkMode(item->hDC,TRANSPARENT);
         SetTextColor(item->hDC,c.ink);
         const auto old = SelectObject(item->hDC,
-            g_font_body ? g_font_body : GetStockObject(DEFAULT_GUI_FONT));
+            g_font_body ? FontForDpi(g_font_body,
+                static_cast<int>(GetDpiForWindow(item->hwndItem)))
+                        : GetStockObject(DEFAULT_GUI_FONT));
         RECT text = item->rcItem;
         text.left += Scale(11,static_cast<int>(GetDpiForWindow(item->hwndItem)));
         DrawTextW(item->hDC,value,-1,&text,
@@ -363,7 +425,7 @@ void DrawActionButton(const DRAWITEMSTRUCT* item) {
     SetBkMode(item->hDC, TRANSPARENT);
     SetTextColor(item->hDC, (primary || selected) ? RGB(255,255,255) : c.ink);
     const auto old = SelectObject(item->hDC,
-        g_font_label ? g_font_label : GetStockObject(DEFAULT_GUI_FONT));
+        g_font_label ? FontForDpi(g_font_label,dpi) : GetStockObject(DEFAULT_GUI_FONT));
     RECT label = item->rcItem;
     DrawTextW(item->hDC, text, -1, &label, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
     SelectObject(item->hDC, old);
@@ -961,6 +1023,7 @@ LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
         SetWindowPos(window, nullptr, suggested->left, suggested->top,
                      suggested->right - suggested->left, suggested->bottom - suggested->top,
                      SWP_NOZORDER | SWP_NOACTIVATE);
+        UpdateFontsForWindow(window);
         return 0;
     }
     case WM_ERASEBKGND: return 1;
@@ -1282,6 +1345,7 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
                      proposed->right-proposed->left,proposed->bottom-proposed->top,
                      SWP_NOZORDER | SWP_NOACTIVATE);
         LayoutSettings(window);
+        UpdateFontsForWindow(window);
         return 0;
     }
     case WM_COMMAND:
@@ -1455,6 +1519,7 @@ LRESULT CALLBACK AboutProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam) 
                      rect->right-rect->left,rect->bottom-rect->top,
                      SWP_NOZORDER|SWP_NOACTIVATE);
         LayoutAbout(window);
+        UpdateFontsForWindow(window);
         return 0;
     }
     case WM_CLOSE: DestroyWindow(window); return 0;
@@ -1612,6 +1677,7 @@ int WINAPI wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE, _In_ PWSTR, _In
     g_canvas_brush = copyfix::ui::CanvasBrush();
     g_surface_brush = copyfix::ui::SurfaceBrush();
     const int dpi = static_cast<int>(GetDpiForSystem());
+    g_base_font_dpi = dpi;
     g_font_body = MakeFont(11, FW_NORMAL, dpi);
     g_font_title = MakeFont(22, FW_SEMIBOLD, dpi);
     g_font_label = MakeFont(10, FW_SEMIBOLD, dpi);
@@ -1643,6 +1709,12 @@ int WINAPI wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE, _In_ PWSTR, _In
         if (g_about_window && IsDialogMessageW(g_about_window, &message)) continue;
         TranslateMessage(&message);
         DispatchMessageW(&message);
+    }
+    for (const auto& fonts : g_dpi_fonts) {
+        if (fonts.body) DeleteObject(fonts.body);
+        if (fonts.title) DeleteObject(fonts.title);
+        if (fonts.label) DeleteObject(fonts.label);
+        if (fonts.caption) DeleteObject(fonts.caption);
     }
     if (g_font_body) DeleteObject(g_font_body);
     if (g_font_title) DeleteObject(g_font_title);
