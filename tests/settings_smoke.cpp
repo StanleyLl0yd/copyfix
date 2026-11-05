@@ -277,6 +277,14 @@ int main() {
         !named(26,L"0") || !named(35,L"9") ||
         !named(36,L"F1") || !named(f8Index,L"F8"))
         return fail(45);
+    // The closed control displays the selected F9, so opening the native
+    // dropdown scrolls to F9. Earlier function keys must still exist above it.
+    for (int row=36; row<59; ++row) {
+        const int fn=row<47 ? row-35 : row-34;
+        wchar_t expected[12]{};
+        swprintf_s(expected,L"F%d",fn);
+        if (!named(row,expected)) return fail(64);
+    }
     bool sawSpecial = false;
     for (int index=0; index<count; ++index) {
         wchar_t label[64]{};
@@ -299,7 +307,7 @@ int main() {
     RECT dropdown{};
     if (!SendMessageW(editor,CB_GETDROPPEDCONTROLRECT,0,
                       reinterpret_cast<LPARAM>(&dropdown)) ||
-        dropdown.bottom-dropdown.top > Scale(280,dpi))
+        dropdown.bottom-dropdown.top > Scale(225,dpi))
         return fail(50);
     // Layout contract: help fits within its profile card and the footer is
     // fully visible. This detects the clipped/overlapping Settings screenshot.
