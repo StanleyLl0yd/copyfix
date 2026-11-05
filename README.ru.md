@@ -8,6 +8,12 @@
   <strong>Чтобы текст после копирования оставался текстом, а не головоломкой.</strong>
 </p>
 
+<p align="center">
+  <a href="https://github.com/StanleyLl0yd/copyfix/actions/workflows/ci.yml"><img src="https://github.com/StanleyLl0yd/copyfix/actions/workflows/ci.yml/badge.svg?branch=main" alt="Сборка"></a>
+  <a href="https://github.com/StanleyLl0yd/copyfix/releases/latest"><img src="https://img.shields.io/badge/Windows-10%20%2F%2011%20x64-0078D4" alt="Windows 10/11 x64"></a>
+  <a href="https://github.com/StanleyLl0yd/copyfix/releases/latest"><img src="https://img.shields.io/github/v/release/StanleyLl0yd/copyfix?label=release" alt="Последняя версия"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/StanleyLl0yd/copyfix?label=license" alt="Лицензия MIT"></a>
+</p>
 <p align="center"><a href="README.md">English</a> · <strong>Русский</strong></p>
 
 Копируешь абзац из PDF, вставляешь в письмо, а там каждая строка обрывается посреди предложения. Слова внезапно разрезаны переносами, пробелы живут собственной жизнью. Исправить вручную несложно, но когда это повторяется в десятый раз, хочется поручить кому-нибудь эту скучную работу.
