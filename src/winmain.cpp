@@ -960,14 +960,15 @@ void DrawPreviewSurface(HWND window, HDC dc) noexcept {
     const int width = client.right;
     const int column = std::max(Scale(150,dpi), (width-2*margin-gap)/2);
     const auto& colors = copyfix::ui::colors;
-    copyfix::ui::Badge(dc, Scale(23,dpi), Scale(20,dpi), Scale(32,dpi));
+    copyfix::ui::Badge(dc, Scale(23,dpi), Scale(20,dpi), Scale(32,dpi),dpi);
     const int top = Scale(94,dpi);
     const int bottom = client.bottom-Scale(108,dpi);
     copyfix::ui::Rounded(dc,RECT{margin, top, margin+column, bottom},
-                          colors.surface, colors.border, Scale(12,dpi));
+                          colors.surface, colors.border,
+                          Scale(copyfix::ui::CardCorner,dpi));
     copyfix::ui::Rounded(dc,
         RECT{margin+column+gap, top, margin+column*2+gap, bottom},
-        colors.surface, colors.border, Scale(12,dpi));
+        colors.surface, colors.border, Scale(copyfix::ui::CardCorner,dpi));
     HBRUSH stroke = CreateSolidBrush(colors.border);
     if (stroke) {
         RECT line{margin,client.bottom-Scale(104,dpi),
@@ -1098,9 +1099,12 @@ LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
         if (!before || !after) return -1;
         ApplyFont(before, g_font_body);
         ApplyFont(after, g_font_body);
-        SendMessageW(before, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(12,12));
-        SendMessageW(after, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(12,12));
-        HWND toggle = CreateWindowExW(0, L"BUTTON", L"↵ Показать переносы строк",
+        const int inset=Scale(14,g_preview_dpi);
+        SendMessageW(before, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN,
+                     MAKELPARAM(inset,inset));
+        SendMessageW(after, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN,
+                     MAKELPARAM(inset,inset));
+        HWND toggle = CreateWindowExW(0, L"BUTTON", L"Показать переносы строк",
                                       WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
                                       0,0,1,1,window,
                                       reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kPreviewShowBreaks)),
@@ -1117,10 +1121,15 @@ LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
         g_show_breaks = false;
         g_show_spaces = false;
         if (!RenderPreviewText(window)) return -1;
-        CreateWindowW(L"BUTTON", L"Применить", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW,
-                      0,0,1,1,window,reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kPreviewAccept)),g_instance,nullptr);
-        CreateWindowW(L"BUTTON", L"Отмена", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW,
-                      0,0,1,1,window,reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kPreviewCancel)),g_instance,nullptr);
+        HWND accept=CreateWindowW(L"BUTTON",L"Применить",
+            WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_OWNERDRAW,0,0,1,1,window,
+            reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kPreviewAccept)),g_instance,nullptr);
+        HWND cancel=CreateWindowW(L"BUTTON",L"Отмена",
+            WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_OWNERDRAW,0,0,1,1,window,
+            reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kPreviewCancel)),g_instance,nullptr);
+        if (!accept || !cancel) return -1;
+        ApplyFont(accept,g_font_label); ApplyFont(cancel,g_font_label);
+        StyleActionButton(accept); StyleActionButton(cancel);
         LayoutPreview(window);
         return 0;
     }
@@ -1132,6 +1141,10 @@ LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
                      suggested->right - suggested->left, suggested->bottom - suggested->top,
                      SWP_NOZORDER | SWP_NOACTIVATE);
         UpdateFontsForWindow(window);
+        const int inset=Scale(14,g_preview_dpi);
+        for (UINT id : {kPreviewBeforeEdit,kPreviewAfterEdit})
+            SendDlgItemMessageW(window,id,EM_SETMARGINS,
+                EC_LEFTMARGIN|EC_RIGHTMARGIN,MAKELPARAM(inset,inset));
         return 0;
     }
     case WM_ERASEBKGND: return 1;
@@ -1311,13 +1324,19 @@ void DrawSettingsSurface(HWND window, HDC dc) noexcept {
     const int dpi = g_settings_dpi;
     const int w = client.right;
     const auto& c = copyfix::ui::colors;
-    copyfix::ui::Badge(dc, Scale(23,dpi), Scale(20,dpi), Scale(32,dpi));
+    copyfix::ui::Badge(dc, Scale(23,dpi), Scale(20,dpi), Scale(32,dpi),dpi);
     copyfix::ui::Rounded(dc,
         RECT{Scale(20,dpi), Scale(91,dpi), w-Scale(20,dpi), Scale(169,dpi)},
-        c.surface, c.border, Scale(12,dpi));
+        c.surface, c.border, Scale(copyfix::ui::CardCorner,dpi));
     copyfix::ui::Rounded(dc,
         RECT{Scale(20,dpi), Scale(181,dpi), w-Scale(20,dpi), Scale(285,dpi)},
-        c.surface, c.border, Scale(12,dpi));
+        c.surface, c.border, Scale(copyfix::ui::CardCorner,dpi));
+    const int widthDip=MulDiv(w,96,dpi);
+    const int segmentWidth=(widthDip-76)/3;
+    copyfix::ui::Rounded(dc,
+        RECT{Scale(34,dpi),Scale(214,dpi),
+             Scale(42+segmentWidth*3,dpi),Scale(250,dpi)},
+        c.raised,c.border,Scale(copyfix::ui::SegmentCorner,dpi));
     const RECT separator{Scale(20,dpi), client.bottom-Scale(61,dpi),
                          w-Scale(20,dpi), client.bottom-Scale(60,dpi)};
     HBRUSH stroke = CreateSolidBrush(c.border);
@@ -1346,10 +1365,10 @@ void LayoutSettings(HWND window) {
     if (HWND combo = GetDlgItem(window,kHotkeyInput))
         SendMessageW(combo,CB_SETMINVISIBLE,8,0);
     Position(window, 421, 36, 188, w-72, 19, dpi);
-    const int segmentWidth = (w-80)/3;
-    Position(window, kProfileGentle, 36, 216, segmentWidth, 33, dpi);
-    Position(window, kProfileSmart, 40+segmentWidth, 216, segmentWidth, 33, dpi);
-    Position(window, kProfileDeep, 44+2*segmentWidth, 216, segmentWidth, 33, dpi);
+    const int segmentWidth = (w-76)/3;
+    Position(window, kProfileGentle, 38, 216, segmentWidth, 33, dpi);
+    Position(window, kProfileSmart, 38+segmentWidth, 216, segmentWidth, 33, dpi);
+    Position(window, kProfileDeep, 38+2*segmentWidth, 216, segmentWidth, 33, dpi);
     Position(window, kSettingsExplanation, 36, 259, w-72, 21, dpi);
     Position(window, kSettingsFeedback, 26, 288, w-52, 35, dpi);
     Position(window, kSettingsCancel, w-250, h-48, 104, 34, dpi);
@@ -1402,13 +1421,19 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
                 g_instance,nullptr);
             if (!button) return -1;
             ApplyFont(button,g_font_body);
+            StyleActionButton(button);
         }
         MakeLabel(window,kSettingsExplanation,ProfileHelpText(g_draft_profile),g_font_caption);
         MakeLabel(window,kSettingsFeedback,L"",g_font_caption);
-        CreateWindowW(L"BUTTON",L"Сохранить",WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW,
-            0,0,1,1,window,reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kSettingsSave)),g_instance,nullptr);
-        CreateWindowW(L"BUTTON",L"Отмена",WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW,
-            0,0,1,1,window,reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kSettingsCancel)),g_instance,nullptr);
+        HWND save=CreateWindowW(L"BUTTON",L"Сохранить",
+            WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_OWNERDRAW,0,0,1,1,window,
+            reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kSettingsSave)),g_instance,nullptr);
+        HWND cancel=CreateWindowW(L"BUTTON",L"Отмена",
+            WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_OWNERDRAW,0,0,1,1,window,
+            reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kSettingsCancel)),g_instance,nullptr);
+        if (!save || !cancel) return -1;
+        ApplyFont(save,g_font_label); ApplyFont(cancel,g_font_label);
+        StyleActionButton(save); StyleActionButton(cancel);
         LayoutSettings(window);
         return 0;
     }
@@ -1531,7 +1556,7 @@ void LayoutAbout(HWND window) {
     RECT bounds{}; GetClientRect(window, &bounds);
     const int dpi = static_cast<int>(GetDpiForWindow(window));
     const int w = MulDiv(bounds.right,96,dpi);
-    Position(window,kAboutIcon,(w-56)/2,24,56,56,dpi);
+    Position(window,kAboutIcon,(w-48)/2,24,48,48,dpi);
     Position(window,kAboutTitle,28,84,w-56,31,dpi);
     Position(window,kAboutVersionLabel,28,114,w-56,21,dpi);
     Position(window,kAboutDescriptionLabel,28,144,w-56,31,dpi);
@@ -1549,7 +1574,7 @@ void DrawAboutSurface(HWND window, HDC dc) noexcept {
     copyfix::ui::Rounded(dc,
         RECT{Scale(16,dpi),Scale(14,dpi),
              client.right-Scale(16,dpi),client.bottom-Scale(14,dpi)},
-        p.surface,p.border,Scale(14,dpi));
+        p.surface,p.border,Scale(copyfix::ui::CardCorner,dpi));
 }
 
 LRESULT CALLBACK AboutProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam) {
@@ -1567,12 +1592,12 @@ LRESULT CALLBACK AboutProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam) 
         MakeCenteredLabel(window,kAboutVersionLabel,kAboutVersionString,g_font_label);
         MakeCenteredLabel(window,kAboutDescriptionLabel,
             L"Умная обработка скопированного текста",g_font_body);
-        HWND project = CreateWindowExW(0,L"BUTTON",L"ⓘ   О проекте",
+        HWND project = CreateWindowExW(0,L"BUTTON",L"О проекте",
             WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_OWNERDRAW,
             0,0,1,1,window,
             reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kAboutProject)),
             g_instance,nullptr);
-        HWND github = CreateWindowExW(0,L"BUTTON",L"GitHub   ↗",
+        HWND github = CreateWindowExW(0,L"BUTTON",L"GitHub",
             WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_OWNERDRAW,
             0,0,1,1,window,
             reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kAboutGitHub)),
@@ -1580,6 +1605,8 @@ LRESULT CALLBACK AboutProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam) 
         if (!project || !github) return -1;
         ApplyFont(project,g_font_body);
         ApplyFont(github,g_font_body);
+        StyleActionButton(project);
+        StyleActionButton(github);
         MakeCenteredLabel(window,kAboutLicense,
             L"© 2026 Stanley Lloyd   ·   Лицензия MIT",g_font_caption);
         LayoutAbout(window);
