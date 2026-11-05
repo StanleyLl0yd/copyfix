@@ -47,6 +47,25 @@ int main() {
         !GetDlgItem(window,kAboutGitHub) ||
         !GetDlgItem(window,kAboutLicense)) return fail(6);
 
+    // Compact About C must keep both links and copyright inside its card.
+    const auto relative = [&](UINT id) {
+        RECT r{};
+        if (HWND child = GetDlgItem(window,id); child && GetWindowRect(child,&r))
+            MapWindowPoints(nullptr,window,reinterpret_cast<POINT*>(&r),2);
+        return r;
+    };
+    RECT client{}; GetClientRect(window,&client);
+    const auto icon = relative(kAboutIcon);
+    const auto title = relative(kAboutTitle);
+    const auto project = relative(kAboutProject);
+    const auto github = relative(kAboutGitHub);
+    const auto license = relative(kAboutLicense);
+    if (icon.bottom >= title.top || title.bottom >= project.top ||
+        project.bottom >= github.top || github.bottom >= license.top ||
+        license.bottom > client.bottom-Scale(12,static_cast<int>(GetDpiForWindow(window))) ||
+        license.right > client.right)
+        return fail(8);
+
     SendMessageW(window,WM_CLOSE,0,0);
     if (g_about_window || IsWindow(window)) return fail(7);
     UnregisterClassW(L"CopyFixAbout",g_instance);
