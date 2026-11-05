@@ -209,7 +209,10 @@ void UpdateWindowTheme(HWND window) noexcept {
 
 void SynchronizeSystemTheme() noexcept {
     const bool shouldDark = copyfix::ui::ReadSystemDark();
-    if (shouldDark == copyfix::ui::dark) return;
+    const bool contrast = copyfix::ui::ReadHighContrast();
+    if (shouldDark == copyfix::ui::dark &&
+        contrast == copyfix::ui::highContrast && !contrast) return;
+    copyfix::ui::SetHighContrast(contrast);
     copyfix::ui::SetDark(shouldDark);
     g_canvas_brush = copyfix::ui::CanvasBrush();
     g_surface_brush = copyfix::ui::SurfaceBrush();
@@ -299,46 +302,90 @@ void Position(HWND parent, UINT id, int x, int y, int w, int h, int dpi) {
         MoveWindow(child, Scale(x,dpi), Scale(y,dpi),
                    std::max(1, Scale(w,dpi)), std::max(1, Scale(h,dpi)), TRUE);
 }
+constexpr wchar_t kHoverProperty[] = L"CopyFix.OwnerDraw.Hover";
+void SetHovered(HWND window,bool on) noexcept {
+    const bool old=GetPropW(window,kHoverProperty)!=nullptr;
+    if (old==on) return;
+    if (on) SetPropW(window,kHoverProperty,reinterpret_cast<HANDLE>(1));
+    else RemovePropW(window,kHoverProperty);
+    InvalidateRect(window,nullptr,FALSE);
+}
+void TrackControlHover(HWND window) noexcept {
+    if (GetPropW(window,kHoverProperty)) return;
+    TRACKMOUSEEVENT track{sizeof(track),TME_LEAVE,window,0};
+    if (TrackMouseEvent(&track)) SetHovered(window,true);
+}
+LRESULT CALLBACK ActionButtonSubclass(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp,
+                                      UINT_PTR id,DWORD_PTR) {
+    switch (msg) {
+    case WM_MOUSEMOVE: TrackControlHover(hwnd); break;
+    case WM_MOUSELEAVE: SetHovered(hwnd,false); break;
+    case WM_SETFOCUS:
+    case WM_KILLFOCUS:
+    case WM_ENABLE: InvalidateRect(hwnd,nullptr,FALSE); break;
+    case WM_NCDESTROY:
+        RemovePropW(hwnd,kHoverProperty);
+        RemoveWindowSubclass(hwnd,ActionButtonSubclass,id);
+        break;
+    }
+    return DefSubclassProc(hwnd,msg,wp,lp);
+}
+void StyleActionButton(HWND hwnd) noexcept {
+    if (hwnd) SetWindowSubclass(hwnd,ActionButtonSubclass,2,0);
+}
+
 void DrawNativeCheckBox(HWND window, HDC dc) noexcept {
     RECT box{}; GetClientRect(window,&box);
-    const UINT id = static_cast<UINT>(GetDlgCtrlID(window));
-    const bool onCanvas = id == kPreviewShowBreaks || id == kPreviewShowSpaces;
-    const HBRUSH background = onCanvas ? g_canvas_brush : g_surface_brush;
-    FillRect(dc,&box,background ? background
-                                : static_cast<HBRUSH>(GetStockObject(WHITE_BRUSH)));
-    const auto& c = copyfix::ui::colors;
-    const int dpi = static_cast<int>(GetDpiForWindow(window));
-    const int tick = Scale(17,dpi);
-    const int left = Scale(3,dpi);
-    const int y = (box.bottom-tick)/2;
-    const bool checked = SendMessageW(window,BM_GETCHECK,0,0) == BST_CHECKED;
-    const bool enabled = IsWindowEnabled(window) != FALSE;
+    const UINT id=static_cast<UINT>(GetDlgCtrlID(window));
+    const bool onCanvas=id==kPreviewShowBreaks || id==kPreviewShowSpaces;
+    const HBRUSH background=onCanvas ? g_canvas_brush : g_surface_brush;
+    FillRect(dc,&box,background ? background :
+             static_cast<HBRUSH>(GetStockObject(WHITE_BRUSH)));
+    const auto& c=copyfix::ui::colors;
+    const int dpi=static_cast<int>(GetDpiForWindow(window));
+    const int tick=Scale(16,dpi),left=Scale(3,dpi);
+    const int y=(box.bottom-tick)/2;
+    const bool checked=SendMessageW(window,BM_GETCHECK,0,0)==BST_CHECKED;
+    const bool enabled=IsWindowEnabled(window)!=FALSE;
+    const bool hovered=GetPropW(window,kHoverProperty)!=nullptr;
     copyfix::ui::Rounded(dc,RECT{left,y,left+tick,y+tick},
         checked ? c.blue : c.surface,
-        checked ? c.blue : c.border,Scale(5,dpi));
+        checked ? c.blue : hovered ? copyfix::ui::Mix(c.border,c.blue,35) : c.border,
+        Scale(6,dpi));
     if (checked) {
-        HPEN mark = CreatePen(PS_SOLID,std::max(1,Scale(2,dpi)),RGB(255,255,255));
-        if (mark) {
-            const auto old = SelectObject(dc,mark);
-            MoveToEx(dc,left+tick/5,y+tick/2,nullptr);
-            LineTo(dc,left+tick*2/5,y+tick*3/4);
-            LineTo(dc,left+tick*4/5,y+tick/4);
-            SelectObject(dc,old);
-            DeleteObject(mark);
+        HFONT symbol=CreateFontW(-MulDiv(10,dpi,72),0,0,0,FW_BOLD,
+            FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,
+            CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH|FF_SWISS,
+            L"Segoe UI Symbol");
+        if (symbol) {
+            const HGDIOBJ old=SelectObject(dc,symbol);
+            const int mode=SetBkMode(dc,TRANSPARENT);
+            const COLORREF color=SetTextColor(dc,copyfix::ui::highContrast
+                ? GetSysColor(COLOR_HIGHLIGHTTEXT) : RGB(255,255,255));
+            RECT glyph{left,y-Scale(1,dpi),left+tick,y+tick};
+            DrawTextW(dc,L"✓",1,&glyph,DT_CENTER|DT_VCENTER|DT_SINGLELINE|DT_NOPREFIX);
+            SetTextColor(dc,color); SetBkMode(dc,mode);
+            SelectObject(dc,old); DeleteObject(symbol);
         }
     }
-    wchar_t label[100]{};
-    GetWindowTextW(window,label,static_cast<int>(std::size(label)));
+    wchar_t caption[100]{};
+    GetWindowTextW(window,caption,static_cast<int>(std::size(caption)));
     SetBkMode(dc,TRANSPARENT);
     SetTextColor(dc,enabled ? c.ink : c.muted);
-    const HGDIOBJ oldFont = SelectObject(dc,
-        g_font_body ? FontForDpi(g_font_body,dpi) : GetStockObject(DEFAULT_GUI_FONT));
-    RECT textBox{left+tick+Scale(8,dpi),0,box.right,box.bottom};
-    DrawTextW(dc,label,-1,&textBox,DT_LEFT|DT_VCENTER|DT_SINGLELINE);
+    const HGDIOBJ oldFont=SelectObject(dc,g_font_body
+        ? FontForDpi(g_font_body,dpi) : GetStockObject(DEFAULT_GUI_FONT));
+    RECT label{left+tick+Scale(8,dpi),0,box.right,box.bottom};
+    DrawTextW(dc,caption,-1,&label,DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS);
     SelectObject(dc,oldFont);
-    if (GetFocus() == window) {
-        InflateRect(&textBox,-1,-Scale(4,dpi));
-        DrawFocusRect(dc,&textBox);
+    if (GetFocus()==window) {
+        RECT ring=label; InflateRect(&ring,-Scale(2,dpi),-Scale(4,dpi));
+        HPEN pen=CreatePen(PS_SOLID,1,c.blue);
+        if (pen) {
+            const HGDIOBJ oldPen=SelectObject(dc,pen);
+            const HGDIOBJ oldBrush=SelectObject(dc,GetStockObject(HOLLOW_BRUSH));
+            RoundRect(dc,ring.left,ring.top,ring.right,ring.bottom,Scale(5,dpi),Scale(5,dpi));
+            SelectObject(dc,oldBrush); SelectObject(dc,oldPen); DeleteObject(pen);
+        }
     }
 }
 
@@ -356,6 +403,8 @@ LRESULT CALLBACK CheckBoxSubclass(HWND window,UINT msg,WPARAM wparam,
     case WM_PRINTCLIENT:
         DrawNativeCheckBox(window,reinterpret_cast<HDC>(wparam));
         return 0;
+    case WM_MOUSEMOVE: TrackControlHover(window); break;
+    case WM_MOUSELEAVE: SetHovered(window,false); break;
     case WM_SETFOCUS:
     case WM_KILLFOCUS:
     case WM_ENABLE: {
@@ -364,6 +413,7 @@ LRESULT CALLBACK CheckBoxSubclass(HWND window,UINT msg,WPARAM wparam,
         return result;
     }
     case WM_NCDESTROY:
+        RemovePropW(window,kHoverProperty);
         RemoveWindowSubclass(window,CheckBoxSubclass,id);
         break;
     }
