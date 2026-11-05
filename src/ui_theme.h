@@ -98,15 +98,26 @@ inline void Rounded(HDC dc, RECT r, COLORREF fill, COLORREF outline,
 }
 
 inline void Badge(HDC dc, int x, int y, int diameter) noexcept {
+    // Use the Windows font rasterizer rather than two aliased GDI line
+    // segments. The checkmark stays crisp at 100%, 150% and 200% DPI.
     Rounded(dc, RECT{x,y,x+diameter,y+diameter},
             colors.raised, colors.raised, diameter);
-    HPEN pen = CreatePen(PS_SOLID, 2, colors.blue);
-    if (!pen) return;
-    auto previous = SelectObject(dc, pen);
-    MoveToEx(dc, x+diameter/4, y+diameter/2, nullptr);
-    LineTo(dc, x+diameter*11/25, y+diameter*17/25);
-    LineTo(dc, x+diameter*20/25, y+diameter*7/25);
-    SelectObject(dc, previous);
-    DeleteObject(pen);
+    const int dpi = GetDeviceCaps(dc, LOGPIXELSY);
+    HFONT font = CreateFontW(-MulDiv(13, dpi, 72), 0, 0, 0, FW_NORMAL,
+                             FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+                             OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                             CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS,
+                             L"Segoe UI Symbol");
+    if (!font) return;
+    const HGDIOBJ previous = SelectObject(dc,font);
+    const int previousMode = SetBkMode(dc,TRANSPARENT);
+    const COLORREF previousColor = SetTextColor(dc,colors.blue);
+    RECT bounds{x,y,x+diameter,y+diameter};
+    DrawTextW(dc,L"✓",1,&bounds,DT_CENTER|DT_VCENTER|DT_SINGLELINE|DT_NOPREFIX);
+    SetTextColor(dc,previousColor);
+    SetBkMode(dc,previousMode);
+    SelectObject(dc,previous);
+    DeleteObject(font);
 }
+
 } // namespace copyfix::ui
