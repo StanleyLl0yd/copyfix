@@ -63,7 +63,8 @@ inline HBRUSH SurfaceBrush() noexcept {
     return dark ? darkSurface : lightSurface;
 }
 inline void FreeBrushes() noexcept {
-    for (HBRUSH brush : {lightCanvas, darkCanvas, lightSurface, darkSurface})
+    HBRUSH brushes[]{lightCanvas, darkCanvas, lightSurface, darkSurface};
+    for (HBRUSH brush : brushes)
         if (brush) DeleteObject(brush);
     lightCanvas = darkCanvas = lightSurface = darkSurface = nullptr;
 }
