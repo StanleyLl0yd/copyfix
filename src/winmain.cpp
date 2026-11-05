@@ -56,6 +56,9 @@ constexpr UINT kSettingsExplanation = 422;
 constexpr UINT kSettingsLanguageInput = 423;
 constexpr UINT kSettingsLanguageSection = 424;
 constexpr UINT kSettingsLanguageHint = 425;
+constexpr UINT kSettingsThemeInput = 426;
+constexpr UINT kSettingsThemeSection = 427;
+constexpr UINT kSettingsThemeHint = 428;
 constexpr UINT kPreviewTitle = 410;
 constexpr UINT kPreviewSubtitle = 411;
 constexpr UINT kPreviewBeforeLabel = 412;
@@ -130,6 +133,7 @@ struct Settings {
     copyfix::Profile profile = copyfix::Profile::Deep;
     HotkeyChord hotkey;
     copyfix::i18n::Language language = copyfix::i18n::Language::System;
+    copyfix::ui::Preference theme = copyfix::ui::Preference::System;
 };
 struct ClipSnapshot {
     std::wstring text;
@@ -159,6 +163,8 @@ HWND g_settings_window = nullptr;
 HWND g_about_window = nullptr;
 copyfix::Profile g_draft_profile = copyfix::Profile::Deep;
 copyfix::i18n::Language g_draft_language = copyfix::i18n::Language::System;
+copyfix::ui::Preference g_draft_theme = copyfix::ui::Preference::System;
+bool g_theme_preview_active = false;
 NOTIFYICONDATAW g_tray{};
 Settings g_settings;
 using UiText = copyfix::i18n::Text;
@@ -218,7 +224,8 @@ void UpdateWindowTheme(HWND window) noexcept {
 }
 
 void SynchronizeSystemTheme() noexcept {
-    const bool shouldDark = copyfix::ui::ReadSystemDark();
+    const auto choice = g_theme_preview_active ? g_draft_theme : g_settings.theme;
+    const bool shouldDark = copyfix::ui::ResolveDark(choice,copyfix::ui::ReadSystemDark());
     const bool contrast = copyfix::ui::ReadHighContrast();
     if (shouldDark == copyfix::ui::dark &&
         contrast == copyfix::ui::highContrast && !contrast) return;
@@ -731,11 +738,15 @@ void LoadSettings() noexcept {
     const DWORD profile = read(L"Profile", static_cast<DWORD>(copyfix::Profile::Deep));
     const DWORD hotkey = read(L"Hotkey", 0);
     const DWORD language = read(L"Language", 0);
+    const DWORD theme = read(L"Theme", 0);
     if (profile <= 2) g_settings.profile = static_cast<copyfix::Profile>(profile);
     g_settings.hotkey = DecodeHotkey(hotkey);
     g_settings.language=copyfix::i18n::IsValid(language)
         ? static_cast<copyfix::i18n::Language>(language)
         : copyfix::i18n::Language::System;
+    g_settings.theme=copyfix::ui::ValidPreference(theme)
+        ? static_cast<copyfix::ui::Preference>(theme)
+        : copyfix::ui::Preference::System;
     RegCloseKey(key);
 }
 
@@ -747,13 +758,16 @@ bool SaveSettings() noexcept {
     const DWORD profile = static_cast<DWORD>(g_settings.profile);
     const DWORD hotkey = EncodeHotkey(g_settings.hotkey);
     const DWORD language = static_cast<DWORD>(g_settings.language);
+    const DWORD theme = static_cast<DWORD>(g_settings.theme);
     const bool ok =
         RegSetValueExW(key, L"Profile", 0, REG_DWORD,
                        reinterpret_cast<const BYTE*>(&profile), sizeof(profile)) == ERROR_SUCCESS &&
         RegSetValueExW(key, L"Hotkey", 0, REG_DWORD,
                        reinterpret_cast<const BYTE*>(&hotkey), sizeof(hotkey)) == ERROR_SUCCESS &&
         RegSetValueExW(key, L"Language", 0, REG_DWORD,
-                       reinterpret_cast<const BYTE*>(&language), sizeof(language)) == ERROR_SUCCESS;
+                       reinterpret_cast<const BYTE*>(&language), sizeof(language)) == ERROR_SUCCESS &&
+        RegSetValueExW(key, L"Theme", 0, REG_DWORD,
+                       reinterpret_cast<const BYTE*>(&theme), sizeof(theme)) == ERROR_SUCCESS;
     RegCloseKey(key);
     return ok;
 }
@@ -1946,7 +1960,9 @@ int WINAPI wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE, _In_ PWSTR, _In
         CloseHandle(g_instance_mutex);
         return 1;
     }
-    copyfix::ui::SetDark(copyfix::ui::ReadSystemDark());
+    copyfix::ui::SetHighContrast(copyfix::ui::ReadHighContrast());
+    copyfix::ui::SetDark(copyfix::ui::ResolveDark(
+        g_settings.theme,copyfix::ui::ReadSystemDark()));
     g_canvas_brush = copyfix::ui::CanvasBrush();
     g_surface_brush = copyfix::ui::SurfaceBrush();
     const int dpi = static_cast<int>(GetDpiForSystem());
