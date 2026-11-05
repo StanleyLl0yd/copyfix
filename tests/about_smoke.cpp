@@ -64,8 +64,53 @@ int main() {
     const int dpi=static_cast<int>(GetDpiForWindow(window));
     if (icon.right-icon.left != Scale(54,dpi) ||
         icon.bottom-icon.top != Scale(54,dpi) ||
-        !SendDlgItemMessageW(window,kAboutIcon,STM_GETICON,0,0))
+        (GetWindowLongPtrW(GetDlgItem(window,kAboutIcon),GWL_STYLE)&SS_TYPEMASK)!=SS_OWNERDRAW)
         return fail(14);
+    // Ensure dark/light rendering never exposes the default white STATIC
+    // background or unpainted rectangular corners on rounded buttons.
+    HDC screen=GetDC(window);
+    if (!screen) return fail(15);
+    HDC dc=CreateCompatibleDC(screen);
+    HBITMAP bitmap=CreateCompatibleBitmap(screen,128,128);
+    ReleaseDC(window,screen);
+    if (!dc || !bitmap) return fail(15);
+    const HGDIOBJ oldBitmap=SelectObject(dc,bitmap);
+    const auto inspectTheme=[&](bool dark) {
+        copyfix::ui::SetDark(dark);
+        const auto expected=copyfix::ui::colors.surface;
+        RECT box{0,0,54,54};
+        FillRect(dc,&box,static_cast<HBRUSH>(GetStockObject(WHITE_BRUSH)));
+        DRAWITEMSTRUCT iconDraw{};
+        iconDraw.CtlType=ODT_STATIC;
+        iconDraw.CtlID=kAboutIcon;
+        iconDraw.hwndItem=GetDlgItem(window,kAboutIcon);
+        iconDraw.hDC=dc;
+        iconDraw.rcItem=box;
+        if (!DrawAboutIcon(&iconDraw) ||
+            GetPixel(dc,0,0)!=expected ||
+            GetPixel(dc,53,0)!=expected)
+            return false;
+        box=RECT{0,0,100,34};
+        FillRect(dc,&box,static_cast<HBRUSH>(GetStockObject(WHITE_BRUSH)));
+        DRAWITEMSTRUCT buttonDraw{};
+        buttonDraw.CtlType=ODT_BUTTON;
+        buttonDraw.CtlID=kAboutProject;
+        buttonDraw.hwndItem=GetDlgItem(window,kAboutProject);
+        buttonDraw.hDC=dc;
+        buttonDraw.rcItem=box;
+        DrawActionButton(&buttonDraw);
+        return GetPixel(dc,0,0)==expected &&
+               GetPixel(dc,99,0)==expected &&
+               GetPixel(dc,0,33)==expected &&
+               GetPixel(dc,99,33)==expected;
+    };
+    const bool lightOK=inspectTheme(false);
+    const bool darkOK=inspectTheme(true);
+    SelectObject(dc,oldBitmap);
+    DeleteObject(bitmap);
+    DeleteDC(dc);
+    copyfix::ui::SetDark(false);
+    if (!lightOK || !darkOK) return fail(16);
     if (icon.bottom >= title.top || title.bottom >= project.top ||
         project.bottom >= github.top || github.bottom >= license.top ||
         license.bottom > client.bottom-Scale(12,static_cast<int>(GetDpiForWindow(window))) ||
