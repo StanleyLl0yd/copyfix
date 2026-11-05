@@ -241,8 +241,11 @@ void Position(HWND parent, UINT id, int x, int y, int w, int h, int dpi) {
 }
 void DrawNativeCheckBox(HWND window, HDC dc) noexcept {
     RECT box{}; GetClientRect(window,&box);
-    FillRect(dc,&box,g_surface_brush ? g_surface_brush
-                                    : static_cast<HBRUSH>(GetStockObject(WHITE_BRUSH)));
+    const UINT id = static_cast<UINT>(GetDlgCtrlID(window));
+    const bool onCanvas = id == kPreviewShowBreaks || id == kPreviewShowSpaces;
+    const HBRUSH background = onCanvas ? g_canvas_brush : g_surface_brush;
+    FillRect(dc,&box,background ? background
+                                : static_cast<HBRUSH>(GetStockObject(WHITE_BRUSH)));
     const auto& c = copyfix::ui::colors;
     const int dpi = static_cast<int>(GetDpiForWindow(window));
     const int tick = Scale(17,dpi);
