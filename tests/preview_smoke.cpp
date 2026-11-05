@@ -92,7 +92,8 @@ int main() {
                toggles.top > note.bottom &&
                toggles.top-note.bottom <= Scale(12,dpi) &&
                spaces.top == toggles.top && spaces.bottom == toggles.bottom &&
-               abs(toggles.top-apply.top) <= Scale(5,dpi) &&
+               (toggles.top > apply.top ? toggles.top-apply.top :
+                    apply.top-toggles.top) <= Scale(5,dpi) &&
                apply.top > note.bottom && apply.bottom <= client.bottom;
     };
     for (UINT id : {kPreviewAccept,kPreviewCancel}) {
