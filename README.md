@@ -27,7 +27,7 @@ It isn't a spellchecker or an AI writer. It doesn't try to improve your prose or
 
 ## How to use it
 
-1. Download \`CopyFix.exe\` from the latest release and run it. No installer or administrator rights are needed.
+1. Download `CopyFix.exe` from the latest release and run it. No installer or administrator rights are needed.
 2. Copy some text as usual.
 3. Press **Ctrl+Alt+F9** (you can change the shortcut), or choose **Fix text** from the tray menu.
 4. If a preview appears, check the highlighted changes and apply or cancel them. Then paste with **Ctrl+V**.
@@ -56,13 +56,13 @@ Under the hood it's **C++20 with native Win32**, using Windows GDI/DWM for the i
 
 You'll need Visual Studio 2022 Build Tools (MSVC and Windows SDK) and CMake 3.21+ on Windows.
 
-\`\`\`powershell
+```powershell
 cmake -S . -B build -G "Visual Studio 17 2022" -A x64
 cmake --build build --config Release --parallel
 ctest --test-dir build -C Release --output-on-failure
-\`\`\`
+```
 
-The resulting app is \`build/Release/CopyFix.exe\`. The release uses the static MSVC runtime, so users don't need to install it separately. For deeper implementation notes, test coverage and known constraints, see [project status](docs/STATUS.md), [Windows QA](docs/QA-WINDOWS.md) and the [audit record](docs/REPOSITORY-AUDIT-2026-11-03.md).
+The resulting app is `build/Release/CopyFix.exe`. The release uses the static MSVC runtime, so users don't need to install it separately. For deeper implementation notes, test coverage and known constraints, see [project status](docs/STATUS.md), [Windows QA](docs/QA-WINDOWS.md) and the [audit record](docs/REPOSITORY-AUDIT-2026-11-03.md).
 
 ## Want to help?
 
