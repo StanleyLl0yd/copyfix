@@ -13,7 +13,7 @@ struct Palette {
 inline constexpr Palette Light {
     RGB(244,248,253), RGB(255,255,255), RGB(233,242,255),
     RGB(255,255,255), RGB(28,42,64), RGB(95,111,136),
-    RGB(24,104,239), RGB(216,228,243), RGB(255,220,225),
+    RGB(24,104,239), RGB(227,234,242), RGB(255,220,225),
     RGB(216,245,228), RGB(255,246,243), RGB(242,250,246),
     RGB(222,237,255), RGB(166,40,49)
 };
@@ -21,13 +21,43 @@ inline constexpr Palette Light {
 inline constexpr Palette Dark {
     RGB(23,33,49), RGB(33,46,65), RGB(44,62,85),
     RGB(27,37,53), RGB(240,247,255), RGB(175,193,217),
-    RGB(35,138,251), RGB(65,83,109), RGB(98,53,69),
+    RGB(35,138,251), RGB(69,85,105), RGB(98,53,69),
     RGB(39,91,74), RGB(60,44,56), RGB(34,66,58),
     RGB(34,81,139), RGB(255,156,156)
 };
 
+// Shared DIP metrics. Win32 RoundRect expects the corner ellipse diameter.
+inline constexpr int CardCorner = 14;
+inline constexpr int ControlCorner = 12;
+inline constexpr int SegmentCorner = 12;
+inline constexpr int ControlHeight = 34;
+
+inline COLORREF Mix(COLORREF from, COLORREF to, int percent) noexcept {
+    const int a = std::max(0, std::min(100, percent));
+    return RGB((GetRValue(from)*(100-a)+GetRValue(to)*a)/100,
+               (GetGValue(from)*(100-a)+GetGValue(to)*a)/100,
+               (GetBValue(from)*(100-a)+GetBValue(to)*a)/100);
+}
+
+inline bool ReadHighContrast() noexcept {
+    HIGHCONTRASTW info{sizeof(info)};
+    return SystemParametersInfoW(SPI_GETHIGHCONTRAST,sizeof(info),&info,0) &&
+           (info.dwFlags&HCF_HIGHCONTRASTON)!=0;
+}
+
+inline Palette ContrastPalette() noexcept {
+    const COLORREF bg=GetSysColor(COLOR_WINDOW);
+    const COLORREF ink=GetSysColor(COLOR_WINDOWTEXT);
+    const COLORREF face=GetSysColor(COLOR_BTNFACE);
+    const COLORREF accent=GetSysColor(COLOR_HIGHLIGHT);
+    const COLORREF frame=GetSysColor(COLOR_WINDOWFRAME);
+    return {face,bg,face,bg,ink,ink,accent,frame,
+            accent,face,accent,face,accent,ink};
+}
+
 inline Palette colors = Light;
 inline bool dark = false;
+inline bool highContrast = false;
 inline HBRUSH lightCanvas = nullptr;
 inline HBRUSH darkCanvas = nullptr;
 inline HBRUSH lightSurface = nullptr;
@@ -44,7 +74,11 @@ inline bool ReadSystemDark() noexcept {
 
 inline void SetDark(bool value) noexcept {
     dark = value;
-    colors = value ? Dark : Light;
+    colors = highContrast ? ContrastPalette() : (value ? Dark : Light);
+}
+inline void SetHighContrast(bool value) noexcept {
+    highContrast = value;
+    SetDark(dark);
 }
 
 inline void EnsureBrushes() noexcept {
@@ -55,10 +89,12 @@ inline void EnsureBrushes() noexcept {
 }
 
 inline HBRUSH CanvasBrush() noexcept {
+    if (highContrast) return GetSysColorBrush(COLOR_BTNFACE);
     EnsureBrushes();
     return dark ? darkCanvas : lightCanvas;
 }
 inline HBRUSH SurfaceBrush() noexcept {
+    if (highContrast) return GetSysColorBrush(COLOR_WINDOW);
     EnsureBrushes();
     return dark ? darkSurface : lightSurface;
 }
@@ -71,7 +107,7 @@ inline void FreeBrushes() noexcept {
 
 inline void ThemeWindow(HWND window) noexcept {
     if (!window) return;
-    const BOOL enable = dark ? TRUE : FALSE;
+    const BOOL enable = (dark && !highContrast) ? TRUE : FALSE;
     DwmSetWindowAttribute(window, DWMWA_USE_IMMERSIVE_DARK_MODE,
                           &enable, sizeof(enable));
     const DWM_WINDOW_CORNER_PREFERENCE corners = DWMWCP_ROUND;
@@ -97,12 +133,11 @@ inline void Rounded(HDC dc, RECT r, COLORREF fill, COLORREF outline,
     DeleteObject(brush);
 }
 
-inline void Badge(HDC dc, int x, int y, int diameter) noexcept {
+inline void Badge(HDC dc, int x, int y, int diameter, int dpi) noexcept {
     // Use the Windows font rasterizer rather than two aliased GDI line
     // segments. The checkmark stays crisp at 100%, 150% and 200% DPI.
     Rounded(dc, RECT{x,y,x+diameter,y+diameter},
             colors.raised, colors.raised, diameter);
-    const int dpi = GetDeviceCaps(dc, LOGPIXELSY);
     HFONT font = CreateFontW(-MulDiv(13, dpi, 72), 0, 0, 0, FW_NORMAL,
                              FALSE, FALSE, FALSE, DEFAULT_CHARSET,
                              OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
