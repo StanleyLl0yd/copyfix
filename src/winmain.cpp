@@ -8,6 +8,7 @@
 #include "diff_spans.h"
 #include "resource_ids.h"
 #include "ui_theme.h"
+#include <shellscalingapi.h>
 
 #include "text_engine.h"
 
@@ -160,6 +161,34 @@ HotkeyChord g_registered_hotkey;
 // Injectable only for deterministic window tests; production uses MessageBoxW.
 auto g_hotkey_warning_dialog = &MessageBoxW;
 int Scale(int px, int dpi) noexcept { return MulDiv(px, dpi, 96); }
+
+struct SpawnRect {
+    HMONITOR monitor = nullptr;
+    int x = CW_USEDEFAULT;
+    int y = CW_USEDEFAULT;
+    int width = 0;
+    int height = 0;
+};
+
+SpawnRect PositionedOnCursorMonitor(int widthDip, int heightDip, HWND fallback) noexcept {
+    POINT cursor{};
+    const HMONITOR monitor = GetCursorPos(&cursor)
+        ? MonitorFromPoint(cursor,MONITOR_DEFAULTTONEAREST)
+        : MonitorFromWindow(fallback,MONITOR_DEFAULTTONEAREST);
+    UINT dpiX = 96, dpiY = 96;
+    if (!monitor || FAILED(GetDpiForMonitor(monitor,MDT_EFFECTIVE_DPI,&dpiX,&dpiY)))
+        dpiX = GetDpiForSystem();
+    const int width = Scale(widthDip,static_cast<int>(dpiX));
+    const int height = Scale(heightDip,static_cast<int>(dpiX));
+    MONITORINFO info{sizeof(info)};
+    if (!monitor || !GetMonitorInfoW(monitor,&info))
+        return {monitor,CW_USEDEFAULT,CW_USEDEFAULT,width,height};
+    const int spaceX = info.rcWork.right-info.rcWork.left-width;
+    const int spaceY = info.rcWork.bottom-info.rcWork.top-height;
+    return {monitor,info.rcWork.left+std::max(0,spaceX/2),
+            info.rcWork.top+std::max(0,spaceY/2),width,height};
+}
+
 
 bool RenderPreviewText(HWND window);
 
@@ -734,7 +763,7 @@ void LayoutPreview(HWND window) {
     const int margin = 25, gap = 18;
     const int column = std::max(150, (w - 2 * margin - gap) / 2);
     const int edit_y = 149;
-    const int edit_height = std::max(100, h - edit_y - 124);
+    const int edit_height = std::max(100, h - edit_y - 140);
     Position(window, kPreviewTitle, 86, 22, w-112, 39, dpi);
     Position(window, kPreviewSubtitle, 86, 63, w-112, 25, dpi);
     Position(window, kPreviewBeforeLabel, margin + 14, 113, column-28, 27, dpi);
@@ -1011,19 +1040,16 @@ LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
 void OpenPreview() {
     SynchronizeSystemTheme();
     if (g_preview) { SetForegroundWindow(g_preview); return; }
+    const auto spawn = PositionedOnCursorMonitor(1040,690,g_message);
     g_preview = CreateWindowExW(WS_EX_APPWINDOW, L"CopyFixPreview", L"CopyFix - проверка текста",
-        WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, CW_USEDEFAULT, CW_USEDEFAULT,
-        Scale(1040,96), Scale(690,96), nullptr, nullptr, g_instance, nullptr);
+        WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, spawn.x, spawn.y,
+        spawn.width, spawn.height, nullptr, nullptr, g_instance, nullptr);
     if (!g_preview) {
         ClearPending();
         Notify(L"Не удалось открыть предпросмотр.");
         return;
     }
-    POINT cursor{};
-    const HMONITOR monitor = GetCursorPos(&cursor)
-        ? MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST)
-        : MonitorFromWindow(g_message, MONITOR_DEFAULTTONEAREST);
-    CenterWindowOnMonitor(g_preview, monitor);
+    CenterWindowOnMonitor(g_preview, spawn.monitor);
     InitWindowTheme(g_preview);
     ShowWindow(g_preview, SW_SHOWNORMAL);
 }
@@ -1247,7 +1273,7 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
         UpdateWindowTheme(window);
         return 0;
     case WM_DPICHANGED: {
-        g_settings_dpi = static_cast<int>(GetDpiForWindow(window));
+        g_settings_dpi = HIWORD(wparam);
         const auto* proposed = reinterpret_cast<const RECT*>(lparam);
         SetWindowPos(window,nullptr,proposed->left,proposed->top,
                      proposed->right-proposed->left,proposed->bottom-proposed->top,
@@ -1298,16 +1324,13 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
 void OpenSettings() {
     SynchronizeSystemTheme();
     if (g_settings_window) { SetForegroundWindow(g_settings_window); return; }
+    const auto spawn = PositionedOnCursorMonitor(510,475,g_message);
     g_settings_window = CreateWindowExW(WS_EX_APPWINDOW,L"CopyFixSettings",L"CopyFix - настройки",
-        WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
-        CW_USEDEFAULT,CW_USEDEFAULT,Scale(510,96),Scale(475,96),
+        WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_CLIPCHILDREN,
+        spawn.x,spawn.y,spawn.width,spawn.height,
         nullptr,nullptr,g_instance,nullptr);
     if (!g_settings_window) return;
-    POINT cursor{};
-    const HMONITOR monitor = GetCursorPos(&cursor)
-        ? MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST)
-        : MonitorFromWindow(g_message, MONITOR_DEFAULTTONEAREST);
-    CenterWindowOnMonitor(g_settings_window, monitor);
+    CenterWindowOnMonitor(g_settings_window, spawn.monitor);
     ShowWindow(g_settings_window, SW_SHOWNORMAL);
 }
 
@@ -1423,6 +1446,14 @@ LRESULT CALLBACK AboutProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam) 
         SynchronizeSystemTheme();
         UpdateWindowTheme(window);
         return 0;
+    case WM_DPICHANGED: {
+        const auto* rect = reinterpret_cast<const RECT*>(lparam);
+        SetWindowPos(window,nullptr,rect->left,rect->top,
+                     rect->right-rect->left,rect->bottom-rect->top,
+                     SWP_NOZORDER|SWP_NOACTIVATE);
+        LayoutAbout(window);
+        return 0;
+    }
     case WM_CLOSE: DestroyWindow(window); return 0;
     case WM_DESTROY: g_about_window = nullptr; return 0;
     }
@@ -1435,16 +1466,13 @@ void ShowAbout(HWND parent) noexcept {
         SetForegroundWindow(g_about_window);
         return;
     }
+    const auto spawn = PositionedOnCursorMonitor(420,460,parent);
     g_about_window = CreateWindowExW(WS_EX_APPWINDOW,L"CopyFixAbout",
-        L"CopyFix — о программе",WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
-        CW_USEDEFAULT,CW_USEDEFAULT,Scale(420,96),Scale(460,96),
+        L"CopyFix — о программе",WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_CLIPCHILDREN,
+        spawn.x,spawn.y,spawn.width,spawn.height,
         nullptr,nullptr,g_instance,nullptr);
     if (!g_about_window) return;
-    POINT cursor{};
-    const HMONITOR monitor = GetCursorPos(&cursor)
-        ? MonitorFromPoint(cursor,MONITOR_DEFAULTTONEAREST)
-        : MonitorFromWindow(parent,MONITOR_DEFAULTTONEAREST);
-    CenterWindowOnMonitor(g_about_window,monitor);
+    CenterWindowOnMonitor(g_about_window,spawn.monitor);
     InitWindowTheme(g_about_window);
     ShowWindow(g_about_window,SW_SHOWNORMAL);
 }
