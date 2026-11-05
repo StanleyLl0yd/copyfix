@@ -1390,6 +1390,9 @@ void DrawSettingsSurface(HWND window, HDC dc) noexcept {
     copyfix::ui::Rounded(dc,
         RECT{Scale(20,dpi), Scale(297,dpi), w-Scale(20,dpi), Scale(399,dpi)},
         c.surface, c.border, Scale(copyfix::ui::CardCorner,dpi));
+    copyfix::ui::Rounded(dc,
+        RECT{Scale(20,dpi), Scale(411,dpi), w-Scale(20,dpi), Scale(511,dpi)},
+        c.surface, c.border, Scale(copyfix::ui::CardCorner,dpi));
     const int widthDip=MulDiv(w,96,dpi);
     const int segmentWidth=(widthDip-76)/3;
     copyfix::ui::Rounded(dc,
@@ -1410,7 +1413,7 @@ void LayoutSettings(HWND window) {
     const int dpi = g_settings_dpi;
     const int w = MulDiv(bounds.right, 96, dpi);
     const int h = MulDiv(bounds.bottom, 96, dpi);
-    // The three cards are deliberately compact; the footer anchors to the client
+    // Four compact cards; the footer anchors to the client
     // edge, not to the outer Win32 frame. No label crosses a card or divider.
     Position(window, kSettingsTitle, 65, 17, w-85, 31, dpi);
     Position(window, kSettingsSubtitle, 65, 50, w-86, 32, dpi);
@@ -1432,7 +1435,10 @@ void LayoutSettings(HWND window) {
     Position(window, kSettingsLanguageSection, 36, 306, w-72, 19, dpi);
     Position(window, kSettingsLanguageInput, 36, 332, w-72, 108, dpi);
     Position(window, kSettingsLanguageHint, 36, 374, w-72, 22, dpi);
-    Position(window, kSettingsFeedback, 26, 402, w-52, 26, dpi);
+    Position(window, kSettingsThemeSection, 36, 420, w-72, 19, dpi);
+    Position(window, kSettingsThemeInput, 36, 446, w-72, 108, dpi);
+    Position(window, kSettingsThemeHint, 36, 484, w-72, 21, dpi);
+    Position(window, kSettingsFeedback, 26, 516, w-52, 22, dpi);
     Position(window, kSettingsCancel, w-250, h-48, 104, 34, dpi);
     Position(window, kSettingsSave, w-136, h-48, 116, 34, dpi);
 }
@@ -1452,6 +1458,8 @@ void UpdateSettingsLabels(HWND window) noexcept {
     SetChildCaption(window,kSettingsExplanation,ProfileHelpText(g_draft_profile));
     SetChildCaption(window,kSettingsLanguageSection,DraftTr(UiText::LanguageSection));
     SetChildCaption(window,kSettingsLanguageHint,DraftTr(UiText::LanguageHint));
+    SetChildCaption(window,kSettingsThemeSection,DraftTr(UiText::ThemeSection));
+    SetChildCaption(window,kSettingsThemeHint,DraftTr(UiText::ThemeHint));
     SetChildCaption(window,kSettingsCancel,DraftTr(UiText::Cancel));
     SetChildCaption(window,kSettingsSave,DraftTr(UiText::Save));
     if (HWND combo=GetDlgItem(window,kSettingsLanguageInput)) {
@@ -1460,6 +1468,12 @@ void UpdateSettingsLabels(HWND window) noexcept {
                            UiText::LanguageEnglish})
             SendMessageW(combo,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(DraftTr(key)));
         SendMessageW(combo,CB_SETCURSEL,static_cast<WPARAM>(g_draft_language),0);
+    }
+    if (HWND combo=GetDlgItem(window,kSettingsThemeInput)) {
+        SendMessageW(combo,CB_RESETCONTENT,0,0);
+        for (UiText key : {UiText::ThemeSystem,UiText::ThemeLight,UiText::ThemeDark})
+            SendMessageW(combo,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(DraftTr(key)));
+        SendMessageW(combo,CB_SETCURSEL,static_cast<WPARAM>(g_draft_theme),0);
     }
     InvalidateRect(window,nullptr,FALSE);
 }
@@ -1471,6 +1485,8 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
         InitWindowTheme(window);
         g_draft_profile = g_settings.profile;
         g_draft_language = g_settings.language;
+        g_draft_theme = g_settings.theme;
+        g_theme_preview_active = true;
         MakeLabel(window,kSettingsTitle,DraftTr(UiText::SettingsTitle),g_font_title);
         MakeLabel(window,kSettingsSubtitle,
                   DraftTr(UiText::SettingsSubtitle),
@@ -1529,6 +1545,19 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
             SendMessageW(lang,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(DraftTr(text)));
         SendMessageW(lang,CB_SETCURSEL,static_cast<WPARAM>(g_draft_language),0);
         MakeLabel(window,kSettingsLanguageHint,DraftTr(UiText::LanguageHint),g_font_caption);
+        MakeLabel(window,kSettingsThemeSection,DraftTr(UiText::ThemeSection),g_font_label);
+        HWND theme=CreateWindowW(L"COMBOBOX",nullptr,
+            WS_CHILD|WS_VISIBLE|WS_TABSTOP|CBS_DROPDOWNLIST|
+            CBS_OWNERDRAWFIXED|CBS_HASSTRINGS|CBS_NOINTEGRALHEIGHT|WS_VSCROLL,
+            0,0,1,1,window,
+            reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kSettingsThemeInput)),
+            g_instance,nullptr);
+        if (!theme) return -1;
+        ApplyFont(theme,g_font_body);
+        for (UiText text : {UiText::ThemeSystem,UiText::ThemeLight,UiText::ThemeDark})
+            SendMessageW(theme,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(DraftTr(text)));
+        SendMessageW(theme,CB_SETCURSEL,static_cast<WPARAM>(g_draft_theme),0);
+        MakeLabel(window,kSettingsThemeHint,DraftTr(UiText::ThemeHint),g_font_caption);
         MakeLabel(window,kSettingsFeedback,L"",g_font_caption);
         HWND save=CreateWindowW(L"BUTTON",DraftTr(UiText::Save),
             WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_OWNERDRAW,0,0,1,1,window,
@@ -1557,9 +1586,11 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
         SetBkMode(dc,TRANSPARENT);
         const UINT id = static_cast<UINT>(GetDlgCtrlID(reinterpret_cast<HWND>(lparam)));
         const bool insideCard = id == 420 || id == 421 || id == kSettingsExplanation ||
-            id == kSettingsLanguageSection || id == kSettingsLanguageHint;
+            id == kSettingsLanguageSection || id == kSettingsLanguageHint ||
+            id == kSettingsThemeSection || id == kSettingsThemeHint;
         SetTextColor(dc,id==kSettingsFeedback ? copyfix::ui::colors.warning :
-            (id==kSettingsTitle || id==420 || id==421 || id==kSettingsLanguageSection
+            (id==kSettingsTitle || id==420 || id==421 ||
+             id==kSettingsLanguageSection || id==kSettingsThemeSection
               ? copyfix::ui::colors.ink : copyfix::ui::colors.muted));
         return reinterpret_cast<LRESULT>(insideCard ? g_surface_brush : g_canvas_brush);
     }
@@ -1572,7 +1603,9 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
     }
     case WM_MEASUREITEM: {
         auto* measure = reinterpret_cast<MEASUREITEMSTRUCT*>(lparam);
-        if (measure && (measure->CtlID == kHotkeyInput || measure->CtlID == kSettingsLanguageInput)) {
+        if (measure && (measure->CtlID == kHotkeyInput ||
+                        measure->CtlID == kSettingsLanguageInput ||
+                        measure->CtlID == kSettingsThemeInput)) {
             measure->itemHeight = static_cast<UINT>(Scale(25,g_settings_dpi));
             return TRUE;
         }
@@ -1595,6 +1628,16 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
         return 0;
     }
     case WM_COMMAND:
+        if (LOWORD(wparam) == kSettingsThemeInput &&
+            HIWORD(wparam) == CBN_SELCHANGE &&
+            reinterpret_cast<HWND>(lparam) == GetDlgItem(window,kSettingsThemeInput)) {
+            const LRESULT value=SendDlgItemMessageW(window,kSettingsThemeInput,CB_GETCURSEL,0,0);
+            if (value>=0 && value<=2) {
+                g_draft_theme=static_cast<copyfix::ui::Preference>(value);
+                SynchronizeSystemTheme();
+            }
+            return 0;
+        }
         if (LOWORD(wparam) == kSettingsLanguageInput &&
             HIWORD(wparam) == CBN_SELCHANGE &&
             reinterpret_cast<HWND>(lparam) == GetDlgItem(window,kSettingsLanguageInput)) {
@@ -1619,8 +1662,10 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
             const HotkeyChord next_hotkey = ReadHotkeyChoice(window);
             const auto next_profile = g_draft_profile;
             const LRESULT selected=SendDlgItemMessageW(window,kSettingsLanguageInput,CB_GETCURSEL,0,0);
-            if (selected<0 || selected>2) return 0;
+            const LRESULT themeChoice=SendDlgItemMessageW(window,kSettingsThemeInput,CB_GETCURSEL,0,0);
+            if (selected<0 || selected>2 || themeChoice<0 || themeChoice>2) return 0;
             g_draft_language=static_cast<copyfix::i18n::Language>(selected);
+            g_draft_theme=static_cast<copyfix::ui::Preference>(themeChoice);
             if (!ValidHotkey(next_hotkey)) {
                 ShowShortcutWarning(window, false);
                 return 0;
@@ -1632,6 +1677,7 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
             g_settings.hotkey = next_hotkey;
             g_settings.profile = next_profile;
             g_settings.language = g_draft_language;
+            g_settings.theme = g_draft_theme;
             if (!SaveSettings())
                 MessageBoxW(window,DraftTr(UiText::SettingsSaveFailed),
                             L"CopyFix",MB_OK | MB_ICONWARNING);
@@ -1644,7 +1690,11 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
         }
         break;
     case WM_CLOSE: DestroyWindow(window); return 0;
-    case WM_DESTROY: g_settings_window = nullptr; return 0;
+    case WM_DESTROY:
+        g_settings_window = nullptr;
+        g_theme_preview_active = false;
+        SynchronizeSystemTheme();
+        return 0;
     }
     return DefWindowProcW(window,msg,wparam,lparam);
 }
@@ -1652,7 +1702,7 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
 void OpenSettings() {
     SynchronizeSystemTheme();
     if (g_settings_window) { SetForegroundWindow(g_settings_window); return; }
-    const auto spawn = PositionedOnCursorMonitor(500,528,g_message);
+    const auto spawn = PositionedOnCursorMonitor(500,642,g_message);
     g_settings_window = CreateWindowExW(WS_EX_APPWINDOW,L"CopyFixSettings",Tr(UiText::SettingsWindow),
         WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_CLIPCHILDREN,
         spawn.x,spawn.y,spawn.width,spawn.height,
