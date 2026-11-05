@@ -9,6 +9,7 @@
 int main() {
     const auto Fail = [](int code) { std::cerr << "PREVIEW_SMOKE_FAILURE_" << code << "\n"; return code; };
     g_instance = GetModuleHandleW(nullptr);
+    g_settings.language=copyfix::i18n::Language::Russian;
     g_richedit_module = LoadLibraryW(L"Msftedit.dll");
     if (!g_richedit_module) return Fail(9);
     g_canvas_brush = CreateSolidBrush(kCanvas);
@@ -50,6 +51,15 @@ int main() {
     if (!GetWindowTextW(GetDlgItem(preview, kPreviewNote), status, 128) ||
         wcsstr(status, L"изменений") == nullptr || wcsstr(status, L"глубокий") == nullptr)
         return Fail(34);
+    g_settings.language=copyfix::i18n::Language::English;
+    UpdatePreviewLabels(preview);
+    GetWindowTextW(GetDlgItem(preview,kPreviewTitle),status,128);
+    if (wcscmp(status,L"Review changes")!=0) return Fail(46);
+    GetWindowTextW(GetDlgItem(preview,kPreviewNote),status,128);
+    if (!wcsstr(status,L"changes") || !wcsstr(status,L"deep"))
+        return Fail(47);
+    g_settings.language=copyfix::i18n::Language::Russian;
+    UpdatePreviewLabels(preview);
     // A missing/unavailable RichEdit is a hard preview failure, never an
     // implicit approval or a destructive clipboard write.
     if (SetPreviewRichText(nullptr, L"текст") ||
