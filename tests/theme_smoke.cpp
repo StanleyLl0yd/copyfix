@@ -8,6 +8,15 @@ int main() {
         return id;
     };
     using namespace copyfix::ui;
+    if (!ValidPreference(0) || !ValidPreference(1) ||
+        !ValidPreference(2) || ValidPreference(3) || ValidPreference(999) ||
+        ResolveDark(Preference::System,false) ||
+        !ResolveDark(Preference::System,true) ||
+        ResolveDark(Preference::Light,false) ||
+        ResolveDark(Preference::Light,true) ||
+        !ResolveDark(Preference::Dark,false) ||
+        !ResolveDark(Preference::Dark,true))
+        return fail(12);
     SetDark(false);
     const HBRUSH light = CanvasBrush();
     const HBRUSH surface = SurfaceBrush();
