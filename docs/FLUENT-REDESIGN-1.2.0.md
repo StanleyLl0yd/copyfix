@@ -13,11 +13,11 @@
 ## Runtime architecture
 
 - **C++20/Win32 + GDI + DWM**. System **dwmapi.dll** and **shcore.dll** are already supplied with Windows 10/11; they are native operating-system libraries, not distributed dependencies.
-- The app follows the Windows **AppsUseLightTheme** preference. It rereads the value when opening windows and upon `WM_SETTINGCHANGE`/`WM_THEMECHANGED`. If the value is unavailable, use the light palette. No theme preference is stored in CopyFix's Registry key.
+- By default the app follows Windows **AppsUseLightTheme**; Settings additionally offers explicit Light and Dark modes. Windows theme changes affect the app only while the saved preference is automatic. System high-contrast colors always take precedence. No separate theme files or dependencies are shipped.
 - On Windows 11 DWM draws the standard system caption and rounded outer corners. On Windows 10 unsupported DWM styling attributes fail harmlessly; render the client area as opaque surfaces.
 - Use **native Win32 BUTTON/COMBOBOX** controls, with scoped drawing/subclassing where necessary. Preserve focus, keyboard input and checkbox semantics; do not install keyboard hooks.
 - Keep the existing **Msftedit.dll RichEdit** controls, Unicode/UTF-16 handling, scroll preservation, diff ranges, clipboard safety and confirm/undo contracts.
-- Preferences remain in `HKCU\Software\CopyFix`. Existing REG_DWORD `Profile` and `Hotkey` retain compatibility; 1.2.0 adds optional `Language` (0 automatic Windows UI language, 1 Russian, 2 English). Missing or invalid values default to automatic. Cancel never commits a draft language.
+- Preferences remain in `HKCU\Software\CopyFix`. Existing REG_DWORD `Profile` and `Hotkey` retain compatibility; 1.2.0 adds optional `Language` (0 automatic Windows UI language, 1 Russian, 2 English) and `Theme` (0 Windows auto, 1 light, 2 dark). Missing or invalid values default to automatic; neither draft choice is persisted before Save.
 - Window sizes and initial locations are scaled to the **effective DPI of the monitor under the cursor**. Every window is centered using measured dimensions.
 - No third-party UI runtime, additional shipped files, network calls, telemetry or external assets. The approved artwork remains `artwork/app-icon.png` and `artwork/tray-16x16.png` with embedded `resources/copyfix.ico`.
 
@@ -58,7 +58,15 @@ Following the owner's light-theme screenshots, the current layout is considered 
 - Settings: retain the bounded six-row native ComboBox popup. Windows scrolls the popup to the currently selected F9, so F1–F8 are above the visible region, **not missing**. The popup normally overlays lower controls; forcing it to open upward would require fragile native list-window repositioning, so it is intentionally not overridden.
 - Added precise Win32 smoke assertions for all supported F1–F24 function-key labels except Windows-reserved F12, popup bounds, footer geometry/status contrast and About icon geometry.
 
-No text transformation, clipboard, Undo, registration, persistence, language selection, theme preference or packaged canonical icon source is modified by this pass. Manual **dark-theme** and mixed-DPI screenshots are still required before considering merge/release.
+No text transformation, clipboard, Undo, registration, persistence, language selection or canonical icon source was modified by that earlier polish pass. Manual **dark-theme** and mixed-DPI screenshots are still required before considering merge/release.
+
+## Manual theme selection (owner request, 2026-11-05)
+
+Settings C now has a fourth native card, **Appearance / ТЕМА ОФОРМЛЕНИЯ**, with the same keyboard-accessible ComboBox as the language selector. The available modes are **System default (Windows)** (REG_DWORD `Theme=0`), **Light / Светлая** (`1`) and **Dark / Тёмная** (`2`). The initial Settings height increases to 642 DIPs and keeps the Save/Cancel footer anchored to the client edge.
+
+Changing the theme within Settings updates existing Settings, Preview and About windows immediately, including the native RichEdit backgrounds and diff highlighting. **Cancel or closing Settings restores the committed theme; Save stores the choice** under `HKCU\\Software\\CopyFix`. Missing, incorrectly typed and out-of-range preference values fall back to Windows automatic mode. Windows high-contrast mode takes precedence over both manual choices. Existing Profile/Hotkey/Language values and portable packaging are preserved.
+
+Manual acceptance remains necessary for automatic, forced light and forced dark with the three windows, Windows appearance changes in Auto, live Preview recoloring, controls and dropdowns at 100/150/200% DPI, keyboard focus and high-contrast behavior.
 
 ## Pending manual acceptance
 
