@@ -11,6 +11,7 @@ int main() {
         return code;
     };
     g_instance = GetModuleHandleW(nullptr);
+    g_settings.language=copyfix::i18n::Language::Russian;
     g_canvas_brush = CreateSolidBrush(kCanvas);
     g_surface_brush = CreateSolidBrush(kSurface);
     const WNDCLASSEXW wc{
@@ -76,6 +77,15 @@ int main() {
     if (wcscmp(linkLabel,L"О проекте")!=0) return fail(10);
     GetWindowTextW(GetDlgItem(window,kAboutGitHub),linkLabel,80);
     if (wcscmp(linkLabel,L"GitHub")!=0) return fail(11);
+    g_settings.language=copyfix::i18n::Language::English;
+    UpdateAboutLabels(window);
+    wchar_t english[128]{};
+    GetWindowTextW(GetDlgItem(window,kAboutProject),english,128);
+    if (wcscmp(english,L"Project website")!=0) return fail(12);
+    GetWindowTextW(GetDlgItem(window,kAboutLicense),english,128);
+    if (!wcsstr(english,L"MIT License")) return fail(13);
+    g_settings.language=copyfix::i18n::Language::Russian;
+    UpdateAboutLabels(window);
     SendMessageW(window,WM_CLOSE,0,0);
     if (g_about_window || IsWindow(window)) return fail(7);
     UnregisterClassW(L"CopyFixAbout",g_instance);
