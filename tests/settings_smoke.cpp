@@ -52,12 +52,14 @@ int main() {
     g_settings = Settings{};
     if (g_settings.profile != copyfix::Profile::Deep ||
         g_settings.hotkey != HotkeyChord{} ||
-        g_settings.language != copyfix::i18n::Language::System)
+        g_settings.language != copyfix::i18n::Language::System ||
+        g_settings.theme != copyfix::ui::Preference::System)
         return fail(2);
 
     g_settings.profile = copyfix::Profile::Smart;
     g_settings.hotkey = {MOD_CONTROL | MOD_ALT, L'C'};
     g_settings.language = copyfix::i18n::Language::English;
+    g_settings.theme = copyfix::ui::Preference::Dark;
     cleanup.created_key = true;  // Also clean a partially created key on failure.
     if (!SaveSettings()) return fail(3);
 
@@ -82,7 +84,13 @@ int main() {
         RegQueryValueExW(key,L"Language",nullptr,&type,
                          reinterpret_cast<BYTE*>(&language),&size)==ERROR_SUCCESS &&
         type==REG_DWORD && size==sizeof(DWORD) && language==2;
-    if (!valid_profile || !valid_hotkey || !valid_language) {
+    type=0; size=sizeof(DWORD);
+    DWORD theme=0;
+    const bool valid_theme=
+        RegQueryValueExW(key,L"Theme",nullptr,&type,
+                         reinterpret_cast<BYTE*>(&theme),&size)==ERROR_SUCCESS &&
+        type==REG_DWORD && size==sizeof(DWORD) && theme==2;
+    if (!valid_profile || !valid_hotkey || !valid_language || !valid_theme) {
         RegCloseKey(key); return fail(5);
     }
 
@@ -90,7 +98,8 @@ int main() {
     LoadSettings();
     if (g_settings.profile != copyfix::Profile::Smart ||
         g_settings.hotkey != HotkeyChord{MOD_CONTROL | MOD_ALT, L'C'} ||
-        g_settings.language != copyfix::i18n::Language::English) {
+        g_settings.language != copyfix::i18n::Language::English ||
+        g_settings.theme != copyfix::ui::Preference::Dark) {
         RegCloseKey(key); return fail(6);
     }
 
@@ -145,7 +154,8 @@ int main() {
     g_settings = Settings{};
     LoadSettings();
     if (g_settings.hotkey != custom ||
-        g_settings.language != copyfix::i18n::Language::English) {
+        g_settings.language != copyfix::i18n::Language::English ||
+        g_settings.theme != copyfix::ui::Preference::Dark) {
         RegCloseKey(key); return fail(16);
     }
     const DWORD invalidLanguage=99;
@@ -160,6 +170,18 @@ int main() {
         RegCloseKey(key); return fail(56);
     }
     g_settings.language=copyfix::i18n::Language::Russian;
+    const DWORD invalidTheme=42;
+    if (RegSetValueExW(key,L"Theme",0,REG_DWORD,
+             reinterpret_cast<const BYTE*>(&invalidTheme),
+             sizeof(invalidTheme)) != ERROR_SUCCESS) {
+        RegCloseKey(key); return fail(65);
+    }
+    g_settings.theme=copyfix::ui::Preference::Dark;
+    LoadSettings();
+    if (g_settings.theme!=copyfix::ui::Preference::System) {
+        RegCloseKey(key); return fail(66);
+    }
+    g_settings.theme=copyfix::ui::Preference::Light;
 
     if (wcscmp(copyfix::i18n::Get(UiText::SettingsTitle,
               copyfix::i18n::Language::English),L"Settings")!=0 ||
@@ -351,6 +373,22 @@ int main() {
     const RECT languageRect=relative(kSettingsLanguageInput);
     const RECT languageSection=relative(kSettingsLanguageSection);
     const RECT languageHint=relative(kSettingsLanguageHint);
+    const HWND themeCombo=GetDlgItem(g_settings_window,kSettingsThemeInput);
+    if (!themeCombo ||
+        !(GetWindowLongPtrW(themeCombo,GWL_STYLE) & CBS_HASSTRINGS) ||
+        SendMessageW(themeCombo,CB_GETCOUNT,0,0)!=3 ||
+        SendMessageW(themeCombo,CB_GETCURSEL,0,0)!=1)
+        return fail(67);
+    const RECT themeRect=relative(kSettingsThemeInput);
+    const RECT themeSection=relative(kSettingsThemeSection);
+    const RECT themeHint=relative(kSettingsThemeHint);
+    if (themeRect.left < Scale(20,dpi) ||
+        themeSection.top < Scale(411,dpi) ||
+        themeHint.bottom > Scale(511,dpi) ||
+        themeHint.top <= themeSection.bottom ||
+        themeRect.top <= languageHint.bottom ||
+        themeHint.bottom >= feedbackRect.top)
+        return fail(68);
     if (languageRect.left<Scale(20,dpi) ||
         languageSection.top<Scale(297,dpi) ||
         languageHint.bottom>Scale(399,dpi) ||
@@ -374,6 +412,30 @@ int main() {
         reinterpret_cast<LPARAM>(languageCombo));
     if (g_draft_language!=copyfix::i18n::Language::Russian)
         return fail(60);
+
+    // Live preview is independent from persistence and must roll back
+    // when Settings is closed without saving.
+    SendMessageW(themeCombo,CB_SETCURSEL,2,0);
+    SendMessageW(g_settings_window,WM_COMMAND,
+        MAKEWPARAM(kSettingsThemeInput,CBN_SELCHANGE),
+        reinterpret_cast<LPARAM>(themeCombo));
+    if (g_draft_theme!=copyfix::ui::Preference::Dark ||
+        g_settings.theme!=copyfix::ui::Preference::Light ||
+        !copyfix::ui::dark || !g_theme_preview_active)
+        return fail(69);
+    SendMessageW(themeCombo,CB_SETCURSEL,0,0);
+    SendMessageW(g_settings_window,WM_COMMAND,
+        MAKEWPARAM(kSettingsThemeInput,CBN_SELCHANGE),
+        reinterpret_cast<LPARAM>(themeCombo));
+    if (g_draft_theme!=copyfix::ui::Preference::System ||
+        copyfix::ui::dark != copyfix::ui::ReadSystemDark())
+        return fail(70);
+    SendMessageW(themeCombo,CB_SETCURSEL,2,0);
+    SendMessageW(g_settings_window,WM_COMMAND,
+        MAKEWPARAM(kSettingsThemeInput,CBN_SELCHANGE),
+        reinterpret_cast<LPARAM>(themeCombo));
+    if (!copyfix::ui::dark) return fail(71);
+
     if (comboRect.left<=shiftRect.right ||
         comboRect.top>shiftRect.bottom ||
         comboRect.bottom<=comboRect.top) return fail(54);
@@ -422,7 +484,9 @@ int main() {
         g_settings.profile != copyfix::Profile::Deep) return fail(43);
     DestroyWindow(g_settings_window);
     if (g_settings_window) return fail(26);
-    if (g_settings.language!=copyfix::i18n::Language::Russian)
+    if (g_settings.language!=copyfix::i18n::Language::Russian ||
+        g_settings.theme!=copyfix::ui::Preference::Light ||
+        copyfix::ui::dark || g_theme_preview_active)
         return fail(61);
     // Global hotkeys may be used by the CI desktop; only enforce registration
     // and rollback when the initial combination is actually available.
