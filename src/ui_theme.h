@@ -63,6 +63,13 @@ inline HBRUSH darkCanvas = nullptr;
 inline HBRUSH lightSurface = nullptr;
 inline HBRUSH darkSurface = nullptr;
 
+enum class Preference : DWORD { System=0, Light=1, Dark=2 };
+inline constexpr bool ValidPreference(DWORD value) noexcept { return value<=2; }
+inline constexpr bool ResolveDark(Preference choice,bool windowsDark) noexcept {
+    return choice==Preference::Dark ||
+           (choice==Preference::System && windowsDark);
+}
+
 inline bool ReadSystemDark() noexcept {
     DWORD value = 1;
     DWORD size = sizeof(value);
