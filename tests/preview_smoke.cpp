@@ -66,6 +66,24 @@ int main() {
         RenderPreviewText(nullptr)) return Fail(33);
     if (!before || !after || GetDlgCtrlID(after) == IDCANCEL ||
         GetDlgCtrlID(before) == GetDlgCtrlID(after)) return Fail(12);
+    // Theme overrides must recolor existing RichEdit panes, not only window
+    // frames. EM_SETBKGNDCOLOR returns the previous control background.
+    g_settings.theme=copyfix::ui::Preference::Dark;
+    SynchronizeSystemTheme();
+    if (!copyfix::ui::dark ||
+        static_cast<COLORREF>(SendMessageW(before,EM_SETBKGNDCOLOR,0,
+            copyfix::ui::Dark.paper))!=copyfix::ui::Dark.paper ||
+        static_cast<COLORREF>(SendMessageW(after,EM_SETBKGNDCOLOR,0,
+            copyfix::ui::Dark.paper))!=copyfix::ui::Dark.paper)
+        return Fail(50);
+    g_settings.theme=copyfix::ui::Preference::Light;
+    SynchronizeSystemTheme();
+    if (copyfix::ui::dark ||
+        static_cast<COLORREF>(SendMessageW(before,EM_SETBKGNDCOLOR,0,
+            copyfix::ui::Light.paper))!=copyfix::ui::Light.paper ||
+        static_cast<COLORREF>(SendMessageW(after,EM_SETBKGNDCOLOR,0,
+            copyfix::ui::Light.paper))!=copyfix::ui::Light.paper)
+        return Fail(51);
     // Both content panes must stay within their cards and above the footer,
     // including at the minimum supported window size.
     const auto relative = [&](UINT id) {
