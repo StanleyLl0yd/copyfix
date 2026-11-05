@@ -1757,6 +1757,26 @@ void DrawAboutSurface(HWND window, HDC dc) noexcept {
         p.surface,p.border,Scale(copyfix::ui::CardCorner,dpi));
 }
 
+bool DrawAboutIcon(const DRAWITEMSTRUCT* item) noexcept {
+    if (!item || item->CtlID != kAboutIcon || !item->hDC) return false;
+    // SS_OWNERDRAW avoids the default SS_ICON white background in dark mode.
+    // Draw the canonical embedded icon with its native alpha on our card.
+    const auto& palette=copyfix::ui::colors;
+    HBRUSH background=CreateSolidBrush(palette.surface);
+    if (!background) return false;
+    FillRect(item->hDC,&item->rcItem,background);
+    DeleteObject(background);
+    const int width=item->rcItem.right-item->rcItem.left;
+    const int height=item->rcItem.bottom-item->rcItem.top;
+    const int size=std::min(width,height);
+    if (size<=0) return false;
+    const HICON icon=LoadAppIcon(size);
+    return DrawIconEx(item->hDC,
+        item->rcItem.left+(width-size)/2,
+        item->rcItem.top+(height-size)/2,
+        icon,size,size,0,nullptr,DI_NORMAL)!=FALSE;
+}
+
 void UpdateAboutLabels(HWND window) noexcept {
     if (!IsWindow(window)) return;
     SetWindowTextW(window,Tr(UiText::AboutWindow));
@@ -1771,13 +1791,11 @@ LRESULT CALLBACK AboutProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam) 
     case WM_CREATE: {
         InitWindowTheme(window);
         HWND icon = CreateWindowExW(0,L"STATIC",nullptr,
-            WS_CHILD | WS_VISIBLE | SS_ICON | SS_REALSIZEIMAGE,
+            WS_CHILD | WS_VISIBLE | SS_OWNERDRAW,
             0,0,1,1,window,
             reinterpret_cast<HMENU>(static_cast<UINT_PTR>(kAboutIcon)),
             g_instance,nullptr);
         if (!icon) return -1;
-        SendMessageW(icon,STM_SETICON,reinterpret_cast<WPARAM>(
-            LoadAppIcon(Scale(54,static_cast<int>(GetDpiForWindow(window))))),0);
         MakeCenteredLabel(window,kAboutTitle,L"CopyFix",g_font_title);
         MakeCenteredLabel(window,kAboutVersionLabel,kAboutVersionString,g_font_label);
         MakeCenteredLabel(window,kAboutDescriptionLabel,
@@ -1819,9 +1837,12 @@ LRESULT CALLBACK AboutProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam) 
                                         : copyfix::ui::colors.muted));
         return reinterpret_cast<LRESULT>(g_surface_brush);
     }
-    case WM_DRAWITEM:
-        DrawActionButton(reinterpret_cast<const DRAWITEMSTRUCT*>(lparam));
+    case WM_DRAWITEM: {
+        const auto* item=reinterpret_cast<const DRAWITEMSTRUCT*>(lparam);
+        if (item && item->CtlID==kAboutIcon) return DrawAboutIcon(item) ? TRUE : FALSE;
+        DrawActionButton(item);
         return TRUE;
+    }
     case WM_COMMAND:
         if (HIWORD(wparam) == BN_CLICKED &&
             LOWORD(wparam) == kAboutProject &&
@@ -1851,9 +1872,7 @@ LRESULT CALLBACK AboutProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam) 
         SetWindowPos(window,nullptr,rect->left,rect->top,
                      rect->right-rect->left,rect->bottom-rect->top,
                      SWP_NOZORDER|SWP_NOACTIVATE);
-        if (HWND icon=GetDlgItem(window,kAboutIcon))
-            SendMessageW(icon,STM_SETICON,
-                reinterpret_cast<WPARAM>(LoadAppIcon(Scale(54,dpi))),0);
+        // Owner-drawn icon paints with the new control size after relayout.
         LayoutAbout(window);
         UpdateFontsForWindow(window);
         return 0;
