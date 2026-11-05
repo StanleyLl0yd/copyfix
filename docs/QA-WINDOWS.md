@@ -69,3 +69,26 @@ Win32 clipboard replacement is not transactional. When `EmptyClipboard` succeeds
 - The `clipboard_contract` CTest creates an isolated synthetic Win32 clipboard payload on the ephemeral Windows runner.
 - It verifies Unicode round-trip, guarded commits, sequence-number rejection of stale snapshots, actual Undo, non-destructive Undo after another copy and detection of additional clipboard formats.
 - This automated test is **not** a substitute for checking clipboard behavior on Windows 10/11 desktops or with real Office/browser content.
+
+## Windows 1.1.0 custom hotkey acceptance (not yet performed)
+
+- [ ] New settings default to checked Ctrl + Alt, unchecked Shift, F9 selected, Deep profile.
+- [ ] Saved legacy DWORD 0/1/2 preset combinations remain preserved on upgrade.
+- [ ] Choose Ctrl + Shift + F8 using checkboxes and the key list, save, trigger from another app, restart, verify persistence.
+- [ ] While a separate program globally owns Ctrl + Alt + F8, select the same combination from the controls (without pressing the keys), click Save: a warning **must appear every time**, settings stay open, previous chord is restored in the controls and remains active, registry unchanged.
+- [ ] Repeat conflict three times, then choose a valid free key; confirm successful save without stale status text.
+- [ ] Invalid combinations such as Ctrl + V, Shift-only, or missing Ctrl/Alt give an explicit warning and keep previous binding.
+- [ ] Cancel an unsaved change, confirm previous registered shortcut still works.
+- [ ] Test letters, digits, navigation, OEM and function keys; US/Russian keyboard layouts; DPI 100/150/200%.
+- [ ] Settings, preview and About are centered on the cursor monitor using actual window sizes.
+- [ ] No registry/INI technical footer; no hooks, Raw Input, logging, extra DLL/INI files or networking.
+- [ ] Windows 10/11 real-machine tests, one unsigned portable EXE, About/VersionInfo 1.1.0, exact-main CI after protected PR merge.
+
+### Owner acceptance and additional startup notification
+
+Owner reported **16/16 checks accepted** (2026-11-05) for the native key selector, free-key registration and restart persistence, blocked combinations including three repeated warnings and release, rejection of Ctrl+V and Shift-only, cancel, profile independence, window centering, and core clipboard regressions.
+
+- [ ] Launch CopyFix after a full tray exit: Windows shows the normal system notification **"CopyFix запущен и готов к работе."**, with the standard CopyFix notification icon/title and OS-selected position. Do not impose a fixed bottom-left placement.
+- [ ] After closing the utility and starting again, see exactly one startup notification per new process; no repeated startup message from changing settings, opening About, or taskbar recreation.
+- [ ] If initial hotkey registration is unavailable, show a hotkey-error notification instead of incorrectly claiming that CopyFix is fully ready.
+- [ ] Confirm Windows notification settings / Focus Assist can affect visual display; the application should not force-enable notifications.
