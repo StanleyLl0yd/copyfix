@@ -49,6 +49,17 @@ The initial draft did not follow the Windows UI language: all user-facing string
 
 The Settings window is taller to accommodate the language card. The shortcut popup shows at most six visible entries to reduce overlap with footer actions. No extra shipped DLLs/assets/runtime. Owner visual acceptance is still required for both languages and both themes, keyboard navigation, DPI, high contrast and native ComboBox popup rendering.
 
+## Final native UI polish (2026-11-05)
+
+Following the owner's light-theme screenshots, the current layout is considered acceptable in principle, **not yet released or fully accepted**. This final small pass avoids any architecture change:
+
+- Preview: raise the status text contrast by blending the theme's muted and ink colors, and tighten the vertical gap to the footer toggles while keeping the action buttons aligned.
+- About: increase the canonical icon's displayed size from 48 to 54 DIPs; load the corresponding native icon size at the window DPI and refresh it when moving between monitors.
+- Settings: retain the bounded six-row native ComboBox popup. Windows scrolls the popup to the currently selected F9, so F1–F8 are above the visible region, **not missing**. The popup normally overlays lower controls; forcing it to open upward would require fragile native list-window repositioning, so it is intentionally not overridden.
+- Added precise Win32 smoke assertions for all supported F1–F24 function-key labels except Windows-reserved F12, popup bounds, footer geometry/status contrast and About icon geometry.
+
+No text transformation, clipboard, Undo, registration, persistence, language selection, theme preference or packaged canonical icon source is modified by this pass. Manual **dark-theme** and mixed-DPI screenshots are still required before considering merge/release.
+
 ## Pending manual acceptance
 
 - [ ] Windows 11 light and dark, all **three** windows side-by-side against the approved mockups.
