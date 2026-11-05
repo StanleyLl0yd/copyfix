@@ -307,6 +307,9 @@ HWND MakeLabel(HWND parent, int id, const wchar_t* text, HFONT font) {
     ApplyFont(label, font);
     return label;
 }
+void SetChildCaption(HWND parent, UINT id, const wchar_t* caption) noexcept {
+    if (HWND child=GetDlgItem(parent,id)) SetWindowTextW(child,caption);
+}
 void Position(HWND parent, UINT id, int x, int y, int w, int h, int dpi) {
     if (auto child = GetDlgItem(parent, id))
         MoveWindow(child, Scale(x,dpi), Scale(y,dpi),
@@ -1079,13 +1082,35 @@ bool RenderPreviewText(HWND window) {
     }
 }
 
+void UpdatePreviewLabels(HWND window) noexcept {
+    if (!IsWindow(window)) return;
+    SetWindowTextW(window,Tr(UiText::PreviewWindow));
+    SetChildCaption(window,kPreviewTitle,Tr(UiText::PreviewTitle));
+    SetChildCaption(window,kPreviewSubtitle,Tr(UiText::PreviewSubtitle));
+    SetChildCaption(window,kPreviewBeforeLabel,Tr(UiText::SourceText));
+    SetChildCaption(window,kPreviewAfterLabel,Tr(UiText::ResultText));
+    const wchar_t* profile=g_settings.profile==copyfix::Profile::Gentle
+        ? Tr(UiText::ProfileGentleLower) : g_settings.profile==copyfix::Profile::Smart
+        ? Tr(UiText::ProfileSmartLower) : Tr(UiText::ProfileDeepLower);
+    wchar_t status[128]{};
+    swprintf_s(status,L"%zu%s%s",g_pending.after.changes,
+               Tr(UiText::PreviewStatusSuffix),profile);
+    SetChildCaption(window,kPreviewNote,status);
+    SetChildCaption(window,kPreviewShowBreaks,Tr(UiText::ShowBreaks));
+    SetChildCaption(window,kPreviewShowSpaces,Tr(UiText::ShowSpaces));
+    SetChildCaption(window,kPreviewAccept,Tr(UiText::Apply));
+    SetChildCaption(window,kPreviewCancel,Tr(UiText::Cancel));
+    InvalidateRect(window,nullptr,FALSE);
+}
+
 LRESULT CALLBACK PreviewProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam) {
     switch (msg) {
     case WM_CREATE: {
         g_preview_dpi = static_cast<int>(GetDpiForWindow(window));
         InitWindowTheme(window);
-        const wchar_t* profile = g_settings.profile == copyfix::Profile::Gentle ? L"бережный" :
-                                 g_settings.profile == copyfix::Profile::Smart ? L"умный" : L"глубокий";
+        const wchar_t* profile = g_settings.profile == copyfix::Profile::Gentle
+            ? Tr(UiText::ProfileGentleLower) : g_settings.profile == copyfix::Profile::Smart
+            ? Tr(UiText::ProfileSmartLower) : Tr(UiText::ProfileDeepLower);
         MakeLabel(window, kPreviewTitle, Tr(UiText::PreviewTitle), g_font_title);
         MakeLabel(window, kPreviewSubtitle,
                   Tr(UiText::PreviewSubtitle), g_font_caption);
@@ -1310,10 +1335,7 @@ void ShowShortcutWarning(HWND window, bool occupied) noexcept {
     if (!IsWindow(window)) return;
     ResetHotkeyChoice(window);
     const wchar_t* message = occupied
-        ? L"Сочетание уже занято другой программой или зарезервировано Windows. "
-          L"Прежняя комбинация сохранена."
-        : L"Комбинация недопустима. Выберите Ctrl или Alt, при желании Shift, "
-          L"и клавишу из списка.";
+        ? DraftTr(UiText::ShortcutOccupied) : DraftTr(UiText::ShortcutInvalid);
     if (HWND status = GetDlgItem(window, kSettingsFeedback))
         SetWindowTextW(status, message);
     g_hotkey_warning_dialog(window, message, DraftTr(UiText::ShortcutWarningTitle),
@@ -1323,11 +1345,11 @@ void ShowShortcutWarning(HWND window, bool occupied) noexcept {
 const wchar_t* ProfileHelpText(copyfix::Profile profile) noexcept {
     switch (profile) {
     case copyfix::Profile::Gentle:
-        return L"Бережная очистка: сохраняет абзацы и сложное форматирование.";
+        return DraftTr(UiText::ProfileHelpGentle);
     case copyfix::Profile::Smart:
-        return L"Оптимальный баланс: исправляет типичные переносы и пробелы.";
+        return DraftTr(UiText::ProfileHelpSmart);
     case copyfix::Profile::Deep:
-        return L"Глубокая очистка: больше исправлений с предпросмотром.";
+        return DraftTr(UiText::ProfileHelpDeep);
     }
     return L"";
 }
@@ -1348,7 +1370,7 @@ void DrawSettingsSurface(HWND window, HDC dc) noexcept {
         RECT{Scale(20,dpi), Scale(181,dpi), w-Scale(20,dpi), Scale(285,dpi)},
         c.surface, c.border, Scale(copyfix::ui::CardCorner,dpi));
     copyfix::ui::Rounded(dc,
-        RECT{Scale(20,dpi), Scale(297,dpi), w-Scale(20,dpi), Scale(370,dpi)},
+        RECT{Scale(20,dpi), Scale(297,dpi), w-Scale(20,dpi), Scale(399,dpi)},
         c.surface, c.border, Scale(copyfix::ui::CardCorner,dpi));
     const int widthDip=MulDiv(w,96,dpi);
     const int segmentWidth=(widthDip-76)/3;
@@ -1391,10 +1413,37 @@ void LayoutSettings(HWND window) {
     Position(window, kSettingsExplanation, 36, 259, w-72, 21, dpi);
     Position(window, kSettingsLanguageSection, 36, 306, w-72, 19, dpi);
     Position(window, kSettingsLanguageInput, 36, 332, w-72, 108, dpi);
-    Position(window, kSettingsLanguageHint, 36, 377, w-72, 22, dpi);
+    Position(window, kSettingsLanguageHint, 36, 374, w-72, 22, dpi);
     Position(window, kSettingsFeedback, 26, 406, w-52, 32, dpi);
     Position(window, kSettingsCancel, w-250, h-48, 104, 34, dpi);
     Position(window, kSettingsSave, w-136, h-48, 116, 34, dpi);
+}
+
+void UpdateSettingsLabels(HWND window) noexcept {
+    if (!IsWindow(window)) return;
+    SetWindowTextW(window,DraftTr(UiText::SettingsWindow));
+    SetChildCaption(window,kSettingsTitle,DraftTr(UiText::SettingsTitle));
+    SetChildCaption(window,kSettingsSubtitle,DraftTr(UiText::SettingsSubtitle));
+    SetChildCaption(window,420,DraftTr(UiText::HotkeySection));
+    SetChildCaption(window,421,DraftTr(UiText::ProfileSection));
+    for (UINT id=kProfileGentle; id<=kProfileDeep; ++id) {
+        const UiText profileText=id==kProfileGentle ? UiText::ProfileGentle :
+            id==kProfileSmart ? UiText::ProfileSmart : UiText::ProfileDeep;
+        SetChildCaption(window,id,DraftTr(profileText));
+    }
+    SetChildCaption(window,kSettingsExplanation,ProfileHelpText(g_draft_profile));
+    SetChildCaption(window,kSettingsLanguageSection,DraftTr(UiText::LanguageSection));
+    SetChildCaption(window,kSettingsLanguageHint,DraftTr(UiText::LanguageHint));
+    SetChildCaption(window,kSettingsCancel,DraftTr(UiText::Cancel));
+    SetChildCaption(window,kSettingsSave,DraftTr(UiText::Save));
+    if (HWND combo=GetDlgItem(window,kSettingsLanguageInput)) {
+        SendMessageW(combo,CB_RESETCONTENT,0,0);
+        for (UiText key : {UiText::LanguageSystem,UiText::LanguageRussian,
+                           UiText::LanguageEnglish})
+            SendMessageW(combo,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(DraftTr(key)));
+        SendMessageW(combo,CB_SETCURSEL,static_cast<WPARAM>(g_draft_language),0);
+    }
+    InvalidateRect(window,nullptr,FALSE);
 }
 
 LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam) {
@@ -1528,6 +1577,16 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
         return 0;
     }
     case WM_COMMAND:
+        if (LOWORD(wparam) == kSettingsLanguageInput &&
+            HIWORD(wparam) == CBN_SELCHANGE &&
+            reinterpret_cast<HWND>(lparam) == GetDlgItem(window,kSettingsLanguageInput)) {
+            const LRESULT value=SendDlgItemMessageW(window,kSettingsLanguageInput,CB_GETCURSEL,0,0);
+            if (value>=0 && value<=2) {
+                g_draft_language=static_cast<copyfix::i18n::Language>(value);
+                UpdateSettingsLabels(window);
+            }
+            return 0;
+        }
         if (LOWORD(wparam) >= kProfileGentle && LOWORD(wparam) <= kProfileDeep &&
             HIWORD(wparam) == BN_CLICKED &&
             reinterpret_cast<HWND>(lparam) == GetDlgItem(window, LOWORD(wparam))) {
@@ -1541,6 +1600,9 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
         if (LOWORD(wparam) == kSettingsSave) {
             const HotkeyChord next_hotkey = ReadHotkeyChoice(window);
             const auto next_profile = g_draft_profile;
+            const LRESULT selected=SendDlgItemMessageW(window,kSettingsLanguageInput,CB_GETCURSEL,0,0);
+            if (selected<0 || selected>2) return 0;
+            g_draft_language=static_cast<copyfix::i18n::Language>(selected);
             if (!ValidHotkey(next_hotkey)) {
                 ShowShortcutWarning(window, false);
                 return 0;
@@ -1551,9 +1613,11 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT msg, WPARAM wparam, LPARAM lpara
             }
             g_settings.hotkey = next_hotkey;
             g_settings.profile = next_profile;
+            g_settings.language = g_draft_language;
             if (!SaveSettings())
                 MessageBoxW(window,DraftTr(UiText::SettingsSaveFailed),
                             L"CopyFix",MB_OK | MB_ICONWARNING);
+            RefreshLocalizedWindows();
             DestroyWindow(window);
             return 0;
         }
@@ -1614,6 +1678,15 @@ void DrawAboutSurface(HWND window, HDC dc) noexcept {
         RECT{Scale(16,dpi),Scale(14,dpi),
              client.right-Scale(16,dpi),client.bottom-Scale(14,dpi)},
         p.surface,p.border,Scale(copyfix::ui::CardCorner,dpi));
+}
+
+void UpdateAboutLabels(HWND window) noexcept {
+    if (!IsWindow(window)) return;
+    SetWindowTextW(window,Tr(UiText::AboutWindow));
+    SetChildCaption(window,kAboutDescriptionLabel,Tr(UiText::AboutDescription));
+    SetChildCaption(window,kAboutProject,Tr(UiText::AboutProject));
+    SetChildCaption(window,kAboutLicense,Tr(UiText::AboutLicense));
+    InvalidateRect(window,nullptr,FALSE);
 }
 
 LRESULT CALLBACK AboutProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam) {
@@ -1726,6 +1799,17 @@ void ShowAbout(HWND parent) noexcept {
     ShowWindow(g_about_window,SW_SHOWNORMAL);
 }
 
+void RefreshLocalizedWindows() noexcept {
+    UpdateSettingsLabels(g_settings_window);
+    UpdatePreviewLabels(g_preview);
+    UpdateAboutLabels(g_about_window);
+    if (g_tray.hWnd) {
+        wcscpy_s(g_tray.szTip,Tr(UiText::TrayTooltip));
+        g_tray.uFlags=NIF_TIP;
+        Shell_NotifyIconW(NIM_MODIFY,&g_tray);
+    }
+}
+
 void ShowMenu() {
     HMENU menu = CreatePopupMenu();
     HMENU profiles = CreatePopupMenu();
@@ -1786,6 +1870,7 @@ LRESULT CALLBACK MessageProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam
     case WM_SETTINGCHANGE:
     case WM_THEMECHANGED:
         SynchronizeSystemTheme();
+        RefreshLocalizedWindows();
         return 0;
     case WM_HOTKEY:
         if (wparam == g_hotkey_id) {
@@ -1839,10 +1924,8 @@ int WINAPI wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE, _In_ PWSTR, _In
     if (!g_instance_mutex) return 1;
     if (GetLastError() == ERROR_ALREADY_EXISTS) {
         CloseHandle(g_instance_mutex);
-        MessageBoxW(nullptr,
-                    L"CopyFix уже запущен. Чтобы использовать новую версию, "
-                    L"закройте работающий экземпляр через значок в трее "
-                    L"и затем запустите этот файл снова.",
+        LoadSettings();
+        MessageBoxW(nullptr,Tr(UiText::InstanceRunning),
                     Tr(UiText::InstanceTitle), MB_OK | MB_ICONINFORMATION);
         return 0;
     }
